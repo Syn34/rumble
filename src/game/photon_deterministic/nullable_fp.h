@@ -80,10 +80,9 @@ struct NullableNonNegativeFP {
         return HasValue() ? ValueOrDefault().GetHashCode() : 0;
     }
 
-    // TODO(0x7a76734, Photon.Deterministic.NullableNonNegativeFP.Serialize):
-    // static Serialize(void* ptr, IDeterministicFrameSerializer serializer)
-    // passes _value to serializer.Stream (BitStream.Serialize(ulong*)). Needs
-    // IDeterministicFrameSerializer/BitStream.
+    // 0x7a76734 NullableNonNegativeFP.Serialize: the packed 64-bit value (flag
+    // bit included) goes through the frame serializer's bit stream unchanged.
+    static void Serialize(void* ptr, class IDeterministicFrameSerializer& serializer);
 };
 
 static_assert(sizeof(NullableNonNegativeFP) == NullableNonNegativeFP::SIZE,

@@ -254,10 +254,9 @@ class FP {
     // culture's default ("G", 7 significant digits) float format.
     std::string ToString() const;
 
-    // TODO(0x7a726d0, Photon.Deterministic.FP.Serialize): static
-    // Serialize(void* ptr, IDeterministicFrameSerializer serializer) writes or
-    // reads RawValue through serializer.Stream (BitStream.Serialize(long*)).
-    // Needs IDeterministicFrameSerializer/BitStream.
+    // 0x7a726d0 FP.Serialize: writes or reads the raw value through the frame
+    // serializer's bit stream (direction is decided by the stream).
+    static void Serialize(void* ptr, class IDeterministicFrameSerializer& serializer);
 
     // --- Raw helpers, exposed so vector maths can apply the same rules ---
     static constexpr Raw MulRaw(Raw a, Raw b) {

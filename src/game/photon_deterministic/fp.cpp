@@ -1,6 +1,9 @@
 // fp.cpp - Photon.Deterministic.FP: conversions from float and text, ToString.
 #include "fp.h"
 
+#include "bit_stream.h"
+#include "deterministic_frame_serializer.h"
+
 #include <cmath>
 #include <cstdio>
 #include <stdexcept>
@@ -177,6 +180,11 @@ std::string FP::ToString() const {
     char buffer[32];
     std::snprintf(buffer, sizeof buffer, "%.7G", static_cast<double>(AsFloat()));
     return buffer;
+}
+
+// 0x7a726d0
+void FP::Serialize(void* ptr, IDeterministicFrameSerializer& serializer) {
+    serializer.Stream().Serialize(&static_cast<FP*>(ptr)->raw_);
 }
 
 } // namespace Photon::Deterministic
