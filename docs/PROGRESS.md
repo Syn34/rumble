@@ -59,6 +59,9 @@ local no-ops with documented behaviour.
 - Build skeleton (CMake, C++20, warnings-as-errors clean on GCC and Clang), unit test harness
 - `rr::det::FP` fixed-point type matching the simulation's arithmetic rules
 - `Quantum.FPMathUtility`: 14 of 16 methods (RandomOnUnitCircle, OrientOnNormal pending)
+- `Photon.Deterministic.RNGSession` (13/13; PCG32 seeded by SplitMix64), `BitStream` (107/107,
+  incl. generic `SerializeArrayLength`), `ByteUtils` (20/20; the gzip writer emits stored deflate
+  blocks, so compressed bytes differ from zlib's)
 - Inventory tool with method → address mapping
 - Desktop platform backend; renderer selection (CLI, settings file, automatic fallback)
 - OpenGL and Vulkan backends rendering an identical placeholder scene; frame capture;
