@@ -12,6 +12,8 @@ add_executable(rr_tests
     test_nullable_fp.cpp
     test_fp_vectors.cpp
     test_fp_quaternion_matrix.cpp
+    test_quantum_heap.cpp
+    test_quantum_collections.cpp
 )
 target_link_libraries(rr_tests PRIVATE rr::game rr::assets)
 rr_set_warnings(rr_tests)
