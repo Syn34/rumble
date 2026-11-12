@@ -1,0 +1,983 @@
+{
+ "updated": "2026-11-12",
+ "assemblies": [
+  {
+   "assembly": "AFuncs.dll",
+   "methods": 1382,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "AK.Wwise.Unity.API.WwiseTypes.dll",
+   "methods": 114,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "AK.Wwise.Unity.API.dll",
+   "methods": 2129,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "AK.Wwise.Unity.MonoBehaviour.dll",
+   "methods": 418,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "AK.Wwise.Unity.Timeline.dll",
+   "methods": 92,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Adjust.dll",
+   "methods": 222,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Ak.Wwise.Api.WAAPI.dll",
+   "methods": 158,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "AppleAuth.dll",
+   "methods": 78,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Assembly-CSharp.dll",
+   "methods": 20495,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "AssetVariants.Examples.dll",
+   "methods": 48,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Cinemachine.dll",
+   "methods": 1350,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Coffee.UIParticle.dll",
+   "methods": 159,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "CurveArchitect.dll",
+   "methods": 248,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "DOTween.Modules.dll",
+   "methods": 340,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "DOTween.dll",
+   "methods": 1163,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "DOTweenPro.Scripts.dll",
+   "methods": 63,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "DOTweenPro.dll",
+   "methods": 46,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Fidelio-Framework.Android.dll",
+   "methods": 340,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "Fidelio-Framework.Assets.dll",
+   "methods": 336,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "Fidelio-Framework.dll",
+   "methods": 15081,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "FidelioFramework-Core.dll",
+   "methods": 1357,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "Firebase.Analytics.dll",
+   "methods": 39,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Firebase.App.dll",
+   "methods": 342,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Firebase.Crashlytics.dll",
+   "methods": 132,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Firebase.Messaging.dll",
+   "methods": 144,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Firebase.Platform.dll",
+   "methods": 129,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Firebase.TaskExtension.dll",
+   "methods": 5,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "GameClasses.dll",
+   "methods": 1162,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "GameData.dll",
+   "methods": 5,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "Google.Play.Games.dll",
+   "methods": 748,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "HapticFeedback.dll",
+   "methods": 47,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "HtmlAgilityPack.dll",
+   "methods": 181,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "MessagePack.Annotations.dll",
+   "methods": 17,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "MessagePack.dll",
+   "methods": 1780,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Mono.Security.dll",
+   "methods": 501,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "NGUI.dll",
+   "methods": 1849,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Newtonsoft.Json.dll",
+   "methods": 4096,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Obb.Serialization.dll",
+   "methods": 71,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "OhBibi.AFuncFramework.Client.dll",
+   "methods": 474,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "OhBibi.AFuncFramework.Interfaces.dll",
+   "methods": 2,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "OhBibi.AFuncFramework.dll",
+   "methods": 317,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "OhBibi.Purchasing.dll",
+   "methods": 273,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "OhbibiCore.dll",
+   "methods": 1647,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "OhbibiMiniUiRuntime.dll",
+   "methods": 4,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "OhbibiProfilerInfoRuntime.dll",
+   "methods": 97,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "Photon3Unity3D.dll",
+   "methods": 762,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "PhotonDeterministic.dll",
+   "methods": 904,
+   "done": 442,
+   "game": false
+  },
+  {
+   "assembly": "PhotonQuantum.dll",
+   "methods": 3488,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "PhotonRealtime.dll",
+   "methods": 543,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "PrecisionCats.InspectorExamples.dll",
+   "methods": 2,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "PrecisionCats.dll",
+   "methods": 2,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "ProtobufSerializer.dll",
+   "methods": 161,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "ReactiveUI.dll",
+   "methods": 283,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Rewired.Scripts.dll",
+   "methods": 596,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Rewired_Android.dll",
+   "methods": 61,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Rewired_Core.dll",
+   "methods": 7149,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "SplineMesh.dll",
+   "methods": 222,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Collections.Immutable.dll",
+   "methods": 907,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Configuration.dll",
+   "methods": 17,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Core.dll",
+   "methods": 3461,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Data.dll",
+   "methods": 3279,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Drawing.dll",
+   "methods": 67,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Net.Http.dll",
+   "methods": 534,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Numerics.dll",
+   "methods": 239,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Runtime.CompilerServices.Unsafe.dll",
+   "methods": 11,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Runtime.Serialization.dll",
+   "methods": 9,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Xml.Linq.dll",
+   "methods": 233,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.Xml.dll",
+   "methods": 6468,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "System.dll",
+   "methods": 5442,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.AI.Navigation.dll",
+   "methods": 145,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.AdaptivePerformance.Apple.iOS.dll",
+   "methods": 15,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.AdaptivePerformance.Google.Android.dll",
+   "methods": 76,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Addressables.dll",
+   "methods": 644,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Burst.Unsafe.dll",
+   "methods": 2,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Burst.dll",
+   "methods": 127,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Collections.dll",
+   "methods": 500,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.IO.Compression.dll",
+   "methods": 202,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.InternalAPIEngineBridge.004.dll",
+   "methods": 1,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Mathematics.dll",
+   "methods": 342,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.MemoryProfiler.dll",
+   "methods": 8,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Notifications.Android.dll",
+   "methods": 189,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Polybrush.dll",
+   "methods": 52,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.ProBuilder.dll",
+   "methods": 440,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Purchasing.AppleMacosStub.dll",
+   "methods": 10,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Purchasing.AppleStub.dll",
+   "methods": 10,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Purchasing.Security.dll",
+   "methods": 142,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Purchasing.SecurityCore.dll",
+   "methods": 27,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Purchasing.Stores.dll",
+   "methods": 551,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Purchasing.Utilities.dll",
+   "methods": 77,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Purchasing.dll",
+   "methods": 616,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.RenderPipelines.Core.Runtime.Shared.dll",
+   "methods": 1,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.RenderPipelines.Core.Runtime.dll",
+   "methods": 4981,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.RenderPipelines.GPUDriven.Runtime.dll",
+   "methods": 815,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.RenderPipelines.Universal.2D.Runtime.dll",
+   "methods": 45,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.RenderPipelines.Universal.Runtime.dll",
+   "methods": 3340,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.ResourceManager.dll",
+   "methods": 861,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Services.Core.Configuration.dll",
+   "methods": 23,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Services.Core.Device.dll",
+   "methods": 23,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Services.Core.Environments.Internal.dll",
+   "methods": 3,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Services.Core.Internal.dll",
+   "methods": 142,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Services.Core.Registration.dll",
+   "methods": 47,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Services.Core.Scheduler.dll",
+   "methods": 28,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Services.Core.Telemetry.dll",
+   "methods": 10,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Services.Core.Threading.dll",
+   "methods": 1,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Services.Core.dll",
+   "methods": 23,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.TextMeshPro.dll",
+   "methods": 1814,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Timeline.dll",
+   "methods": 691,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.UnifiedRayTracing.Runtime.dll",
+   "methods": 7,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Usercentrics.dll",
+   "methods": 186,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Zendesk.MessagingCore.dll",
+   "methods": 890,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "Unity.Zendesk.dll",
+   "methods": 2473,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.AIModule.dll",
+   "methods": 212,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.AdaptivePerformanceModule.dll",
+   "methods": 639,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.AndroidJNIModule.dll",
+   "methods": 622,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.AnimationModule.dll",
+   "methods": 986,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.AssetBundleModule.dll",
+   "methods": 58,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.AudioModule.dll",
+   "methods": 275,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.CoreModule.dll",
+   "methods": 8518,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.DirectorModule.dll",
+   "methods": 107,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.GameCenterModule.dll",
+   "methods": 43,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.HierarchyCoreModule.dll",
+   "methods": 294,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.IMGUIModule.dll",
+   "methods": 878,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.IdentifiersModule.dll",
+   "methods": 3,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.ImageConversionModule.dll",
+   "methods": 6,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.InputForUIModule.dll",
+   "methods": 213,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.InputLegacyModule.dll",
+   "methods": 98,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.InputModule.dll",
+   "methods": 8,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.JSONSerializeModule.dll",
+   "methods": 8,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.MultiplayerModule.dll",
+   "methods": 1,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.ParticleSystemModule.dll",
+   "methods": 493,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.Physics2DModule.dll",
+   "methods": 508,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.PhysicsModule.dll",
+   "methods": 416,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.PropertiesModule.dll",
+   "methods": 782,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.SharedInternalsModule.dll",
+   "methods": 65,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.SubsystemsModule.dll",
+   "methods": 90,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.TerrainModule.dll",
+   "methods": 56,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.TextCoreFontEngineModule.dll",
+   "methods": 200,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.TextCoreTextEngineModule.dll",
+   "methods": 848,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.TextRenderingModule.dll",
+   "methods": 111,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.UI.dll",
+   "methods": 1903,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.UIElementsModule.dll",
+   "methods": 11118,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.UIModule.dll",
+   "methods": 234,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.UnityAnalyticsCommonModule.dll",
+   "methods": 65,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.UnityAnalyticsModule.dll",
+   "methods": 12,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.UnityWebRequestAssetBundleModule.dll",
+   "methods": 24,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.UnityWebRequestModule.dll",
+   "methods": 206,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.UnityWebRequestTextureModule.dll",
+   "methods": 16,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.UnityWebRequestWWWModule.dll",
+   "methods": 18,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.VFXModule.dll",
+   "methods": 39,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.VRModule.dll",
+   "methods": 10,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.VideoModule.dll",
+   "methods": 27,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "UnityEngine.XRModule.dll",
+   "methods": 115,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "ZMAttachmentPlugin.Runtime.dll",
+   "methods": 17,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "ZXing.dll",
+   "methods": 19,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "__Generated",
+   "methods": 3,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "com.dotsquid.stableenum.dll",
+   "methods": 11,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "com.ohbibi.amplitudesdk.dll",
+   "methods": 37,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "com.ohbibi.dependencyinjection.dll",
+   "methods": 166,
+   "done": 0,
+   "game": true
+  },
+  {
+   "assembly": "mscorlib.dll",
+   "methods": 13074,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "protobuf-net.dll",
+   "methods": 968,
+   "done": 0,
+   "game": false
+  },
+  {
+   "assembly": "quantum.code.dll",
+   "methods": 7251,
+   "done": 15,
+   "game": true
+  },
+  {
+   "assembly": "quantum.core.dll",
+   "methods": 2608,
+   "done": 16,
+   "game": false
+  },
+  {
+   "assembly": "zxing.unity.dll",
+   "methods": 1802,
+   "done": 0,
+   "game": false
+  }
+ ]
+}

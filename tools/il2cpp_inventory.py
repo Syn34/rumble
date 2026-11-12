@@ -389,7 +389,7 @@ def main():
                     help="comma-separated assemblies: also write <assembly>.fields.txt "
                          "(field names, types and byte offsets; needs --binary)")
     ap.add_argument("--assemblies", default="",
-                    help="comma-separated list; write per-method lists only for these")
+                    help="comma-separated list (or 'all'); write per-method lists for these")
     args = ap.parse_args()
 
     with open(args.metadata, "rb") as f:
@@ -397,6 +397,8 @@ def main():
 
     os.makedirs(args.out, exist_ok=True)
     wanted = {a.strip() for a in args.assemblies.split(",") if a.strip()}
+    if wanted == {"all"}:
+        wanted = {img["name"] for img in md.images}
     binary = Binary(args.binary) if args.binary else None
 
     summary = []

@@ -64,6 +64,7 @@ fakes a plausible result.
   changes; it renders the same frames with each backend and compares them.
 - The build must stay green: every commit configures, builds and passes `ctest`.
 - Format with the repository's `.clang-format`.
+- After reimplementing methods, run `tools/progress.py` so the README percentage stays current.
 
 ## Determinism
 

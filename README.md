@@ -13,7 +13,68 @@ program never loads or calls into the original binaries.
 
 ## Status
 
-Early foundation. See [docs/PROGRESS.md](docs/PROGRESS.md) for what exists and what's next.
+<!-- progress:start -->
+**Overall: 0.28%** — 473 of 171,382 original methods reimplemented
+
+`░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░`
+
+| Part | Done | Methods | Progress |
+|---|---:|---:|---:|
+| Game code | 15 | 50,426 | 0.03% |
+| Third-party libraries | 458 | 120,956 | 0.38% |
+
+<details><summary>Per assembly (started ones first, then largest)</summary>
+
+| Assembly | Done | Methods | Progress |
+|---|---:|---:|---:|
+| PhotonDeterministic.dll | 442 | 904 | 48.9% |
+| quantum.core.dll | 16 | 2,608 | 0.6% |
+| quantum.code.dll | 15 | 7,251 | 0.2% |
+| Assembly-CSharp.dll | 0 | 20,495 | 0.0% |
+| Fidelio-Framework.dll | 0 | 15,081 | 0.0% |
+| mscorlib.dll | 0 | 13,074 | 0.0% |
+| UnityEngine.UIElementsModule.dll | 0 | 11,118 | 0.0% |
+| UnityEngine.CoreModule.dll | 0 | 8,518 | 0.0% |
+| Rewired_Core.dll | 0 | 7,149 | 0.0% |
+| System.Xml.dll | 0 | 6,468 | 0.0% |
+| System.dll | 0 | 5,442 | 0.0% |
+| Unity.RenderPipelines.Core.Runtime.dll | 0 | 4,981 | 0.0% |
+| Newtonsoft.Json.dll | 0 | 4,096 | 0.0% |
+| PhotonQuantum.dll | 0 | 3,488 | 0.0% |
+| System.Core.dll | 0 | 3,461 | 0.0% |
+| Unity.RenderPipelines.Universal.Runtime.dll | 0 | 3,340 | 0.0% |
+| System.Data.dll | 0 | 3,279 | 0.0% |
+| Unity.Zendesk.dll | 0 | 2,473 | 0.0% |
+| AK.Wwise.Unity.API.dll | 0 | 2,129 | 0.0% |
+| UnityEngine.UI.dll | 0 | 1,903 | 0.0% |
+| NGUI.dll | 0 | 1,849 | 0.0% |
+| Unity.TextMeshPro.dll | 0 | 1,814 | 0.0% |
+| zxing.unity.dll | 0 | 1,802 | 0.0% |
+| MessagePack.dll | 0 | 1,780 | 0.0% |
+| OhbibiCore.dll | 0 | 1,647 | 0.0% |
+| AFuncs.dll | 0 | 1,382 | 0.0% |
+| FidelioFramework-Core.dll | 0 | 1,357 | 0.0% |
+| Cinemachine.dll | 0 | 1,350 | 0.0% |
+| DOTween.dll | 0 | 1,163 | 0.0% |
+| GameClasses.dll | 0 | 1,162 | 0.0% |
+| UnityEngine.AnimationModule.dll | 0 | 986 | 0.0% |
+| protobuf-net.dll | 0 | 968 | 0.0% |
+| System.Collections.Immutable.dll | 0 | 907 | 0.0% |
+| Unity.Zendesk.MessagingCore.dll | 0 | 890 | 0.0% |
+| UnityEngine.IMGUIModule.dll | 0 | 878 | 0.0% |
+| Unity.ResourceManager.dll | 0 | 861 | 0.0% |
+| UnityEngine.TextCoreTextEngineModule.dll | 0 | 848 | 0.0% |
+| Unity.RenderPipelines.GPUDriven.Runtime.dll | 0 | 815 | 0.0% |
+| UnityEngine.PropertiesModule.dll | 0 | 782 | 0.0% |
+| Photon3Unity3D.dll | 0 | 762 | 0.0% |
+| *123 more* | 0 | 20,121 | |
+
+</details>
+
+<sub>Counted by `tools/progress.py` on 2026-11-12: a method is done when its original address is cited above a reimplementation under `src/game/`. The engine layer (platform, renderers, asset readers) is new code and isn't counted.</sub>
+<!-- progress:end -->
+
+See [docs/PROGRESS.md](docs/PROGRESS.md) for details and what's next.
 
 ## Building
 

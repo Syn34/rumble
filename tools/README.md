@@ -42,3 +42,12 @@ or method it refers to).
 ```sh
 python3 -I tools/il2cpp_lookup.py --binary <libil2cpp.so> --metadata <global-metadata.dat> disasm 0x7ce0508 60
 ```
+
+## progress.py
+
+Updates the completion percentage in README.md and `docs/progress.json` (counts only).
+
+```sh
+python3 tools/il2cpp_inventory.py <global-metadata.dat> --binary <libil2cpp.so> --out build/inventory --assemblies all
+python3 tools/progress.py --inventory build/inventory
+```
