@@ -1,0 +1,22 @@
+# Build output
+/build*/
+/out/
+/.vs/
+/.vscode/
+/.idea/
+CMakeUserPresets.json
+*.user
+
+# Original game files and anything derived from them.
+# These belong to the copyright holder and must never be committed.
+/gamedata/
+*.apk
+*.apks
+*.xapk
+*.obb
+*.so
+global-metadata.dat
+*.methods.tsv
+/inventory/
+
+__pycache__/
