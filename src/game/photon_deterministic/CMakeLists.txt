@@ -14,6 +14,7 @@ add_library(rr_photon_deterministic
     fp_matrix3x3.cpp
     nullable_fp_vector3.cpp
     dotnet_number_format.cpp
+    fp_collision.cpp
 )
 add_library(rr::photon_deterministic ALIAS rr_photon_deterministic)
 target_include_directories(rr_photon_deterministic PUBLIC ..)
