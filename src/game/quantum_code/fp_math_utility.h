@@ -4,16 +4,16 @@
 // used by the deterministic simulation (movement, AI, network quantisation).
 #pragma once
 
-#include "rr/core/fp.h"
-#include "rr/core/fp_vector.h"
+#include "photon_deterministic/fp.h"
+#include "photon_deterministic/fp_vector.h"
 
 #include <cstdint>
 
 namespace Quantum {
 
-using rr::det::FP;
-using rr::det::FPVector2;
-using rr::det::FPVector3;
+using Photon::Deterministic::FP;
+using Photon::Deterministic::FPVector2;
+using Photon::Deterministic::FPVector3;
 
 class FPMathUtility {
 public:

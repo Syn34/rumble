@@ -28,7 +28,6 @@ include(cmake/Dependencies.cmake)
 message(STATUS "Ranger Rumble: desktop=${RR_ENABLE_DESKTOP} opengl=${RR_ENABLE_OPENGL} "
                "vulkan=${RR_ENABLE_VULKAN}")
 
-add_subdirectory(src/core)
 add_subdirectory(src/platform)
 add_subdirectory(src/render)
 add_subdirectory(src/game)

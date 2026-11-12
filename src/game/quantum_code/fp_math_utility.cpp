@@ -2,13 +2,13 @@
 // arm64 libil2cpp.so of v1.10.4 and are for traceability only.
 #include "fp_math_utility.h"
 
-#include "rr/core/fp_math.h"
+#include "photon_deterministic/fp_math.h"
 
 #include <cmath>
 
 namespace Quantum {
 
-namespace FPMath = rr::det::FPMath;
+namespace FPMath = Photon::Deterministic::FPMath;
 
 namespace {
 constexpr int kByteMax = 255;

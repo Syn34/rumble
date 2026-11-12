@@ -67,6 +67,6 @@ fakes a plausible result.
 
 ## Determinism
 
-The gameplay simulation is deterministic. Simulation code uses `rr::det::FP`
+The gameplay simulation is deterministic. Simulation code uses `Photon::Deterministic::FP`
 fixed-point maths only — no `float`/`double` — and must preserve the original's
-rounding behaviour (see comments in `src/core/include/rr/core/fp.h`).
+rounding behaviour (see comments in `src/game/photon_deterministic/fp.h`).

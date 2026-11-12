@@ -1,9 +1,9 @@
 // fp_vector.h - 2D/3D fixed-point vectors for the deterministic simulation.
 #pragma once
 
-#include "rr/core/fp.h"
+#include "fp.h"
 
-namespace rr::det {
+namespace Photon::Deterministic {
 
 struct FPVector2 {
     FP x;
@@ -65,4 +65,4 @@ struct FPVector3 {
     constexpr FP SqrMagnitude() const { return Dot(*this, *this); }
 };
 
-} // namespace rr::det
+} // namespace Photon::Deterministic

@@ -59,7 +59,6 @@ validation layer if it is installed.
 
 | Path | What lives there |
 |---|---|
-| `src/core/` | Engine-independent foundation: deterministic fixed-point maths, utilities. |
 | `src/platform/` | OS abstraction (window, input, time, files): headless and SDL2 desktop backends. |
 | `src/render/` | Graphics-API-neutral renderer interface with OpenGL and Vulkan backends; shaders. |
 | `src/game/` | The reimplemented game, grouped by the original assembly it replaces. |

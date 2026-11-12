@@ -20,7 +20,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace rr::det {
+namespace Photon::Deterministic {
 
 class FP {
 public:
@@ -103,4 +103,4 @@ private:
     Raw raw_ = 0;
 };
 
-} // namespace rr::det
+} // namespace Photon::Deterministic

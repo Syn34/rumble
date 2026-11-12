@@ -1,12 +1,12 @@
 #include "test_framework.h"
 
-#include "rr/core/fp.h"
-#include "rr/core/fp_math.h"
-#include "rr/core/fp_vector.h"
+#include "photon_deterministic/fp.h"
+#include "photon_deterministic/fp_math.h"
+#include "photon_deterministic/fp_vector.h"
 
-using rr::det::FP;
-using rr::det::FPVector3;
-namespace FPMath = rr::det::FPMath;
+using Photon::Deterministic::FP;
+using Photon::Deterministic::FPVector3;
+namespace FPMath = Photon::Deterministic::FPMath;
 
 TEST_CASE("FP uses 16 fractional bits") {
     CHECK(FP::One().RawValue() == 65536);

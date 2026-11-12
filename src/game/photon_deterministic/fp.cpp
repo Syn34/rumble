@@ -1,8 +1,8 @@
-#include "rr/core/fp.h"
+#include "fp.h"
 
 #include <cmath>
 
-namespace rr::det {
+namespace Photon::Deterministic {
 
 FP FP::FromFloatUnsafe(float value) {
     const float scaled = value * static_cast<float>(OneRaw);
@@ -23,4 +23,4 @@ FP FP::FromFloatUnsafe(float value) {
     return FromRaw(static_cast<Raw>(scaled)); // truncates toward zero
 }
 
-} // namespace rr::det
+} // namespace Photon::Deterministic
