@@ -1,6 +1,6 @@
 #include "test_framework.h"
 
-#include "photon_deterministic/native_allocator.h"
+#include "photon_deterministic/system_allocator.h"
 #include "quantum_core/frame_heap.h"
 #include "quantum_core/heap.h"
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-using Photon::Deterministic::Native::SystemAllocator;
+using Photon::Deterministic::SystemAllocator;
 using Quantum::Ptr;
 using Quantum::Allocator::FrameHeap;
 using Quantum::Allocator::Heap;
@@ -235,7 +235,9 @@ TEST_CASE("FrameHeap trackers and the allocation tracker") {
 }
 
 TEST_CASE("Native allocator helpers") {
-    using namespace Photon::Deterministic::Native;
+    using Native = Photon::Deterministic::Native;
+    constexpr auto RoundUpToAlignment = &Native::RoundUpToAlignment;
+    constexpr auto GetAlignmentForArrayElement = &Native::GetAlignmentForArrayElement;
     CHECK(RoundUpToAlignment(13, 4) == 16);
     CHECK(RoundUpToAlignment(16, 16) == 16);
     CHECK(RoundUpToAlignment(1, 64) == 64);

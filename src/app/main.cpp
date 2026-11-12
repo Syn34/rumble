@@ -11,6 +11,7 @@
 #include "settings.h"
 #include "test_scene.h"
 
+#include "photon_deterministic/system_allocator.h"
 #include "rr/platform/platform.h"
 #include "rr/render/render_device.h"
 
@@ -110,6 +111,9 @@ int RunHeadless(const Options& options) {
 int main(int argc, char** argv) {
     Options options;
     if (!ParseOptions(argc, argv, options)) return 2;
+
+    // Raw-memory services the simulation runtime expects the platform to provide.
+    Photon::Deterministic::SystemUtility::Install();
 
     if (options.listRenderers) {
         for (GraphicsApi api : rr::render::AvailableGraphicsApis()) {

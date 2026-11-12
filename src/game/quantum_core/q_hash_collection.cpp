@@ -1,14 +1,14 @@
 #include "q_hash_collection.h"
 #include "q_dictionary.h"
 
-#include "photon_deterministic/native_allocator.h"
+#include "photon_deterministic/native.h"
 
 #include <algorithm>
 
 namespace Quantum::Collections {
 
-using Photon::Deterministic::Native::GetAlignmentForArrayElement;
-using Photon::Deterministic::Native::RoundUpToAlignment;
+const auto GetAlignmentForArrayElement = &Photon::Deterministic::Native::GetAlignmentForArrayElement;
+const auto RoundUpToAlignment = &Photon::Deterministic::Native::RoundUpToAlignment;
 
 void QHashCollection::CalculateStrides(int& keyStride, int& entryStride) {
     entryStride = static_cast<int>(sizeof(Entry));

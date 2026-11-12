@@ -1,6 +1,6 @@
 #include "test_framework.h"
 
-#include "photon_deterministic/native_allocator.h"
+#include "photon_deterministic/system_allocator.h"
 #include "quantum_core/frame_heap.h"
 #include "quantum_core/q_dictionary.h"
 #include "quantum_core/q_list.h"
@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <vector>
 
-using Photon::Deterministic::Native::SystemAllocator;
+using Photon::Deterministic::SystemAllocator;
 using Quantum::Ptr;
 using Quantum::Allocator::FrameHeap;
 using Quantum::Allocator::Heap;

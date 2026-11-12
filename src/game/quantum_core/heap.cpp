@@ -1,6 +1,6 @@
 #include "heap.h"
 
-#include "photon_deterministic/native_allocator.h"
+#include "photon_deterministic/native.h"
 
 #include <bit>
 #include <cstring>
@@ -498,7 +498,7 @@ std::span<const Heap::Bin> Heap::Group::Bins::Default() {
 }
 
 Heap::Offsets Heap::Group::CalculateMetaOffsets(const Config& config) {
-    using Photon::Deterministic::Native::RoundUpToAlignment;
+    const auto RoundUpToAlignment = &Photon::Deterministic::Native::RoundUpToAlignment;
     const int dataSize = RoundUpToAlignment(kDataRecordSize, 4);
     const int binsSize = RoundUpToAlignment(PAGE_BIN_COUNT * kBinRecordSize, 4);
     const int binsFullSize = RoundUpToAlignment(PAGE_BIN_COUNT * kBinRecordSize, 4);

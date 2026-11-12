@@ -9,7 +9,7 @@
 //    namespace here so its other members can be added separately.
 #pragma once
 
-#include "photon_deterministic/native_allocator.h"
+#include "photon_deterministic/native.h"
 
 #include <cstddef>
 #include <cstdint>

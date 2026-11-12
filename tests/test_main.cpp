@@ -1,6 +1,10 @@
 #include "test_framework.h"
 
+#include "photon_deterministic/system_allocator.h"
+
 int main() {
+    // The platform installs the raw-memory services before any simulation code runs.
+    Photon::Deterministic::SystemUtility::Install();
     for (const auto& c : rr::test::Registry()) {
         const int before = rr::test::FailureCount();
         c.body();

@@ -14,6 +14,7 @@ add_executable(rr_tests
     test_fp_quaternion_matrix.cpp
     test_quantum_heap.cpp
     test_quantum_collections.cpp
+    test_deterministic_session.cpp
 )
 target_link_libraries(rr_tests PRIVATE rr::game rr::assets)
 rr_set_warnings(rr_tests)

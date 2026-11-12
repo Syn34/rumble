@@ -40,9 +40,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace Photon::Deterministic::Native {
-class Allocator;
-}
+#include "photon_deterministic/native.h"
 
 namespace Quantum::Allocator {
 

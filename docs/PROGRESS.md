@@ -32,7 +32,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 | UnityEngine.*.dll, Unity.*.dll | Engine-facing managed API (UI Toolkit, core, render pipelines, TextMeshPro…) | ~40,000 | 0 |
 | Rewired_Core.dll | Input mapping | 7,149 | 0 |
 | Newtonsoft.Json.dll | JSON | 4,096 | 0 |
-| PhotonDeterministic.dll | Deterministic maths, RNG, bit streams, session runtime | 904 | ~520 (all maths types, RNGSession, ByteUtils, BitStream) |
+| PhotonDeterministic.dll | Deterministic maths, RNG, bit streams, session runtime | 904 | ~790 (maths, RNGSession, ByteUtils, BitStream, offline session runtime) |
 | quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, physics, navigation) | ~6,100 | 14 (AssetGuid/AssetRef) |
 | AK.Wwise.*.dll | Audio middleware bindings | ~2,500 | 0 |
 | MessagePack.dll, protobuf-net.dll | Binary serialisation | ~2,750 | 0 |
@@ -65,6 +65,12 @@ local no-ops with documented behaviour.
 - `Photon.Deterministic.RNGSession` (13/13; PCG32 seeded by SplitMix64), `BitStream` (107/107,
   incl. generic `SerializeArrayLength`), `ByteUtils` (20/20; the gzip writer emits stored deflate
   blocks, so compressed bytes differ from zlib's)
+- PhotonDeterministic session runtime (offline path): DeterministicSession, DeterministicSimulator
+  (rollback/prediction), frames and frame input, frame ring buffer, commands and command
+  serializer, session config (+ serialisation), local network/input provider, tick inputs, Log,
+  Native allocator/utility interfaces. Online-only parts (DeterministicNetwork,
+  DeterministicTickInputDecoder, snapshot/checksum-error handling, Protocol wire format) are
+  TODO stubs
 - Inventory tool with method → address mapping
 - Desktop platform backend; renderer selection (CLI, settings file, automatic fallback)
 - OpenGL and Vulkan backends rendering an identical placeholder scene; frame capture;
@@ -80,7 +86,7 @@ local no-ops with documented behaviour.
 ## Next
 
 1. quantum.core: memory/collections (in progress), collision geometry, frame/ECS
-2. PhotonDeterministic session/simulator (offline path)
+2. Concrete Native::Allocator/Utility for the PC platform; hook DeterministicSession to quantum.core's game
 3. Renderer: textures, materials, render targets
 4. Asset reader for the game's content files (from the user's own copy)
 5. Gameplay systems from quantum.code.dll, starting with movement and damage
