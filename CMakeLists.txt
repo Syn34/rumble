@@ -30,8 +30,10 @@ message(STATUS "Ranger Rumble: desktop=${RR_ENABLE_DESKTOP} opengl=${RR_ENABLE_O
 
 add_subdirectory(src/platform)
 add_subdirectory(src/render)
+add_subdirectory(src/engine/assets)
 add_subdirectory(src/game)
 add_subdirectory(src/app)
+add_subdirectory(tools)
 
 if(RR_BUILD_TESTS)
     enable_testing()

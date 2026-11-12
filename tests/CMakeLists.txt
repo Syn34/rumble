@@ -2,7 +2,8 @@ add_executable(rr_tests
     test_main.cpp
     test_fp.cpp
     test_fp_math_utility.cpp
+    test_serialized_file.cpp
 )
-target_link_libraries(rr_tests PRIVATE rr::game)
+target_link_libraries(rr_tests PRIVATE rr::game rr::assets)
 rr_set_warnings(rr_tests)
 add_test(NAME rr_tests COMMAND rr_tests)
