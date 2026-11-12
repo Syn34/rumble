@@ -7,6 +7,8 @@ add_executable(rr_tests
     test_bit_stream.cpp
     test_byte_utils.cpp
     test_rng_session.cpp
+    test_quantum_heap.cpp
+    test_quantum_collections.cpp
 )
 target_link_libraries(rr_tests PRIVATE rr::game rr::assets)
 rr_set_warnings(rr_tests)
