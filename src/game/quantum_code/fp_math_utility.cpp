@@ -21,12 +21,12 @@ bool FPMathUtility::Contains(std::int32_t flags, std::int32_t flag) {
 
 // 0x7be2528
 bool FPMathUtility::EqualWithEpsilon(const FPVector3& a, const FPVector3& b) {
-    return FPVector3::DistanceSquared(a, b) < FP::EN3();
+    return FPVector3::DistanceSquared(a, b) <= FP::EN3();
 }
 
 // 0x7be2568
 bool FPMathUtility::EqualWithEpsilon(FP a, FP b) {
-    return FPMath::Abs(a - b) < FP::EN3();
+    return FPMath::Abs(a - b) <= FP::EN3();
 }
 
 // 0x7be257c
