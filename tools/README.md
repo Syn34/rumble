@@ -32,3 +32,13 @@ their types and byte offsets (used to reconstruct structs and to decode game dat
 Writes `build/inventory/summary.json` (method counts per assembly) and a
 `<assembly>.methods.tsv` per requested assembly (token, address, namespace, type,
 method, parameter count, status). Supports IL2CPP metadata v39 (Unity 6000.3).
+
+## il2cpp_lookup.py
+
+Helpers while studying one function: `disasm <addr> [count]` and `usage <slot>` (resolves
+the metadata-usage slot a function loads before a class-init call to the string literal
+or method it refers to).
+
+```sh
+python3 -I tools/il2cpp_lookup.py --binary <libil2cpp.so> --metadata <global-metadata.dat> disasm 0x7ce0508 60
+```
