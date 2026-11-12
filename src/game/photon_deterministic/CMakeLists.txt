@@ -7,6 +7,13 @@ add_library(rr_photon_deterministic
     fp_lut.cpp
     fp_math.cpp
     nullable_fp.cpp
+    fp_vector2.cpp
+    fp_vector3.cpp
+    fp_quaternion.cpp
+    fp_matrix2x2.cpp
+    fp_matrix3x3.cpp
+    nullable_fp_vector3.cpp
+    dotnet_number_format.cpp
 )
 add_library(rr::photon_deterministic ALIAS rr_photon_deterministic)
 target_include_directories(rr_photon_deterministic PUBLIC ..)

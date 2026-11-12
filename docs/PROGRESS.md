@@ -32,7 +32,8 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 | UnityEngine.*.dll, Unity.*.dll | Engine-facing managed API (UI Toolkit, core, render pipelines, TextMeshPro…) | ~40,000 | 0 |
 | Rewired_Core.dll | Input mapping | 7,149 | 0 |
 | Newtonsoft.Json.dll | JSON | 4,096 | 0 |
-| PhotonQuantum.dll, quantum.core.dll, PhotonDeterministic.dll | Deterministic simulation framework and maths | 7,000 | partial (`FP` type) |
+| PhotonDeterministic.dll | Deterministic maths, RNG, bit streams, session runtime | 904 | ~520 (all maths types, RNGSession, ByteUtils, BitStream) |
+| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, physics, navigation) | ~6,100 | 14 (AssetGuid/AssetRef) |
 | AK.Wwise.*.dll | Audio middleware bindings | ~2,500 | 0 |
 | MessagePack.dll, protobuf-net.dll | Binary serialisation | ~2,750 | 0 |
 | DOTween*.dll, Cinemachine.dll, NGUI.dll | Tweening, cameras, UI | ~4,400 | 0 |
@@ -57,7 +58,9 @@ local no-ops with documented behaviour.
 ## Done
 
 - Build skeleton (CMake, C++20, warnings-as-errors clean on GCC and Clang), unit test harness
-- `rr::det::FP` fixed-point type matching the simulation's arithmetic rules
+- PhotonDeterministic maths: FP, FPMath (table-driven trig/sqrt/exp, tables loaded from the
+  user's game files), FPLut, FPVector2/3, FPQuaternion, FPMatrix2x2/3x3, FPBounds2, nullable types
+- PhotonDeterministic RNGSession (PCG32), ByteUtils, BitStream
 - `Quantum.FPMathUtility`: 14 of 16 methods (RandomOnUnitCircle, OrientOnNormal pending)
 - `Photon.Deterministic.RNGSession` (13/13; PCG32 seeded by SplitMix64), `BitStream` (107/107,
   incl. generic `SerializeArrayLength`), `ByteUtils` (20/20; the gzip writer emits stored deflate
@@ -76,9 +79,8 @@ local no-ops with documented behaviour.
 
 ## Next
 
-1. Deterministic maths library (PhotonDeterministic): FP trig/sqrt tables, FPQuaternion,
-   FPMatrix, RNGSession — decompiled with addresses
-2. Simulation framework types (quantum.core): entities, components, frame, systems
+1. quantum.core: memory/collections (in progress), collision geometry, frame/ECS
+2. PhotonDeterministic session/simulator (offline path)
 3. Renderer: textures, materials, render targets
 4. Asset reader for the game's content files (from the user's own copy)
 5. Gameplay systems from quantum.code.dll, starting with movement and damage

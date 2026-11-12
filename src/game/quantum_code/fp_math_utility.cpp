@@ -96,12 +96,12 @@ FP FPMathUtility::UnQuantizeByteToFP(std::uint8_t quantized, FP min, FP max) {
 
 // 0x7be28b8
 FPVector3 FPMathUtility::ComponentMax(const FPVector3& a, const FPVector3& b) {
-    return {FPMath::Max(a.x, b.x), FPMath::Max(a.y, b.y), FPMath::Max(a.z, b.z)};
+    return {FPMath::Max(a.X, b.X), FPMath::Max(a.Y, b.Y), FPMath::Max(a.Z, b.Z)};
 }
 
 // 0x7be28e4
 FP FPMathUtility::GetMaxComponent(const FPVector3& v) {
-    return FPMath::Max(v.x, FPMath::Max(v.y, v.z));
+    return FPMath::Max(v.X, FPMath::Max(v.Y, v.Z));
 }
 
 // 0x7be2910

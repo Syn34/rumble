@@ -10,6 +10,8 @@ add_executable(rr_tests
     test_byte_utils.cpp
     test_rng_session.cpp
     test_nullable_fp.cpp
+    test_fp_vectors.cpp
+    test_fp_quaternion_matrix.cpp
 )
 target_link_libraries(rr_tests PRIVATE rr::game rr::assets)
 rr_set_warnings(rr_tests)
