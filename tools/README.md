@@ -26,6 +26,9 @@ python3 tools/il2cpp_inventory.py \
     --assemblies quantum.code.dll,GameClasses.dll,Assembly-CSharp.dll
 ```
 
+With `--fields <assemblies>` it also writes `<assembly>.fields.txt`: every type's fields with
+their types and byte offsets (used to reconstruct structs and to decode game data).
+
 Writes `build/inventory/summary.json` (method counts per assembly) and a
 `<assembly>.methods.tsv` per requested assembly (token, address, namespace, type,
 method, parameter count, status). Supports IL2CPP metadata v39 (Unity 6000.3).

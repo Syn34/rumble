@@ -120,6 +120,7 @@ class Metadata:
         self.assemblies = self._read_assemblies()
         self.types = self._read_types()
         self.methods = self._read_methods()
+        self.fields = self._read_fields()
 
     def count(self, name):
         return self.sections[name][2]
@@ -180,13 +181,17 @@ class Metadata:
             r.index(self.w_type)          # parent
             r.index(self.w_gencontainer)  # generic container
             flags = r.u32()
-            r.i32()                       # first field
+            first_field = r.i32()
             first_method = r.i32()
             r.i32(); r.i32(); r.i32(); r.i32()  # events, properties, nested, interfaces
             r.i32()                       # vtable start
             r.i32()                       # interface offsets start
             method_count = r.u16()
+            r.u16()                       # property count
+            field_count = r.u16()
             types.append({
+                "first_field": first_field,
+                "field_count": field_count,
                 "name": self.string(name),
                 "namespace": self.string(namespace),
                 "flags": flags,
@@ -195,6 +200,19 @@ class Metadata:
                 "nested": declaring != -1,
             })
         return types
+
+    def _read_fields(self):
+        fields = []
+        for _, r in self._records("fields"):
+            name = r.i32()
+            type_index = r.index(self.w_type)
+            r.u32()  # token
+            fields.append({"name": self.string(name), "type": type_index})
+        return fields
+
+    def type_full_name(self, index):
+        t = self.types[index]
+        return f"{t['namespace']}.{t['name']}" if t["namespace"] else t["name"]
 
     def _read_methods(self):
         methods = []
@@ -255,6 +273,40 @@ class Binary:
                 return off + (vaddr - va)
         raise ValueError(f"address {vaddr:#x} is not file-backed")
 
+    def read_pointer(self, vaddr):
+        """Pointer-sized value at vaddr, resolving a RELATIVE relocation if present."""
+        if vaddr in self.relative:
+            return self.relative[vaddr]
+        return struct.unpack_from("<Q", self.data, self.file_offset(vaddr))[0]
+
+    def file_to_vaddr(self, offset):
+        for va, off, size in self.loads:
+            if off <= offset < off + size:
+                return va + (offset - off)
+        raise ValueError(f"file offset {offset:#x} is not mapped")
+
+    def find_metadata_registration(self, type_definition_count):
+        """Finds Il2CppMetadataRegistration by its two typeDefinitionCount-sized counts
+        (fieldOffsetsCount and typeDefinitionsSizesCount), which sit two words apart."""
+        needle = struct.pack("<q", type_definition_count)
+        pos = self.data.find(needle)
+        while pos != -1:
+            if self.data[pos + 16: pos + 24] == needle:
+                base = self.file_to_vaddr(pos)
+                return {
+                    "types_count": struct.unpack_from("<q", self.data, pos - 32)[0],
+                    "types": self.read_pointer(base - 24),
+                    "field_offsets": self.read_pointer(base + 8),
+                }
+            pos = self.data.find(needle, pos + 8)
+        return None
+
+    def read_type(self, vaddr):
+        """Decodes an Il2CppType: (type enum, datapoint, byref, attributes)."""
+        datapoint = self.read_pointer(vaddr)
+        bits = struct.unpack_from("<I", self.data, self.file_offset(vaddr + 8))[0]
+        return (bits >> 16) & 0xFF, datapoint, bool(bits & (1 << 29)), bits & 0xFFFF
+
     def method_pointers(self, module_name):
         """Return the list of method body addresses for one assembly (index = RID-1)."""
         needle = b"\0" + module_name.encode() + b"\0"
@@ -270,6 +322,59 @@ class Binary:
         return None
 
 
+PRIMITIVE_NAMES = {
+    0x01: "void", 0x02: "bool", 0x03: "char", 0x04: "sbyte", 0x05: "byte",
+    0x06: "short", 0x07: "ushort", 0x08: "int", 0x09: "uint", 0x0A: "long",
+    0x0B: "ulong", 0x0C: "float", 0x0D: "double", 0x0E: "string",
+    0x18: "nint", 0x19: "nuint", 0x1C: "object",
+}
+
+
+class TypeNamer:
+    """Turns Il2CppType entries from the binary into readable C#-style names."""
+
+    def __init__(self, md, binary, registration):
+        self.md = md
+        self.binary = binary
+        self.types = registration["types"]
+        self.count = registration["types_count"]
+
+    def attributes(self, index):
+        if index < 0 or index >= self.count:
+            return 0
+        return self.binary.read_type(self.binary.read_pointer(self.types + 8 * index))[3]
+
+    def by_index(self, index):
+        if index < 0 or index >= self.count:
+            return "?"
+        return self.at(self.binary.read_pointer(self.types + 8 * index))
+
+    def at(self, type_vaddr, depth=0):
+        if depth > 8:
+            return "..."
+        kind, data, _, _ = self.binary.read_type(type_vaddr)
+        if kind in PRIMITIVE_NAMES:
+            return PRIMITIVE_NAMES[kind]
+        if kind in (0x11, 0x12):            # VALUETYPE / CLASS: data = type definition index
+            return self.md.type_full_name(data) if data < len(self.md.types) else "?"
+        if kind == 0x1D:                    # SZARRAY: data = element type
+            return self.at(data, depth + 1) + "[]"
+        if kind == 0x0F:                    # PTR
+            return self.at(data, depth + 1) + "*"
+        if kind == 0x15:                    # GENERICINST: data = Il2CppGenericClass*
+            base = self.at(self.binary.read_pointer(data), depth + 1)
+            inst = self.binary.read_pointer(data + 8)
+            if not inst:
+                return base
+            argc = struct.unpack_from("<I", self.binary.data, self.binary.file_offset(inst))[0]
+            argv = self.binary.read_pointer(inst + 8)
+            args = [self.at(self.binary.read_pointer(argv + 8 * i), depth + 1) for i in range(argc)]
+            return f"{base.split('`')[0]}<{', '.join(args)}>"
+        if kind in (0x13, 0x1E):
+            return f"T{data & 0xFFFF}"
+        return f"<type {kind:#x}>"
+
+
 METHOD_ATTR_ABSTRACT = 0x0400
 METHOD_ATTR_PINVOKE = 0x2000
 
@@ -280,6 +385,9 @@ def main():
     ap.add_argument("metadata")
     ap.add_argument("--binary", help="libil2cpp.so, to add method body addresses")
     ap.add_argument("--out", default=os.path.join("build", "inventory"))
+    ap.add_argument("--fields", default="",
+                    help="comma-separated assemblies: also write <assembly>.fields.txt "
+                         "(field names, types and byte offsets; needs --binary)")
     ap.add_argument("--assemblies", default="",
                     help="comma-separated list; write per-method lists only for these")
     args = ap.parse_args()
@@ -317,6 +425,35 @@ def main():
                         addr = pointers[rid - 1] if pointers and rid <= len(pointers) else 0
                         out.write(f"0x{m['token']:08X}\t{addr:#x}\t{t['namespace']}\t{t['name']}\t"
                                   f"{m['name']}\t{m['params']}\tTODO\n")
+
+    field_assemblies = {a.strip() for a in args.fields.split(",") if a.strip()}
+    if field_assemblies:
+        if not binary:
+            ap.error("--fields needs --binary")
+        registration = binary.find_metadata_registration(len(md.types))
+        if not registration:
+            ap.error("could not locate the metadata registration in the binary")
+        namer = TypeNamer(md, binary, registration)
+        for img in md.images:
+            if img["name"] not in field_assemblies:
+                continue
+            path = os.path.join(args.out, img["name"] + ".fields.txt")
+            with open(path, "w", encoding="utf-8") as out:
+                out.write("# Instance field offsets are as laid out by IL2CPP: reference types and\n"
+                          "# boxed value types start with a 16-byte object header.\n")
+                for ti in range(img["first_type"], img["first_type"] + img["type_count"]):
+                    t = md.types[ti]
+                    out.write(f"{md.type_full_name(ti)}\n")
+                    offsets = binary.read_pointer(registration["field_offsets"] + 8 * ti)
+                    for k in range(t["field_count"]):
+                        f = md.fields[t["first_field"] + k]
+                        attrs = namer.attributes(f["type"])
+                        offset = "const" if attrs & 0x40 else "static" if attrs & 0x10 else "?"
+                        if offsets and not attrs & 0x50:
+                            raw = struct.unpack_from("<i", binary.data,
+                                                     binary.file_offset(offsets + 4 * k))[0]
+                            offset = f"{raw:#x}"
+                        out.write(f"    {offset:>8}  {namer.by_index(f['type'])} {f['name']}\n")
 
     summary.sort(key=lambda s: -s["methods_with_bodies"])
     with open(os.path.join(args.out, "summary.json"), "w") as out:
