@@ -29,6 +29,7 @@ add_library(rr_photon_deterministic
     deterministic_network_local.cpp
     deterministic_network.cpp
     local_input_provider.cpp
+    fp_collision.cpp
 )
 add_library(rr::photon_deterministic ALIAS rr_photon_deterministic)
 target_include_directories(rr_photon_deterministic PUBLIC ..)
