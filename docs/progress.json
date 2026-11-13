@@ -280,7 +280,7 @@
   {
    "assembly": "PhotonDeterministic.dll",
    "methods": 904,
-   "done": 693,
+   "done": 686,
    "game": false
   },
   {
@@ -970,7 +970,7 @@
   {
    "assembly": "quantum.core.dll",
    "methods": 2608,
-   "done": 1148,
+   "done": 1121,
    "game": false
   },
   {

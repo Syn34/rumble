@@ -3,9 +3,11 @@
 progress.py - measure how much of the original code has been reimplemented and
 update the progress section of README.md.
 
-A method counts as done when its original address appears in a source comment
-under src/game/ (the project convention is `// 0xADDR` above each reimplemented
-function) and is not inside a `TODO(0xADDR, ...)` marker.
+A method counts as done when its original address starts a source comment under
+src/game/ (the project convention is `// 0xADDR` above each reimplemented
+function; further addresses on the same line also count) and the address is not
+named in any `TODO(0xADDR, ...)` marker. Addresses mentioned elsewhere in comment
+prose (e.g. continuation lines of a TODO block) are not counted.
 
 Inputs:
   * the method lists written by `il2cpp_inventory.py --assemblies all` (local,
@@ -40,6 +42,8 @@ GAME_PREFIXES = ("quantum.code", "GameClasses", "GameData", "Assembly-CSharp", "
                  "FidelioFramework", "Ohbibi", "OhBibi", "OhbibiCore", "AFuncs", "com.ohbibi")
 
 ADDRESS = re.compile(r"0x[0-9a-fA-F]{6,}")
+# A comment whose text begins with an address: "// 0x7a726d0 ..." (also after code).
+ADDRESS_COMMENT = re.compile(r"//\s*0x[0-9a-fA-F]{6,}")
 TODO_ADDRESS = re.compile(r"TODO\((0x[0-9a-fA-F]{6,})")
 
 
@@ -53,7 +57,9 @@ def referenced_addresses():
                 todo.update(int(a, 16) for a in TODO_ADDRESS.findall(line))
                 if "TODO(" in line:
                     continue
-                done.update(int(a, 16) for a in ADDRESS.findall(line))
+                match = ADDRESS_COMMENT.search(line)
+                if match:
+                    done.update(int(a, 16) for a in ADDRESS.findall(line[match.start():]))
     return done - todo
 
 
