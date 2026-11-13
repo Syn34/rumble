@@ -66,13 +66,6 @@ void ReadFields(const Value& value, Quantum::WeaponLoadoutData& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::WeaponSpecModifier& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::WeaponStatModifier& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::WeaponVisualParams& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::AIParamAssetRef& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::AIParamBool& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::AIParamEntityRef& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::AIParamFP& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::AIParamFPVector2& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::AIParamFPVector3& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::AIParamInt& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::AIParamGotoDestinationType& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::AIParamMobSlamAttackEventType& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::AIParamMobsEventType& out, ReaderTag);
@@ -87,6 +80,13 @@ void ReadFields(const Value& value, Quantum::AIConfig& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::AIConfig::KeyValuePair& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::AIConfig::Value& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::AIFunction& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::AIParamAssetRef& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::AIParamBool& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::AIParamEntityRef& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::AIParamFP& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::AIParamFPVector2& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::AIParamFPVector3& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::AIParamInt& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::BTNode& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::BTService& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::CompoundHFSMSpec& out, ReaderTag);
@@ -728,41 +728,6 @@ void ReadFields(const Value& value, Quantum::WeaponVisualParams& out, ReaderTag)
     Read(value, "weaponLastRotationEulerAngles", out.weaponLastRotationEulerAngles);
 }
 
-void ReadFields(const Value& value, Quantum::AIParamAssetRef& out, ReaderTag) {
-    ReadFields(value, static_cast<AIParam<AssetRef>&>(out), ReaderTag{});
-    Read(value, "FunctionRef", out.FunctionRef);
-}
-
-void ReadFields(const Value& value, Quantum::AIParamBool& out, ReaderTag) {
-    ReadFields(value, static_cast<AIParam<bool>&>(out), ReaderTag{});
-    Read(value, "FunctionRef", out.FunctionRef);
-}
-
-void ReadFields(const Value& value, Quantum::AIParamEntityRef& out, ReaderTag) {
-    ReadFields(value, static_cast<AIParam<EntityRef>&>(out), ReaderTag{});
-    Read(value, "FunctionRef", out.FunctionRef);
-}
-
-void ReadFields(const Value& value, Quantum::AIParamFP& out, ReaderTag) {
-    ReadFields(value, static_cast<AIParam<FP>&>(out), ReaderTag{});
-    Read(value, "FunctionRef", out.FunctionRef);
-}
-
-void ReadFields(const Value& value, Quantum::AIParamFPVector2& out, ReaderTag) {
-    ReadFields(value, static_cast<AIParam<FPVector2>&>(out), ReaderTag{});
-    Read(value, "FunctionRef", out.FunctionRef);
-}
-
-void ReadFields(const Value& value, Quantum::AIParamFPVector3& out, ReaderTag) {
-    ReadFields(value, static_cast<AIParam<FPVector3>&>(out), ReaderTag{});
-    Read(value, "FunctionRef", out.FunctionRef);
-}
-
-void ReadFields(const Value& value, Quantum::AIParamInt& out, ReaderTag) {
-    ReadFields(value, static_cast<AIParam<std::int32_t>&>(out), ReaderTag{});
-    Read(value, "FunctionRef", out.FunctionRef);
-}
-
 void ReadFields(const Value& value, Quantum::AIParamGotoDestinationType& out, ReaderTag) {
     ReadFields(value, static_cast<EnumAIParam<GOTO_DESTINATION>&>(out), ReaderTag{});
 }
@@ -838,6 +803,41 @@ void ReadFields(const Value& value, Quantum::AIConfig::Value& out, ReaderTag) {
 }
 
 void ReadFields(const Value&, Quantum::AIFunction&, ReaderTag) {}
+
+void ReadFields(const Value& value, Quantum::AIParamAssetRef& out, ReaderTag) {
+    ReadFields(value, static_cast<AIParam<AssetRef>&>(out), ReaderTag{});
+    Read(value, "FunctionRef", out.FunctionRef);
+}
+
+void ReadFields(const Value& value, Quantum::AIParamBool& out, ReaderTag) {
+    ReadFields(value, static_cast<AIParam<bool>&>(out), ReaderTag{});
+    Read(value, "FunctionRef", out.FunctionRef);
+}
+
+void ReadFields(const Value& value, Quantum::AIParamEntityRef& out, ReaderTag) {
+    ReadFields(value, static_cast<AIParam<EntityRef>&>(out), ReaderTag{});
+    Read(value, "FunctionRef", out.FunctionRef);
+}
+
+void ReadFields(const Value& value, Quantum::AIParamFP& out, ReaderTag) {
+    ReadFields(value, static_cast<AIParam<FP>&>(out), ReaderTag{});
+    Read(value, "FunctionRef", out.FunctionRef);
+}
+
+void ReadFields(const Value& value, Quantum::AIParamFPVector2& out, ReaderTag) {
+    ReadFields(value, static_cast<AIParam<FPVector2>&>(out), ReaderTag{});
+    Read(value, "FunctionRef", out.FunctionRef);
+}
+
+void ReadFields(const Value& value, Quantum::AIParamFPVector3& out, ReaderTag) {
+    ReadFields(value, static_cast<AIParam<FPVector3>&>(out), ReaderTag{});
+    Read(value, "FunctionRef", out.FunctionRef);
+}
+
+void ReadFields(const Value& value, Quantum::AIParamInt& out, ReaderTag) {
+    ReadFields(value, static_cast<AIParam<std::int32_t>&>(out), ReaderTag{});
+    Read(value, "FunctionRef", out.FunctionRef);
+}
 
 void ReadFields(const Value& value, Quantum::BTNode& out, ReaderTag) {
     Read(value, "Label", out.Label);

@@ -139,6 +139,138 @@ template <class T> class EnumEqualsFunction : public AIFunctionT<bool> {
     EnumAIParam<T> Value;
 };
 
+struct AIParamAssetRef : AIParam<AssetRef> {
+    AssetRefAIFunction FunctionRef;
+    AIFunctionT<AssetRef>* _cachedFunction = nullptr; // not stored
+
+    // 0x7b80040
+    AIParamAssetRef() = default;
+
+    // 0x7b7feb8 - the blackboard entry's value of this type.
+    AssetRef GetBlackboardValue(BlackboardValue value) const { return *value.get_AssetRefValue(); }
+    // 0x7b7ff54 - the config entry's value of this type (a missing entry throws).
+    AssetRef GetConfigValue(const AIConfig::KeyValuePair* configPair) const {
+        if (configPair == nullptr) throw std::invalid_argument("missing AI config entry");
+        return configPair->Value.AssetRef;
+    }
+    // TODO(0x7b7ff68, Quantum.AIParamAssetRef.GetFunctionValue): AssetRef
+    //   GetFunctionValue(FrameThreadSafe frame, EntityRef entity, AIContext aiContext)
+};
+
+struct AIParamBool : AIParam<bool> {
+    AssetRefAIFunction FunctionRef;
+    AIFunctionT<bool>* _cachedFunction = nullptr; // not stored
+
+    // 0x7b7f4c8
+    AIParamBool() = default;
+
+    // 0x7b7f464 - a parameter that uses `value` (Source stays Value).
+    AIParamBool(bool value) { DefaultValue = value; }
+    // 0x7b7f510 - the blackboard entry's value of this type.
+    bool GetBlackboardValue(BlackboardValue value) const { return value.get_BooleanValue()->Value != 0; }
+    // 0x7b7f5b0 - the config entry's value of this type (a missing entry throws).
+    bool GetConfigValue(const AIConfig::KeyValuePair* configPair) const {
+        if (configPair == nullptr) throw std::invalid_argument("missing AI config entry");
+        return configPair->Value.Boolean;
+    }
+    // TODO(0x7b7f5c4, Quantum.AIParamBool.GetFunctionValue): bool GetFunctionValue(FrameThreadSafe
+    //   frame, EntityRef entity, AIContext aiContext)
+};
+
+struct AIParamEntityRef : AIParam<EntityRef> {
+    AssetRefAIFunction FunctionRef;
+    AIFunctionT<EntityRef>* _cachedFunction = nullptr; // not stored
+
+    // 0x7b7fe70
+    AIParamEntityRef() = default;
+
+    // 0x7b7fce8 - the blackboard entry's value of this type.
+    EntityRef GetBlackboardValue(BlackboardValue value) const { return *value.get_EntityRefValue(); }
+    // 0x7b7fd84 - the config entry's value of this type (a missing entry throws).
+    EntityRef GetConfigValue(const AIConfig::KeyValuePair* configPair) const {
+        if (configPair == nullptr) throw std::invalid_argument("missing AI config entry");
+        return configPair->Value.EntityRef;
+    }
+    // TODO(0x7b7fd98, Quantum.AIParamEntityRef.GetFunctionValue): EntityRef
+    //   GetFunctionValue(FrameThreadSafe frame, EntityRef entity, AIContext aiContext)
+};
+
+struct AIParamFP : AIParam<FP> {
+    AssetRefAIFunction FunctionRef;
+    AIFunctionT<FP>* _cachedFunction = nullptr; // not stored
+
+    // 0x7b7f6fc
+    AIParamFP() = default;
+
+    // 0x7b7f69c - a parameter that uses `value` (Source stays Value).
+    AIParamFP(FP value) { DefaultValue = value; }
+    // 0x7b7f744 - the blackboard entry's value of this type.
+    FP GetBlackboardValue(BlackboardValue value) const { return *value.get_FPValue(); }
+    // 0x7b7f7e0 - the config entry's value of this type (a missing entry throws).
+    FP GetConfigValue(const AIConfig::KeyValuePair* configPair) const {
+        if (configPair == nullptr) throw std::invalid_argument("missing AI config entry");
+        return configPair->Value.FP;
+    }
+    // TODO(0x7b7f7f4, Quantum.AIParamFP.GetFunctionValue): FP GetFunctionValue(FrameThreadSafe
+    //   frame, EntityRef entity, AIContext aiContext)
+};
+
+struct AIParamFPVector2 : AIParam<FPVector2> {
+    AssetRefAIFunction FunctionRef;
+    AIFunctionT<FPVector2>* _cachedFunction = nullptr; // not stored
+
+    // 0x7b7fa58
+    AIParamFPVector2() = default;
+
+    // 0x7b7f8cc - the blackboard entry's value of this type.
+    FPVector2 GetBlackboardValue(BlackboardValue value) const { return *value.get_FPVector2Value(); }
+    // 0x7b7f96c - the config entry's value of this type (a missing entry throws).
+    FPVector2 GetConfigValue(const AIConfig::KeyValuePair* configPair) const {
+        if (configPair == nullptr) throw std::invalid_argument("missing AI config entry");
+        return configPair->Value.FPVector2;
+    }
+    // TODO(0x7b7f980, Quantum.AIParamFPVector2.GetFunctionValue): FPVector2
+    //   GetFunctionValue(FrameThreadSafe frame, EntityRef entity, AIContext aiContext)
+};
+
+struct AIParamFPVector3 : AIParam<FPVector3> {
+    AssetRefAIFunction FunctionRef;
+    AIFunctionT<FPVector3>* _cachedFunction = nullptr; // not stored
+
+    // 0x7b7fca0
+    AIParamFPVector3() = default;
+
+    // 0x7b7faa0 - the blackboard entry's value of this type.
+    FPVector3 GetBlackboardValue(BlackboardValue value) const { return *value.get_FPVector3Value(); }
+    // 0x7b7fb4c - the config entry's value of this type (a missing entry throws).
+    FPVector3 GetConfigValue(const AIConfig::KeyValuePair* configPair) const {
+        if (configPair == nullptr) throw std::invalid_argument("missing AI config entry");
+        return configPair->Value.FPVector3;
+    }
+    // TODO(0x7b7fb6c, Quantum.AIParamFPVector3.GetFunctionValue): FPVector3
+    //   GetFunctionValue(FrameThreadSafe frame, EntityRef entity, AIContext aiContext)
+};
+
+struct AIParamInt : AIParam<std::int32_t> {
+    AssetRefAIFunction FunctionRef;
+    AIFunctionT<std::int32_t>* _cachedFunction = nullptr; // not stored
+
+    // 0x7b7f294
+    AIParamInt() = default;
+
+    // 0x7b7f234 - a parameter that uses `value` (Source stays Value).
+    AIParamInt(std::int32_t value) { DefaultValue = value; }
+    // 0x7b7f2dc - the blackboard entry's value of this type.
+    std::int32_t GetBlackboardValue(BlackboardValue value) const { return *value.get_IntegerValue(); }
+    // 0x7b7f378 - the config entry's value of this type (a missing entry throws).
+    std::int32_t GetConfigValue(const AIConfig::KeyValuePair* configPair) const {
+        if (configPair == nullptr) throw std::invalid_argument("missing AI config entry");
+        return configPair->Value.Integer;
+    }
+    // TODO(0x7b7f38c, Quantum.AIParamInt.GetFunctionValue): int GetFunctionValue(FrameThreadSafe
+    //   frame, EntityRef entity, AIContext aiContext)
+};
+
 class BTNode : public AssetObject {
   public:
     std::string Label;
