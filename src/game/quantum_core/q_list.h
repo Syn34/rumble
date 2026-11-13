@@ -51,8 +51,10 @@ struct QListInternal {
     }
 
     // TODO(0x7d2134c, Quantum.Collections.QListInternal.Print): needs FramePrinter.
-    // TODO(0x7d215d8, Quantum.Collections.QListInternal.Serialize): serialises count,
-    // buffer and items; needs FrameSerializer.
+    // 0x7d215d8 - The list record behind `ptr` (keyed like every heap block), its count,
+    // then its buffer with the first `count` items through `itemSerializer`.
+    static void Serialize(Quantum::Ptr* ptr, FrameSerializer* serializer, int stride,
+                          QBuffer::ItemSerializer itemSerializer);
 };
 
 static_assert(sizeof(QListInternal) == 16);

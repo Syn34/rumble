@@ -5,7 +5,7 @@
 namespace Quantum {
 
 // 0x7ce51d0
-void NavMeshAgentConfig::Loaded() {
+void NavMeshAgentConfig::Loaded(IResourceManager* /*resourceManager*/, Allocator* /*allocator*/) {
     FP stoppingDistance = StoppingDistance;
     if (stoppingDistance < NavigationConstants::MinStoppingDistance) {
         stoppingDistance = NavigationConstants::MinStoppingDistance;

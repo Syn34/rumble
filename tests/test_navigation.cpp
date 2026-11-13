@@ -3,6 +3,7 @@
 
 #include "photon_deterministic/fp_math.h"
 #include "photon_deterministic/rng_session.h"
+#include "quantum_core/builtin_assets.h"
 #include "quantum_core/byte_stream.h"
 #include "quantum_core/mailbox_set8.h"
 #include "quantum_core/navigation/navmesh.h"
@@ -359,10 +360,11 @@ TEST_CASE("NavMesh serialisation round trip") {
 
     NavMesh loaded;
     loaded.DataAsset = AssetGuid(42);
-    loaded.Loaded(nullptr); // missing data: only a warning
+    loaded.LoadData(nullptr); // missing data: only a warning
     CHECK(loaded.Triangles.empty());
-    NavMeshBinaryData data{buffer, false};
-    loaded.Loaded(&data);
+    BinaryData data;
+    data.Data = buffer;
+    loaded.LoadData(&data);
     CHECK(loaded.Triangles.size() == mesh.Triangles.size());
     CHECK(loaded.Vertices.size() == mesh.Vertices.size());
     CHECK(loaded.Borders.size() == mesh.Borders.size());

@@ -28,7 +28,8 @@ struct FrameThreadSafe {
     Core::FrameContext* get_Context() const { return _frame->get_Context(); }
     // 0x7cefa3c
     Photon::Deterministic::FP get_DeltaTime() const { return _frame->get_DeltaTime(); }
-    // TODO(0x7cefa20, Quantum.FrameThreadSafe.get_Map): needs Map.
+    // 0x7cefa20
+    Map* get_Map() const { return _frame->get_Map(); }
     // TODO(0x7cefa5c, Quantum.FrameThreadSafe.get_Physics3D): the per-thread
     // PhysicsEngine3D.ThreadSafeApi; needs the 3D physics engine.
 
@@ -66,8 +67,16 @@ struct FrameThreadSafe {
     Collections::QDictionary<K, V> ResolveDictionary(Collections::QDictionaryPtr<K, V> ptr) const {
         return _frame->ResolveDictionary(ptr);
     }
-    // TODO(0x4f0ce28, Quantum.FrameThreadSafe.FindAsset<T>) and
-    // TODO(0x4f0d34c, Quantum.FrameThreadSafe.TryFindAsset<T>): need the asset database.
+    // 0x4f0ce28 (shared generic code) - FrameBase::FindAsset with this thread's loading
+    // path (worker threads queue loads for the main thread).
+    template <class T> T* FindAsset(AssetGuid guid) const {
+        return _frame->FindAssetInternal<T>(guid, _thread == 0);
+    }
+    template <class T> T* FindAsset(AssetRef assetRef) const { return FindAsset<T>(assetRef.Id); }
+    // 0x4f0d34c (shared generic code)
+    template <class T> bool TryFindAsset(AssetGuid guid, T*& asset) const {
+        return _frame->TryFindAssetInternal<T>(guid, _thread == 0, asset);
+    }
 };
 
 } // namespace Quantum

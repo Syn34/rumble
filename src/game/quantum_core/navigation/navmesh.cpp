@@ -5,13 +5,16 @@
 #include "photon_deterministic/fp_math.h"
 #include "photon_deterministic/log.h"
 #include "photon_deterministic/rng_session.h"
+#include "quantum_core/builtin_assets.h"
 #include "quantum_core/byte_stream.h"
 #include "quantum_core/mailbox_set8.h"
 #include "quantum_core/navigation/path_finder.h"
+#include "quantum_core/resource_manager.h"
 
 #include <algorithm>
 #include <exception>
 #include <limits>
+#include <typeinfo>
 
 namespace Quantum {
 
@@ -53,26 +56,38 @@ template <class T> const T& Element(const std::vector<T>& items, std::int64_t in
 } // namespace
 
 // 0x7ce2834
-void NavMesh::Loaded(const NavMeshBinaryData* dataAsset) {
+void NavMesh::Loaded(IResourceManager* resourceManager, Allocator* /*allocator*/) {
+    if (!DataAsset.IsValid()) {
+        return;
+    }
+    const std::shared_ptr<AssetObject> asset = resourceManager->GetAsset(DataAsset, true);
+    if (asset != nullptr && dynamic_cast<const BinaryData*>(asset.get()) == nullptr) {
+        // The original's cast throws InvalidCastException.
+        throw std::bad_cast();
+    }
+    const auto* data = static_cast<const BinaryData*>(asset.get());
+    LoadData(data);
+    if (data != nullptr && !DataAsset.IsDynamic()) {
+        // The blob is only needed while reading it.
+        resourceManager->DisposeAsset(DataAsset);
+    }
+}
+
+void NavMesh::LoadData(const BinaryData* dataAsset) {
     if (!DataAsset.IsValid()) {
         return;
     }
     if (dataAsset == nullptr) {
         // Quantum.Log.Warn in the original.
-        Log::Warn("NavMesh cannot load data file from {0}", DataAsset.ToString(true));
+        Log::Warn("NavMesh {0}: data asset {1} not found", Name, DataAsset.ToString(true));
         return;
     }
-    // BinaryData.CreateByteStream: decompress if needed, then read.
-    std::vector<std::uint8_t> bytes =
-        dataAsset->IsCompressed
-            ? Photon::Deterministic::ByteUtils::GZipDecompressBytes(dataAsset->Data)
-            : dataAsset->Data;
     try {
-        ByteStream stream(&bytes);
-        Serialize(stream, false);
+        const auto stream = dataAsset->CreateByteStream();
+        Serialize(stream->Stream, false);
     } catch (const std::exception& exception) {
-        Log::Error("Serializing the asset with guid {0} for navmesh {1} {2} caused an error",
-                   DataAsset.ToString(true), Name, Guid.ToString(true));
+        Log::Error("NavMesh {0} {1}: reading data asset {2} failed", Name, Guid.ToString(true),
+                   DataAsset.ToString(true));
         Log::Exception(exception);
     }
 }

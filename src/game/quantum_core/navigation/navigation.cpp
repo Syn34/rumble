@@ -2,6 +2,7 @@
 
 #include "photon_deterministic/fp_collision.h"
 #include "photon_deterministic/fp_math.h"
+#include "quantum_core/frame_base.h"
 #include "quantum_core/navigation/navigation_constants.h"
 #include "quantum_core/navigation/navmesh.h"
 #include "quantum_core/transform.h"
@@ -50,6 +51,14 @@ void AddCandidate(std::vector<Navigation::VelocityCandidate>& candidates, int& c
 
 // ---------------------------------------------------------------------------------------
 // Entry
+
+// 0x7d26684
+NavMeshAgentConfig* Navigation::Entry::TryGetConfig(Core::FrameBase* frame) const {
+    if (PathfinderAgent == nullptr) {
+        return nullptr;
+    }
+    return frame->FindAssetInternal<NavMeshAgentConfig>(PathfinderAgent->ConfigId(), true);
+}
 
 // 0x7d26714
 std::int32_t Navigation::Entry::AvoidanceMask() const {

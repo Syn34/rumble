@@ -30,6 +30,12 @@ class DeterministicCommandSerializer;
 class IDeterministicPlatformTaskRunner;
 } // namespace Photon::Deterministic
 
+namespace Quantum {
+class AssetDB;
+class DynamicAssetDB;
+class IAssetSerializer;
+} // namespace Quantum
+
 namespace Quantum::Core {
 
 class FrameBase;
@@ -41,12 +47,19 @@ class FrameContext {
 
     // Everything a simulation is created with (Quantum.Core.FrameContext.Args).
     struct Args {
-        // TODO(0x7d1e568, Quantum.Core.FrameContext..ctor): AssetDatabase, NavigationConfig,
-        // PhysicsConfig, AssetSerializer and InitialDynamicAssets are not available yet.
+        // TODO(0x7d1e568, Quantum.Core.FrameContext..ctor): NavigationConfig and
+        // PhysicsConfig are not available yet.
+        // The asset database (from the resource manager's CreateAssetDatabase); the
+        // context points it back at itself and disposes it through its manager.
+        std::shared_ptr<Quantum::AssetDB> AssetDatabase;
         Photon::Deterministic::DeterministicPlatformInfo* PlatformInfo = nullptr;
         std::function<bool(int)> IsLocalPlayer;
         bool IsServer = false;
         Photon::Deterministic::DeterministicCommandSerializer* CommandSerializer = nullptr;
+        // Not owned.
+        Quantum::IAssetSerializer* AssetSerializer = nullptr;
+        // Copied into every new frame's dynamic asset database (shared, not owned).
+        std::shared_ptr<Quantum::DynamicAssetDB> InitialDynamicAssets;
         Quantum::Allocator::Heap::Config HeapConfig;
         Quantum::Allocator::HeapTrackingMode HeapTrackingMode = Quantum::Allocator::HeapTrackingMode::Disabled;
         bool UseCullingArea = false;
@@ -75,11 +88,12 @@ class FrameContext {
     // Number of event ids the pool table starts with.
     static constexpr int InitialEventPoolCount = 1024;
 
-    // TODO(0x7d1e568, Quantum.Core.FrameContext..ctor): asset database, task context,
-    // profiler, physics layers and engines, navigation and the Culling object are missing.
-    // Done: allocator and task runner from the platform info, the heap group (when the
-    // heap config asks for at least one heap), event list and pools, the heap tracker for
-    // the configured mode, the prediction area and the shared checksum serializer.
+    // TODO(0x7d1e568, Quantum.Core.FrameContext..ctor): task context, profiler, physics
+    // layers and engines, navigation and the Culling object are missing. Done: allocator
+    // and task runner from the platform info, the asset database (pointed back at this
+    // context), asset serializer and initial dynamic assets, the heap group (when the heap
+    // config asks for at least one heap), event list and pools, the heap tracker for the
+    // configured mode, the prediction area and the shared checksum serializer.
     explicit FrameContext(const Args& args);
     // Runs Dispose.
     ~FrameContext();
@@ -110,8 +124,12 @@ class FrameContext {
     // TODO(0x7d1e520, Quantum.Core.FrameContext.get_TaskContext): needs Task.TaskContext.
     // TODO(0x7d1e528, Quantum.Core.FrameContext.get_ProfilerContext): needs ProfilerContext.
     // TODO(0x7d1e538, Quantum.Core.FrameContext.get_Culling): needs FrameBase.Culling.
-    // TODO(0x7d1e540, Quantum.Core.FrameContext.get_AssetDB): needs AssetDB.
-    // TODO(0x7d1e548, Quantum.Core.FrameContext.get_AssetSerializer): needs IAssetSerializer.
+    // 0x7d1e540
+    Quantum::AssetDB* get_AssetDB() const { return _assetDB.get(); }
+    // 0x7d1e548
+    Quantum::IAssetSerializer* get_AssetSerializer() const { return _assetSerializer; }
+    // Quantum.Core.FrameContext.InitialDynamicAssets (may be null).
+    Quantum::DynamicAssetDB* InitialDynamicAssets() const { return _initialDynamicAssets.get(); }
 
     // TODO(0x7d1eb94, Quantum.Core.FrameContext.OnSimulationBegin): starts the profiler and
     // task context; both are missing, so this does nothing yet.
@@ -134,9 +152,10 @@ class FrameContext {
     // are still freed.
     void FreeTempAllocations();
 
-    // TODO(0x7d1f054, Quantum.Core.FrameContext.Dispose): disposing the engines, asset
-    // database resources and task context is missing. Done: frees temporary memory and the
-    // heap group, disposes the allocator, deletes pooled events. Safe to call twice.
+    // TODO(0x7d1f054, Quantum.Core.FrameContext.Dispose): disposing the engines and task
+    // context is missing. Done: frees temporary memory, hands the asset database back to
+    // its resource manager, frees the heap group, disposes the allocator, deletes pooled
+    // events. Safe to call twice.
     void Dispose();
 
     // 0x7d1a7c8, 0x7d1a7d0
@@ -179,6 +198,9 @@ class FrameContext {
     void EnsureEventPool(int id);
 
     std::function<bool(int)> _isLocalPlayer;
+    std::shared_ptr<Quantum::DynamicAssetDB> _initialDynamicAssets;
+    std::shared_ptr<Quantum::AssetDB> _assetDB;
+    Quantum::IAssetSerializer* _assetSerializer = nullptr;
     CullingArea _cullingArea;
     Quantum::Allocator::Heap::Group* _heapGroup = nullptr;
     Photon::Deterministic::DeterministicCommandSerializer* _commandSerializer = nullptr;

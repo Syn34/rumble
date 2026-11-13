@@ -1,6 +1,9 @@
 // Original: Quantum.AssetGuid / Quantum.AssetRef (quantum.core.dll).
 #include "asset_guid.h"
 
+#include "photon_deterministic/bit_stream.h"
+#include "photon_deterministic/deterministic_frame_serializer.h"
+
 #include <cstdio>
 #include <random>
 
@@ -21,6 +24,10 @@ AssetGuid AssetGuid::NewGuid() {
     return AssetGuid(static_cast<std::int64_t>(value & 0x3FFFFFFFFFFFFFFFull));
 }
 
+void AssetGuid::Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer) {
+    serializer->Stream().Serialize(&static_cast<AssetGuid*>(ptr)->Value);
+}
+
 std::int32_t AssetGuid::GetHashCode() const {
     const auto bits = static_cast<std::uint64_t>(Value);
     return static_cast<std::int32_t>(static_cast<std::uint32_t>(bits) ^
@@ -34,10 +41,6 @@ std::string AssetGuid::ToString(bool brackets) const {
     return buffer;
 }
 
-std::string AssetRef::ToString() const {
-    // TODO(0x7ce0990, Quantum.AssetRef.ToString): the original formats through a
-    // shared helper whose exact text hasn't been confirmed yet; GUID text for now.
-    return Id.ToString(true);
-}
+std::string AssetRef::ToString(AssetGuid id) { return "Id: " + id.ToString(true); }
 
 } // namespace Quantum

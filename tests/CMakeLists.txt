@@ -20,6 +20,7 @@ add_executable(rr_tests
     test_quantum_collision.cpp
     test_navigation.cpp
     test_navigation_agents.cpp
+    test_quantum_assets.cpp
     test_quantum_narrow2d.cpp
     test_quantum_narrow3d.cpp
     test_quantum_box3d.cpp

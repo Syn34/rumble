@@ -3,7 +3,10 @@
 #include "photon_deterministic/bit_stream.h"
 #include "photon_deterministic/deterministic_frame_serializer.h"
 #include "photon_deterministic/fp_math.h"
+#include "quantum_core/frame_base.h"
 #include "quantum_core/navigation/navmesh_agent_config.h"
+
+#include <stdexcept>
 
 namespace Quantum {
 
@@ -15,6 +18,22 @@ FP NavMeshSteeringAgent::CurrentSpeed() const {
 }
 
 // 0x7d309f8
+void NavMeshSteeringAgent::SetConfig(Core::FrameBase* frame, const NavMeshAgentConfig* config,
+                                     bool overwrite) {
+    if (config == nullptr) {
+        config = frame->FindAssetInternal<NavMeshAgentConfig>(
+            AssetGuid(NavMeshAgentConfig::DEFAULT_ID), true);
+    }
+    const bool needsValue = !_maxSpeed.HasValue() || !_acceleration.HasValue() || overwrite;
+    if (config == nullptr) {
+        if (needsValue) {
+            throw std::invalid_argument("no navmesh agent config (and no default config)");
+        }
+        return;
+    }
+    SetConfig(*config, overwrite);
+}
+
 void NavMeshSteeringAgent::SetConfig(const NavMeshAgentConfig& config, bool overwrite) {
     if (!_maxSpeed.HasValue() || overwrite) {
         _maxSpeed = NullableNonNegativeFP::FromFP(config.Speed);
