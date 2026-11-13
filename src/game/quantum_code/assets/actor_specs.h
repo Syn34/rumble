@@ -181,8 +181,8 @@ class DroppableCollectorSpec : public AssetObject {
     // 0x7c904bc
     DroppableCollectorSpec() = default;
 
-    // TODO(0x7c90444, Quantum.DroppableCollectorSpec.HasMaxCollectPerSecond): bool
-    //   HasMaxCollectPerSecond(DroppableType droppableType, ushort maxAmount)
+    // 0x7c90444 - the per-second collection cap for that droppable type (0xFFFF when uncapped).
+    bool HasMaxCollectPerSecond(DroppableType droppableType, std::uint16_t& maxAmount) const;
 };
 
 class HealthSpec : public AssetObject {

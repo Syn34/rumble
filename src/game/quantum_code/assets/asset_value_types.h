@@ -610,7 +610,8 @@ struct GameModesTableEntry {
     AssetRefGameModeSpec spec;
     GAME_MODE_STATUS status{};
 
-    // TODO(0x7b980a4, Quantum.GameModesTableEntry.GetHashCode): int GetHashCode()
+    // 0x7b980a4
+    std::int32_t GetHashCode() const;
 };
 
 struct HFSMSetupData {

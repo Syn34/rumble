@@ -877,8 +877,8 @@ class PusherSpec : public AssetObject {
     // 0x7c94438
     PusherSpec() = default;
 
-    // TODO(0x7c940c4, Quantum.PusherSpec.SetupPushData): void SetupPushData(PushData pushData);
-    //   uses QBoolean.op_Implicit
+    // 0x7c940c4 - copies the push settings into a push request.
+    void SetupPushData(PushData* pushData) const;
     // TODO(0x7c94160, Quantum.PusherSpec.CalculateImpulse): FPVector3 CalculateImpulse(Frame f,
     //   FPVector3 forceDirection, FPVector3 hitPoint, EntityRef pusherEntity); uses FPMath.SqrtRaw,
     //   FPVector3.Normalize, FPVector3.get_Zero, FPAnimationCurve.Evaluate, Transform3D.get_Forward

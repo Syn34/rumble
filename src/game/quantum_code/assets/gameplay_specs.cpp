@@ -17,4 +17,16 @@ FP BombardierDroneSpec::TotalRange() const {
 
 bool ProjectileSpec::HasAcceleration() const { return Type == static_cast<ProjectileType>(0) && Accelerates; }
 
+void PusherSpec::SetupPushData(PushData* pushData) const {
+    pushData->isContinuous = QBoolean(IsContinuous);
+    pushData->bypassPushStop = QBoolean(BypassPushStop);
+    pushData->canBump = QBoolean(CanBump);
+    pushData->bumpType = BumpType;
+    pushData->bumpPercentage = BumpReductionPercentage;
+    pushData->flatBumpStrength = FlatBumpStrength;
+    pushData->forcePushStop = QBoolean(!BypassPushStop && ForcePushStop);
+    pushData->forcePushStopStrength = ForcePushStopStrength;
+    pushData->onShieldBehaviour = OnShieldBehaviour;
+}
+
 } // namespace Quantum

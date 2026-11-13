@@ -30,3 +30,18 @@ std::int32_t HeroSpec::GetLevelAtPower(Frame* frame, GENERATED_CHARACTER_ID hero
 }
 
 } // namespace Quantum
+
+namespace Quantum {
+
+bool DroppableCollectorSpec::HasMaxCollectPerSecond(DroppableType droppableType, std::uint16_t& maxAmount) const {
+    for (const MaxCollectPerSecond& cap : MaxDroppablesCollectedPerSecond) {
+        if (cap.droppableType == droppableType) {
+            maxAmount = cap.amount;
+            return true;
+        }
+    }
+    maxAmount = 0xFFFF;
+    return false;
+}
+
+} // namespace Quantum

@@ -137,6 +137,18 @@ const AIConfig::KeyValuePair* AIConfig::Get(const std::string& key) const {
     return nullptr;
 }
 
+AssetRefConsideration Consideration::GetConsideration(Collections::QList<AssetRefConsideration> sourceList,
+                                                     std::int32_t id) const {
+    (void)sourceList;
+    const Consideration* next = NextConsiderations.at(static_cast<std::size_t>(id));
+    return AssetRefConsideration{next ? next->Guid : AssetGuid{}};
+}
+
+std::int32_t Consideration::Count(Collections::QList<AssetRefConsideration> sourceList) const {
+    (void)sourceList;
+    return static_cast<std::int32_t>(NextConsiderations.size());
+}
+
 void UTRoot::Loaded(IResourceManager* resourceManager, Allocator* allocator) {
     (void)allocator;
     Considerations = LinkAssets<Consideration>(resourceManager, ConsiderationsRefs);

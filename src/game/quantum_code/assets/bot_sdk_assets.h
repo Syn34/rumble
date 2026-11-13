@@ -195,9 +195,10 @@ class Consideration : public AssetObject {
     // 0x7b856fc
     Consideration() = default;
 
-    // TODO(0x7b84968, Quantum.Consideration.GetConsideration): AssetRefConsideration
-    //   GetConsideration(AssetRefConsideration> sourceList, int id); uses AssetObject.get_Guid
-    // TODO(0x7b849b8, Quantum.Consideration.Count): int Count(AssetRefConsideration> sourceList)
+    // 0x7b84968 - the GUID of the next consideration at `id` (the list argument is unused).
+    virtual AssetRefConsideration GetConsideration(Collections::QList<AssetRefConsideration> sourceList, std::int32_t id) const;
+    // 0x7b849b8 - the number of next considerations (the list argument is unused).
+    virtual std::int32_t Count(Collections::QList<AssetRefConsideration> sourceList) const;
     // TODO(0x7b849d0, Quantum.Consideration.GetRank): int GetRank(FrameThreadSafe frame, EntityRef
     //   entity, AIContext aiContext)
     // TODO(0x7b849e8, Quantum.Consideration.Score): FP Score(FrameThreadSafe frame, EntityRef
