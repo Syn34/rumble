@@ -32,6 +32,10 @@ public:
 
     static bool LooksLikeBundle(std::span<const std::uint8_t> bytes);
 
+    // Reads only the entry directory of a bundle file on disk (header and block
+    // table), without decompressing the data. Cheap enough to scan every bundle.
+    static std::vector<BundleEntry> ReadEntries(const std::string& path);
+
     std::uint32_t FormatVersion() const { return version_; }
     const std::string& EngineVersion() const { return engineVersion_; }
     const std::vector<BundleEntry>& Entries() const { return entries_; }

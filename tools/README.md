@@ -64,3 +64,13 @@ build/tools/assetinfo <file.bundle> --engine-lib <libunity.so from the arm64 spl
 
 `--engine-lib` supplies the engine's shared field-name table, which isn't stored in the
 content files. Output is derived from your game files: don't commit it.
+
+## contentindex
+
+Lists the simulation assets (weapon specs, heroes, maps...) found in the extracted asset
+pack, grouped by original script class, and with `--load` builds each one through the
+asset provider the game uses.
+
+```sh
+build/tools/contentindex <split_UnityDataAssetPack/assets/aa/Android> <libunity.so> --load
+```

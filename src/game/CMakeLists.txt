@@ -5,6 +5,7 @@
 #   quantum_core/          - quantum.core.dll, simulation framework
 add_subdirectory(photon_deterministic)
 add_subdirectory(quantum_core)
+add_subdirectory(content)
 
 add_library(rr_game
     quantum_code/fp_math_utility.cpp

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
 
 namespace rr::assets {
 
@@ -42,6 +43,79 @@ std::vector<std::uint8_t> Decompress(std::span<const std::uint8_t> in, std::size
 bool BundleFile::LooksLikeBundle(std::span<const std::uint8_t> bytes) {
     return bytes.size() > sizeof(kSignature) &&
            std::memcmp(bytes.data(), kSignature, sizeof(kSignature)) == 0;
+}
+
+namespace {
+
+struct BundleHeader {
+    std::uint32_t version = 0;
+    std::string engineVersion;
+    std::uint64_t totalSize = 0;
+    std::uint32_t infoCompressedSize = 0;
+    std::uint32_t infoSize = 0;
+    std::uint32_t flags = 0;
+    std::size_t endOfHeader = 0; // after the optional 16-byte alignment
+};
+
+BundleHeader ReadHeader(std::span<const std::uint8_t> bytes) {
+    BinaryReader r(bytes, Endian::Big);
+    BundleHeader h;
+    r.CString(); // signature
+    h.version = r.U32();
+    r.CString(); // minimum player version, always "5.x.x"
+    h.engineVersion = r.CString();
+    h.totalSize = r.U64();
+    h.infoCompressedSize = r.U32();
+    h.infoSize = r.U32();
+    h.flags = r.U32();
+    if (h.version < 6 || h.version > 8) {
+        throw ReadError("bundle: unsupported format version " + std::to_string(h.version));
+    }
+    if (h.version >= 7) r.Align(16);
+    h.endOfHeader = r.Position();
+    return h;
+}
+
+// Parses the entry directory out of a decompressed block table.
+std::vector<BundleEntry> ParseEntries(BinaryReader& table) {
+    std::vector<BundleEntry> entries;
+    const std::uint32_t entryCount = table.U32();
+    for (std::uint32_t i = 0; i < entryCount; ++i) {
+        BundleEntry e;
+        e.offset = table.U64();
+        e.size = table.U64();
+        e.flags = table.U32();
+        e.path = table.CString();
+        entries.push_back(std::move(e));
+    }
+    return entries;
+}
+
+} // namespace
+
+std::vector<BundleEntry> BundleFile::ReadEntries(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) throw ReadError("cannot open " + path);
+    in.seekg(0, std::ios::end);
+    const auto fileSize = static_cast<std::size_t>(in.tellg());
+    // The header is small; read a generous prefix and the table from wherever it is.
+    std::vector<std::uint8_t> prefix(std::min<std::size_t>(fileSize, 256));
+    in.seekg(0);
+    in.read(reinterpret_cast<char*>(prefix.data()), static_cast<std::streamsize>(prefix.size()));
+    if (!LooksLikeBundle(prefix)) throw ReadError(path + " is not a content bundle");
+    const BundleHeader h = ReadHeader(prefix);
+    const std::size_t infoStart =
+        (h.flags & kBlocksInfoAtEnd) ? fileSize - h.infoCompressedSize : h.endOfHeader;
+    std::vector<std::uint8_t> packed(h.infoCompressedSize);
+    in.seekg(static_cast<std::streamoff>(infoStart));
+    in.read(reinterpret_cast<char*>(packed.data()), static_cast<std::streamsize>(packed.size()));
+    if (!in) throw ReadError(path + ": truncated block table");
+    const auto info = Decompress(packed, h.infoSize, h.flags & kCompressionMask);
+    BinaryReader table(info, Endian::Big);
+    table.Skip(16);
+    const std::uint32_t blockCount = table.U32();
+    table.Skip(static_cast<std::size_t>(blockCount) * 10);
+    return ParseEntries(table);
 }
 
 BundleFile::BundleFile(std::span<const std::uint8_t> bytes) {
@@ -83,15 +157,9 @@ BundleFile::BundleFile(std::span<const std::uint8_t> bytes) {
         b.flags = table.U16();
         totalUncompressed += b.size;
     }
-    const std::uint32_t entryCount = table.U32();
-    for (std::uint32_t i = 0; i < entryCount; ++i) {
-        BundleEntry e;
-        e.offset = table.U64();
-        e.size = table.U64();
-        e.flags = table.U32();
-        e.path = table.CString();
+    entries_ = ParseEntries(table);
+    for (const BundleEntry& e : entries_) {
         if (e.offset + e.size > totalUncompressed) throw ReadError("bundle: entry outside the data");
-        entries_.push_back(std::move(e));
     }
 
     data_.reserve(totalUncompressed);

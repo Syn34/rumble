@@ -5,6 +5,7 @@ add_library(rr_assets
     src/lz4.cpp
     src/common_strings.cpp
     src/type_tree_value.cpp
+    src/content_library.cpp
 )
 add_library(rr::assets ALIAS rr_assets)
 target_include_directories(rr_assets PUBLIC include)
