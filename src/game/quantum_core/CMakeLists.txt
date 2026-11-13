@@ -20,6 +20,8 @@ add_library(rr_quantum_core
     physics3d/collision_manifold3d.cpp
     physics3d/hit3d.cpp
     physics3d/narrow_checks.cpp
+    physics3d/narrow_checks_box.cpp
+    physics_components.cpp
     byte_stream.cpp
     mailbox_set8.cpp
     navigation/navmesh_region_mask.cpp

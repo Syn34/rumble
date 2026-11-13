@@ -176,7 +176,7 @@ TEST_CASE("Physics3D sphere pair and manifold helpers") {
     rr::test::InstallMathDerivedTables();
     using namespace Physics3D;
     const Shape3D sphere = Shape3D::CreateSphere(F(1));
-    NarrowEntry3D a, b;
+    Entry3D a, b;
     a.Shape = b.Shape = &sphere;
     a.Narrow.Position = V3(0, 0, 0);
     b.Narrow.Position = V3(0, 1, 0);

@@ -54,18 +54,20 @@ class BinaryData final : public AssetObject, public IBuiltInAssetObject {
 };
 
 // How two materials' coefficients combine. Original: Quantum.PhysicsCombineFunction.
-enum class PhysicsCombineFunction : std::int32_t { Max = 0, Min = 1, Average = 2, Multiply = 3 };
+// Values from the metadata (Max = 1 ... Multiply = 4); the constructor's default (raw 1)
+// is Max.
+enum class PhysicsCombineFunction : std::int32_t { Max = 1, Min = 2, Average = 3, Multiply = 4 };
 
 class PhysicsMaterial final : public AssetObject, public IBuiltInAssetObject {
   public:
     static constexpr std::int64_t DEFAULT_ID = 1;
 
     FP Restitution;
-    PhysicsCombineFunction RestitutionCombineFunction = PhysicsCombineFunction::Min;
+    PhysicsCombineFunction RestitutionCombineFunction = PhysicsCombineFunction::Max;
     // FP.FromFloat_UNSAFE(0.4f) in the constructor: 0.4f * 65536 truncated.
     FP FrictionStatic = FP::FromRaw(26214);
     FP FrictionDynamic = FP::FromRaw(26214);
-    PhysicsCombineFunction FrictionCombineFunction = PhysicsCombineFunction::Min;
+    PhysicsCombineFunction FrictionCombineFunction = PhysicsCombineFunction::Max;
 
     // 0x7ce5514
     PhysicsMaterial() = default;

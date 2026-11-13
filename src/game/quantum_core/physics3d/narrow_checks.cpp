@@ -17,7 +17,7 @@ namespace FPMath = Photon::Deterministic::FPMath;
 bool CheckShapes(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
     assert(mInfo != nullptr && mInfo->EntryA != nullptr && mInfo->EntryB != nullptr);
     using T = Shape3DType;
-    const NarrowEntry3D* entryA = mInfo->EntryA;
+    const Entry3D* entryA = mInfo->EntryA;
     const T a = entryA->Shape->Type();
     const T b = mInfo->EntryB->Shape->Type();
     auto is = [&](T first, T second) { return a == first && b == second; };
@@ -40,9 +40,16 @@ bool CheckShapes(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
         mInfo->InvertEntries();
         return SphereTriangle::Check(mInfo, detailedManifold, entryA->UseSmoothSphereMeshCollision);
     }
-    const bool boxPair = is(T::Box, T::Box) || is(T::Box, T::Mesh) || is(T::Mesh, T::Box);
-    assert(!boxPair && "Physics3D NarrowChecks: box-box / box-triangle not implemented yet");
-    (void)boxPair;
+    if (is(T::Box, T::Box)) {
+        return BoxBox::Check(mInfo, detailedManifold);
+    }
+    if (is(T::Box, T::Mesh)) {
+        return BoxTriangle::Check(mInfo, detailedManifold);
+    }
+    if (is(T::Mesh, T::Box)) {
+        mInfo->InvertEntries();
+        return BoxTriangle::Check(mInfo, detailedManifold);
+    }
     return false;
 }
 
@@ -60,8 +67,8 @@ bool Check(NarrowTls3D& tls, const CCDSettings& settings, FP deltaTime,
 
 // 0x7d790cc
 bool SphereSphere::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
-    const NarrowEntry3D& entryA = *mInfo->EntryA;
-    const NarrowEntry3D& entryB = *mInfo->EntryB;
+    const Entry3D& entryA = *mInfo->EntryA;
+    const Entry3D& entryB = *mInfo->EntryB;
     const FP radiusA = entryA.Shape->Sphere.Radius;
     const FP radii = entryB.Shape->Sphere.Radius + radiusA;
     const FPVector3 posA = entryA.Narrow.Position;
@@ -92,8 +99,8 @@ bool SphereSphere::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold) 
 
 // 0x7d78bec
 bool SphereBox::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
-    const NarrowEntry3D& sphere = *mInfo->EntryA;
-    const NarrowEntry3D& box = *mInfo->EntryB;
+    const Entry3D& sphere = *mInfo->EntryA;
+    const Entry3D& box = *mInfo->EntryB;
     const FP radius = sphere.Shape->Sphere.Radius;
     const NarrowData3D& frame = box.Narrow;
     const FPVector3 axes[3] = {frame.RotatedRight, frame.RotatedUp, frame.RotatedForward};
@@ -174,7 +181,7 @@ bool SphereBox::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
 // 0x7d79290
 bool SphereTriangle::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold,
                            bool smoothSphereMeshCollision) {
-    const NarrowEntry3D& sphere = *mInfo->EntryA;
+    const Entry3D& sphere = *mInfo->EntryA;
     const FPVector3 center = sphere.Narrow.Position;
     const FP radius = sphere.Shape->Sphere.Radius;
     const TriangleCCW* tri = mInfo->Tri;
@@ -383,18 +390,18 @@ bool LinecastBody::HitBoundingBox(const FPVector3& minB, const FPVector3& maxB, 
 }
 
 // 0x7d782c8
-bool LinecastBody::Check(AssetGuid mapGuid, const NarrowEntry3D* b, const FPVector3& start,
+bool LinecastBody::Check(AssetGuid mapGuid, const Entry3D* b, const FPVector3& start,
                          const FPVector3& end, bool computeNormal, Hit3D& hit) {
     hit = Hit3D{};
     auto identify = [&]() {
         hit._staticColliderIndex = b->StaticColliderIndex;
         if (b->StaticColliderIndex < 0) {
-            hit._entity = b->Ref;
+            hit._entity = {b->Ref.Index, b->Ref.Version};
         } else {
             hit._mapGuid = mapGuid;
         }
         hit.ShapeUserTag = b->Shape->UserTag;
-        hit._isTrigger = b->IsTrigger ? 1 : 0;
+        hit._isTrigger = b->IsTriggerCollider() ? 1 : 0;
     };
     const NarrowData3D& frame = b->Narrow;
     switch (b->Shape->Type()) {
