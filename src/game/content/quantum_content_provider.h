@@ -40,6 +40,25 @@ void RegisterAssetFactory(const std::string& scriptClass, AssetFactory factory);
 std::shared_ptr<Quantum::AssetObject> BuildAsset(const std::string& scriptClass,
                                                  const rr::assets::Value& settings);
 
+class QuantumContentProvider;
+
+// Everything a factory may need beyond `Settings`: some assets are completed from other
+// fields of their script object or from objects it points to (an entity prototype from
+// its prefab, a map from its baked entity list).
+struct AssetSource {
+    rr::assets::ContentLibrary& library;
+    rr::assets::ObjectRef ref;          // the script object holding the asset
+    const rr::assets::Value& object;    // its decoded data
+    const rr::assets::Value* settings;  // object.Settings (null if absent)
+    QuantumContentProvider& provider;
+};
+
+using SourceAssetFactory = std::function<std::shared_ptr<Quantum::AssetObject>(const AssetSource& source)>;
+
+// Registers a factory that receives the whole script object; it takes precedence over a
+// Settings-only factory registered for the same class.
+void RegisterSourceAssetFactory(const std::string& scriptClass, SourceAssetFactory factory);
+
 class QuantumContentProvider final : public Quantum::IAssetResourceProvider {
 public:
     // `library` must outlive the provider. Only bundles whose file name starts with
@@ -53,6 +72,9 @@ public:
     // Script class of a listed asset (resolved on first request).
     std::string ScriptClassOf(const Quantum::AssetObjectIdentifier& id);
 
+    // The GUID of the listed asset with this path (UnityDB.GetAssetGuid); invalid if none.
+    Quantum::AssetGuid GuidOfPath(const std::string& path) const;
+
 private:
     struct Entry {
         Quantum::AssetObjectIdentifier id;
@@ -65,6 +87,7 @@ private:
     rr::assets::ContentLibrary& library_;
     std::vector<Entry> entries_;
     std::unordered_map<std::int64_t, std::size_t> byGuid_;
+    std::unordered_map<std::string, std::size_t> byPath_;
 };
 
 } // namespace rr::content
