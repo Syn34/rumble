@@ -69,7 +69,8 @@ content files. Output is derived from your game files: don't commit it.
 
 Lists the simulation assets (weapon specs, heroes, maps...) found in the extracted asset
 pack, grouped by original script class, and with `--load` builds each one through the
-asset provider the game uses.
+asset provider the game uses and reports the maps' static colliders and the static mesh
+triangles read from their baked data.
 
 ```sh
 build/tools/contentindex <split_UnityDataAssetPack/assets/aa/Android> <libunity.so> --load

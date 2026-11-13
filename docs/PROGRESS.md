@@ -34,7 +34,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 | Rewired_Core.dll | Input mapping | 7,149 | 0 |
 | Newtonsoft.Json.dll | JSON | 4,096 | 0 |
 | PhotonDeterministic.dll | Deterministic maths, RNG, bit streams, session runtime | 904 | ~790 (maths, RNGSession, ByteUtils, BitStream, offline session runtime) |
-| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, assets, prototypes, physics, navigation) | ~6,100 | 1,341 (quantum.core), 24 (PhotonQuantum: entity prototype loading) |
+| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, assets, prototypes, physics, navigation) | ~6,100 | 1,479 (quantum.core), 24 (PhotonQuantum: entity prototype loading) |
 | AK.Wwise.*.dll | Audio middleware bindings | ~2,500 | 0 |
 | MessagePack.dll, protobuf-net.dll | Binary serialisation | ~2,750 | 0 |
 | DOTween*.dll, Cinemachine.dll, NGUI.dll | Tweening, cameras, UI | ~4,400 | 0 |
@@ -81,8 +81,11 @@ local no-ops with documented behaviour.
   PolygonCollider native buffers), Map (world values, navmesh/region resolution), Assert; wired
   into FrameContext (AssetDB, serializer, initial dynamic assets), FrameBase/FrameThreadSafe
   FindAsset/TryFindAsset and the navigation config lookups. The PC pipeline plugs in through
-  `IAssetResourceProvider` (asset_resource_provider.h). Pending: Map static colliders and
-  triangle data (need MapStaticCollider2D/3D and TriangleCCW.Serialize), TerrainCollider.Bake
+  `IAssetResourceProvider` (asset_resource_provider.h). Map static mesh triangles are read in
+  Map.Loaded (TriangleCCW.Serialize, Map.SerializeStaticColliderTriangles): all 52 maps of the
+  game have them (182,256 triangles for 5,799 mesh colliders, next to 11,943 boxes;
+  `contentindex --load` reports them). Pending: MapStaticCollider2D (the game has none),
+  TerrainCollider.Bake
 - quantum.core prototypes: EntityPrototype asset, EntityPrototypeContainer (lazy thread-safe sort,
   lookup by component type), EntityPrototypeRef, AssetRefEntityPrototype, ComponentPrototype /
   ComponentPrototype<T> (TypedComponentPrototype), ComponentPrototypeVisitorBase,
@@ -93,8 +96,9 @@ local no-ops with documented behaviour.
   components materialise; NavMeshSteeringAgent/AvoidanceAgent/AvoidanceObstacle, View and
   MapEntityLink are registered with their C++ types. Pending: the physics, character controller
   and joint prototypes' Materialize/AddToEntity (fields, defaults and dispatch are done; they wait
-  for the physics component types) and NavMeshPathfinder_Prototype (needs NavMeshPathfinder.Create
-  and SetTarget)
+  for the physics component types; PhysicsBody3D, PhysicsCollider3D, PhysicsCallbacks3D and
+  CharacterController3D prototypes are done) and NavMeshPathfinder_Prototype (needs
+  NavMeshPathfinder.Create and SetTarget)
 - quantum.core narrow phase: 2D checks for every primitive pair (circle, box, polygon, edge,
   incl. PolygonPolygon clipping, PolygonEdge, oriented BoxBox), 3D sphere-sphere/box/triangle,
   box-box (15-axis SAT, edge/face clipping contacts) and box-triangle (Akenine-Moller SAT, deepest
@@ -106,9 +110,11 @@ local no-ops with documented behaviour.
 - quantum.core physics components: PhysicsBody2D/3D (init, impulses, forces, sleep, world inertia
   tensor, inertia reset from Shape3D inertia factors, Serialize), PhysicsCollider2D/3D,
   PhysicsCallbacks2D/3D collision lists (frame heap), PhysicsJoints/CharacterController layouts,
-  all registered with their real types; HitCollection/HitCollection3D buffers; body and
-  callbacks prototypes materialise. Pending: collider/callbacks Serialize (Shape Serialize),
-  collider Create/OnRemoved (compounds), character controller movement, joints, PhysicsBody2D
+  all registered with their real types; HitCollection/HitCollection3D buffers; body, collider
+  (Shape3DConfig.CreateShape, PhysicsCollider3D.Create) and callbacks prototypes materialise;
+  PhysicsCollider3D/PhysicsCallbacks3D/CharacterController3D Serialize (Shape3D.Serialize),
+  collider OnRemoved. Pending: compound shapes (CompoundShape3D buffers, CopyFrom,
+  FreePersistent, Serialize), the 2D colliders/callbacks Serialize, joints, PhysicsBody2D
   inertia reset
 - quantum.core 3D physics scene: Scene3D step run task by task on one thread (entry creation
   with statics first, first/second-half force integration, bucketed sweep-and-prune broad
@@ -124,11 +130,23 @@ local no-ops with documented behaviour.
   TriggerInfo3D / ExitInfo3D, PhysicsEngine3D (owned by FrameContext with UsePhysics3D;
   SetCallbacks; immediate line casts, shape overlaps and shape casts walking the buckets as
   the original, hit order included), CharacterController3D movement (Init, SetConfig, Move,
-  ComputeRawMovement, ComputeRawSteer) and its prototype. Not ported: static triangle meshes
-  (TriangleMesh, mesh manifolds and their solver/callback paths), broad-phase queries
-  resolved in the step (Query3D, Task_QueryResolve, the controller's query hits), compound
-  shapes, joints and the joint position solver, the static colliders' mutable state, the
-  whole 2D scene/engine and the 2D controller
+  ComputeRawMovement, ComputeRawSteer) and its prototype. Static triangle meshes:
+  TriangleMesh (hashed sparse cell grid, insertion, map initialisation with immutable and
+  toggleable-on colliders, predicted-frame guard) owned by the engine; the mesh broad phase
+  (EntryCheckTriangles with per-thread triangle mailboxes, per-bucket mesh manifolds and
+  chained triangle manifolds), mesh triggers, triangle narrow phase and pruning
+  (NarrowPhaseMeshes), mesh collision callbacks and infos (average triangle normal),
+  CCD sorting/callbacks, islands, both solvers (legacy chained impulses, hybrid
+  AggregateMesh) and per-triangle penetration correction; queries traverse the mesh
+  (3D DDA for line casts, a swept cell cube for shape casts, covered cells for overlaps)
+  with the original's per-triangle tests. Broad-phase queries (AddLinecastQuery,
+  AddOverlapShapeQuery, per-step hit collections, GetQueryHits/TryGetQueryHits, the
+  controller's query hits) are resolved in the step, but through the immediate query walk
+  instead of the original's query endpoints (same pairs and filters; hit order within a
+  bucket may differ). Hit3D static collider lookups. Not ported: the broad phase's query
+  endpoints, compound shapes, joints and the joint position solver, the static colliders'
+  mutable state (StaticCollidersState), TriangleMesh.Serialize (snapshots), the whole 2D
+  scene/engine and the 2D controller
 - `Photon.Deterministic.RNGSession` (13/13; PCG32 seeded by SplitMix64), `BitStream` (107/107,
   incl. generic `SerializeArrayLength`), `ByteUtils` (20/20; the gzip writer emits stored deflate
   blocks, so compressed bytes differ from zlib's)
