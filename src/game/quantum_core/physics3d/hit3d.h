@@ -88,11 +88,15 @@ struct HitCollection3D {
     // 0x7d6e0c4
     void Reset() { _count = 0; }
 
-    // Need FrameContext / Allocator:
-    // TODO(0x7d6dc90, Quantum.Physics3D.HitCollection3D..ctor)
-    // TODO(0x7d6e07c, Quantum.Physics3D.HitCollection3D.Free)
-    // TODO(0x7d6e0cc, Quantum.Physics3D.HitCollection3D.Add)
-    // TODO(0x7d6e120, Quantum.Physics3D.HitCollection3D.ExpandCapacity)
+    HitCollection3D() = default;
+    // 0x7d6dc90 - see HitCollection (2D).
+    HitCollection3D(std::int32_t capacity, Modes mode, Core::FrameContext* context);
+    // 0x7d6e07c
+    void Free(Photon::Deterministic::Native::Allocator* allocator);
+    // 0x7d6e0cc
+    void Add(const Hit3D& hit, Core::FrameContext* context);
+    // 0x7d6e120
+    void ExpandCapacity(std::int32_t newCapacity, Core::FrameContext* context);
 };
 
 } // namespace Quantum::Physics3D
