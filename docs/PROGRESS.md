@@ -51,7 +51,7 @@ local no-ops with documented behaviour.
 | Renderer interface + Vulkan 1.0 backend | done (first version) |
 | Shader pipeline (one GLSL source → GL text + SPIR-V, embedded) | done |
 | Textures, materials, render targets, text | not started |
-| Asset loading from the user's game files | not started |
+| Asset loading from the user's game files | not started (quantum.core side ready: `IAssetResourceProvider` seam in `src/game/quantum_core/asset_resource_provider.h`) |
 | Audio | not started |
 | Physics / animation | not started |
 
@@ -66,8 +66,19 @@ local no-ops with documented behaviour.
   block/component iterators and filters, FrameBase (entities, components, singletons, deferred
   commits, capacity changes, copy, serialisation), FrameContext (heaps, events, temp memory,
   prediction area), FrameMetaData, FrameSerializer with pointer keys, FrameChecksumerBitStream,
-  CRC64. Pending: physics/navigation/asset/prototype parts of the frame, FilterStruct/ComponentGetter,
+  CRC64. Pending: physics/navigation/prototype parts of the frame, FilterStruct/ComponentGetter,
   DispatcherBase subscriptions
+- quantum.core asset system: AssetObject (+ identifier, visitor, config/ref attributes), AssetDB
+  (thread-safe cache, AssetDictionary), DynamicAssetDB (shared snapshots, serialisation through
+  IAssetSerializer), AssetResource state machine, ResourceManagerBase/Static/Dynamic (worker-thread
+  loads routed to the main thread, deferred disposal), typed asset references, built-in assets
+  (BinaryData, PhysicsMaterial, CharacterController2D/3D configs, EntityView, TerrainCollider holes,
+  PolygonCollider native buffers), Map (world values, navmesh/region resolution), Assert; wired
+  into FrameContext (AssetDB, serializer, initial dynamic assets), FrameBase/FrameThreadSafe
+  FindAsset/TryFindAsset and the navigation config lookups. The PC pipeline plugs in through
+  `IAssetResourceProvider` (asset_resource_provider.h). Pending: Map static colliders and
+  triangle data (need MapStaticCollider2D/3D and TriangleCCW.Serialize), EntityPrototype contents,
+  TerrainCollider.Bake
 - quantum.core narrow phase: 2D checks for every primitive pair (circle, box, polygon, edge,
   incl. PolygonPolygon clipping, PolygonEdge, oriented BoxBox), 3D sphere-sphere/box/triangle,
   Gjk2D/Gjk3D (distance, simplex solvers, GJK ray-cast shape casts, conservative-advancement time

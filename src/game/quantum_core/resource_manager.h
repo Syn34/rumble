@@ -137,8 +137,11 @@ class ResourceManagerBase : public IResourceManager {
     // 0x7ce78c4 - loads (LoadResource) and returns the asset; null for an unknown GUID.
     // Throws std::invalid_argument for a dynamic GUID.
     std::shared_ptr<AssetObject> GetAsset(AssetGuid guid, bool mainThread) override;
-    // 0x7ce79a4 (and its iterator, <LoadAllAssets>d__11.MoveNext 0x7ce829c) - every
-    // resource in registration order, loaded.
+    // 0x7ce79a4 - every resource in registration order, loaded. The original returns a
+    // compiler-generated iterator (<LoadAllAssets>d__11: MoveNext 0x7ce829c, .ctor
+    // 0x7ce7a38, Dispose 0x7ce8280, <>m__Finally1 0x7ce8494, Current 0x7ce84e4 / 0x7ce8524,
+    // GetEnumerator 0x7ce852c / 0x7ce85d8; Reset 0x7ce84ec only throws) that this vector
+    // replaces.
     std::vector<std::shared_ptr<AssetObject>> LoadAllAssets(bool mainThread) override;
     // 0x7ce7a6c - GUID registered for `path`, or an invalid GUID.
     AssetGuid GetAssetGuid(const std::string& path) const;
@@ -173,7 +176,9 @@ class ResourceManagerStatic final : public ResourceManagerBase {
   public:
     using Allocator = Photon::Deterministic::Native::Allocator;
 
-    // 0x7ce85dc - one resource per asset (its GUID and path; <>c.<.ctor>b__1_0 0x7ce89b4).
+    // 0x7ce85dc - one resource per asset (its GUID and path; the selector lambda
+    // <>c.<.ctor>b__1_0 0x7ce89b4 and its closure class, .cctor 0x7ce8944 / .ctor
+    // 0x7ce89ac, are the loop in the constructor).
     // `allocator` is handed to the assets' Loaded/Disposed hooks; not owned, but
     // Dispose() disposes it as the original does.
     ResourceManagerStatic(const std::vector<std::shared_ptr<AssetObject>>& assets,

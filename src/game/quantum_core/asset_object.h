@@ -109,6 +109,15 @@ class AssetObject {
 std::string AssetTypeName(const std::type_info& type);
 template <class T> std::string AssetTypeName() { return AssetTypeName(typeid(T)); }
 
+// Marks a field as a reference to assets of one type (editor validation only).
+// Original: Quantum.AssetRefAttribute.
+struct AssetRefAttribute {
+    const std::type_info* _type = nullptr;
+
+    // 0x7ce60bc
+    explicit AssetRefAttribute(const std::type_info& type) : _type(&type) {}
+};
+
 // Options of the editor-side code generator for an asset class; no effect at runtime.
 // Original: Quantum.AssetObjectConfigAttribute.
 struct AssetObjectConfigAttribute {

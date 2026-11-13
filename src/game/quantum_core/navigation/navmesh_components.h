@@ -234,13 +234,15 @@ struct NavMeshPathfinder {
     void Clear(const FPVector3& entryPosition, NavMeshSteeringAgent* steeringAgent);
 
     // TODO(0x7cf7e34, Quantum.NavMeshPathfinder.Create): builds a cleared component with
-    // targets at FP.UseableMin, applies SetConfig and the default region mask; needs the
-    // asset database (FrameBase.FindAsset is not available yet).
-    // TODO(0x7cf7f2c, Quantum.NavMeshPathfinder.SetConfig): stores the config GUID, resizes the
-    // waypoint buffer to CachedWaypointCount and forwards to the entity's steering/avoidance
-    // agents; needs FrameBase.FindAsset.
+    // targets at FP.UseableMin, applies SetConfig and the default region mask; waits on
+    // SetConfig.
+    // TODO(0x7cf7f2c, Quantum.NavMeshPathfinder.SetConfig): stores the config GUID (null:
+    // the default config via FrameBase::FindAsset), resizes the waypoint buffer to
+    // CachedWaypointCount and forwards to the entity's steering/avoidance agents; needs
+    // the navigation components registered as frame component types (GetPointer).
     // TODO(0x7cf8510, Quantum.NavMeshPathfinder.SetTarget): records the target and navmesh and
-    // schedules a path search; needs FrameBase.FindAsset for the config.
+    // schedules a path search (config via FrameBase::FindAsset); needs the same
+    // component access.
     // TODO(0x7cf871c, Quantum.NavMeshPathfinder.Stop): deactivates and optionally zeroes the
     // entity's velocity; needs the physics body components.
     // TODO(0x7cf88b0, Quantum.NavMeshPathfinder.Serialize): byte fields, the heap pointer
