@@ -5,7 +5,7 @@
 
 namespace Quantum::Allocator {
 
-FrameHeap::FrameHeap(Heap* heap, std::unique_ptr<IHeapAllocationTracker> tracker)
+FrameHeap::FrameHeap(Heap* heap, std::shared_ptr<IHeapAllocationTracker> tracker)
     : _heap(heap), _tracker(std::move(tracker)) {
     if (_tracker == nullptr) {
         throw std::invalid_argument("FrameHeap: null tracker");

@@ -2,6 +2,7 @@
 #include "transform.h"
 
 #include "photon_deterministic/deterministic_frame_serializer.h"
+#include "quantum_core/frame_serializer.h"
 #include "photon_deterministic/fp_internal.h"
 #include "photon_deterministic/fp_math.h"
 

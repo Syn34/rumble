@@ -14,10 +14,6 @@
 
 #include <cstdint>
 
-namespace Photon::Deterministic {
-class IDeterministicFrameSerializer;
-}
-
 namespace Quantum {
 
 using Photon::Deterministic::FP;
@@ -25,13 +21,14 @@ using Photon::Deterministic::FPQuaternion;
 using Photon::Deterministic::FPVector2;
 using Photon::Deterministic::FPVector3;
 
-// Serialisation callbacks receive the frame serializer (Quantum.FrameSerializer). It
-// implements IDeterministicFrameSerializer and only that interface is used here.
-using FrameSerializer = Photon::Deterministic::IDeterministicFrameSerializer;
+// Serialisation callbacks receive the frame serializer (quantum_core/frame_serializer.h).
+class FrameSerializer;
 
 // 2D position + rotation (radians, counter-clockwise).
 struct Transform2D {
     static constexpr int SIZE = 24;
+    // Registered component name (see component_type_id.h).
+    static constexpr const char* ComponentTypeName = "Transform2D";
 
     FPVector2 Position;
     FP Rotation;
@@ -50,6 +47,8 @@ static_assert(sizeof(Transform2D) == Transform2D::SIZE);
 // Height data that turns a 2D entity into a vertical extent (for 2.5D queries).
 struct Transform2DVertical {
     static constexpr int SIZE = 16;
+    // Registered component name (see component_type_id.h).
+    static constexpr const char* ComponentTypeName = "Transform2DVertical";
 
     FP Position; // vertical offset of the base
     FP Height;
@@ -62,6 +61,8 @@ static_assert(sizeof(Transform2DVertical) == Transform2DVertical::SIZE);
 // 3D position + rotation.
 struct Transform3D {
     static constexpr int SIZE = 56;
+    // Registered component name (see component_type_id.h).
+    static constexpr const char* ComponentTypeName = "Transform3D";
 
     FPVector3 Position;
     FPQuaternion Rotation;
