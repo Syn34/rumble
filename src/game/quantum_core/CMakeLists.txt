@@ -74,3 +74,5 @@ target_sources(rr_quantum_core PRIVATE
     physics3d/collision_info3d.cpp
     physics3d/character_controller3d.cpp
 )
+# Static triangle meshes (agent/qcore-physics3)
+target_sources(rr_quantum_core PRIVATE triangle_mesh.cpp)
