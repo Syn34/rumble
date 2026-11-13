@@ -18,8 +18,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 
 | Original assembly | Role | Methods | Done |
 |---|---|---:|---:|
-| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | ~2,860 (data types, Frame, events, signals, system framework, first systems) |
-| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | 4,585 (data types, Frame, events, signals, asset classes, component prototypes) |
+| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | 4,730 (data types, Frame, events, signals, asset classes, component prototypes, system framework, damage/death/respawn loop, shields, KCC modifiers) |
 | GameClasses.dll | Shared game types | 1,162 | 0 |
 | Assembly-CSharp.dll | Game client (UI, presentation, flow) | 20,495 | 0 |
 | Fidelio-Framework.dll, FidelioFramework-Core.dll | Developer's client framework | 16,438 | 0 |
