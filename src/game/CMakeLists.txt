@@ -15,6 +15,14 @@ add_library(rr_game
     quantum_code/components_3.cpp
     quantum_code/components_4.cpp
     quantum_code/component_pointers.cpp
+    quantum_code/system_base.cpp
+    quantum_code/runtime_config.cpp
+    quantum_code/input_provider.cpp
+    quantum_code/event_types.cpp
+    quantum_code/frame_events.cpp
+    quantum_code/frame_signals.cpp
+    quantum_code/frame_components.cpp
+    quantum_code/frame.cpp
 )
 add_library(rr::game ALIAS rr_game)
 target_include_directories(rr_game PUBLIC .)

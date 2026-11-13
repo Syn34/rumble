@@ -1839,4 +1839,65 @@ void DamageIncreasedOnTargetsEnhancement::OnRemoved(Core::FrameBase* frame, Enti
     static_cast<DamageIncreasedOnTargetsEnhancement*>(ptr)->ClearPointers(static_cast<Frame*>(frame), entityRef);
 }
 
+std::int32_t DamageMultiplier::GetHashCode() const {
+    return HashBuilder(2551u)
+        .Add(Spec)
+        .Value();
+}
+
+void DamageMultiplier::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<DamageMultiplier*>(ptr);
+    SerializeField(&p->Spec, serializer);
+}
+
+std::int32_t DamageMultiplierHeroImprovement::GetHashCode() const {
+    return HashBuilder(2557u).Value();
+}
+
+void DamageMultiplierHeroImprovement::Serialize(void* ptr, FrameSerializer* serializer) {
+    // Nothing to write: the component carries no data.
+    (void)ptr;
+    (void)serializer;
+}
+
+std::int32_t DamageSource::GetHashCode() const {
+    return HashBuilder(2579u)
+        .Add(AmmunitionSpec)
+        .Add(Spec)
+        .Add(hitTrackingDone)
+        .Add(multipliersPtr)
+        .Value();
+}
+
+void DamageSource::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<DamageSource*>(ptr);
+    SerializeField(&p->hitTrackingDone, serializer);
+    SerializeList<DamageMultiplierData>(&p->multipliersPtr, serializer);
+    SerializeField(&p->AmmunitionSpec, serializer);
+    SerializeField(&p->Spec, serializer);
+}
+
+void DamageSource::AllocatePointers(Frame* f, EntityRef entityRef) {
+    (void)entityRef;
+    if (multipliersPtr == Ptr::Null()) {
+        multipliersPtr = AllocateListPtr<DamageMultiplierData>(f, 8);
+    }
+}
+
+void DamageSource::ClearPointers(Frame* f, EntityRef entityRef) {
+    (void)entityRef;
+    if (multipliersPtr != Ptr::Null()) {
+        f->FreeList(get_multipliers());
+    }
+    multipliersPtr = Ptr::Null();
+}
+
+void DamageSource::OnAdded(Core::FrameBase* frame, EntityRef entityRef, void* ptr) {
+    static_cast<DamageSource*>(ptr)->AllocatePointers(static_cast<Frame*>(frame), entityRef);
+}
+
+void DamageSource::OnRemoved(Core::FrameBase* frame, EntityRef entityRef, void* ptr) {
+    static_cast<DamageSource*>(ptr)->ClearPointers(static_cast<Frame*>(frame), entityRef);
+}
+
 } // namespace Quantum

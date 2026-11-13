@@ -6,139 +6,6 @@
 
 namespace Quantum {
 
-std::int32_t VoidRepulserShield::GetHashCode() const {
-    return HashBuilder(3637u)
-        .Add(State)
-        .Value();
-}
-
-void VoidRepulserShield::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<VoidRepulserShield*>(ptr);
-    SerializeField(&p->State, serializer);
-}
-
-std::int32_t VoidRepulserSpeedBoostEnhancement::GetHashCode() const {
-    return HashBuilder(3643u)
-        .Add(Spec)
-        .Value();
-}
-
-void VoidRepulserSpeedBoostEnhancement::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<VoidRepulserSpeedBoostEnhancement*>(ptr);
-    SerializeField(&p->Spec, serializer);
-}
-
-std::int32_t VoidRepulserVoidWaveEnhancement::GetHashCode() const {
-    return HashBuilder(3659u)
-        .Add(ChargeStarted)
-        .Add(Spec)
-        .Value();
-}
-
-void VoidRepulserVoidWaveEnhancement::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<VoidRepulserVoidWaveEnhancement*>(ptr);
-    SerializeField(&p->ChargeStarted, serializer);
-    SerializeField(&p->Spec, serializer);
-}
-
-std::int32_t VoidRepulserData::GetHashCode() const {
-    return HashBuilder(1949u)
-        .Add(hp)
-        .Add(regenFrameReference)
-        .Add(shouldRestore)
-        .Add(startRegenHP)
-        .Add(state)
-        .Value();
-}
-
-void VoidRepulserData::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<VoidRepulserData*>(ptr);
-    SerializeField(&p->regenFrameReference, serializer);
-    SerializeField(&p->shouldRestore, serializer);
-    SerializeField(&p->state, serializer);
-    SerializeField(&p->hp, serializer);
-    SerializeField(&p->startRegenHP, serializer);
-}
-
-std::int32_t VoidRepulserWeapon::GetHashCode() const {
-    return HashBuilder(3671u)
-        .Add(data)
-        .Value();
-}
-
-void VoidRepulserWeapon::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<VoidRepulserWeapon*>(ptr);
-    SerializeField(&p->data, serializer);
-}
-
-std::int32_t WakeUpSurroundingsOnPushOrDestroy::GetHashCode() const {
-    return HashBuilder(3673u)
-        .Add(radius)
-        .Add(spawner)
-        .Value();
-}
-
-void WakeUpSurroundingsOnPushOrDestroy::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<WakeUpSurroundingsOnPushOrDestroy*>(ptr);
-    SerializeField(&p->spawner, serializer);
-    SerializeField(&p->radius, serializer);
-}
-
-std::int32_t WallRunningActor::GetHashCode() const {
-    return HashBuilder(3677u)
-        .Add(CanWallRun)
-        .Add(IsInitialized)
-        .Add(IsWallRunning)
-        .Add(PreviousPosition)
-        .Add(RunnableWallEntity)
-        .Add(RunningDirection)
-        .Add(RunningLeft)
-        .Add(RunningSpeed)
-        .Add(Spec)
-        .Value();
-}
-
-void WallRunningActor::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<WallRunningActor*>(ptr);
-    SerializeField(&p->CanWallRun, serializer);
-    SerializeField(&p->IsInitialized, serializer);
-    SerializeField(&p->IsWallRunning, serializer);
-    SerializeField(&p->RunningLeft, serializer);
-    SerializeField(&p->Spec, serializer);
-    SerializeField(&p->RunnableWallEntity, serializer);
-    SerializeField(&p->RunningSpeed, serializer);
-    SerializeField(&p->PreviousPosition, serializer);
-    SerializeField(&p->RunningDirection, serializer);
-}
-
-std::int32_t WarmongerMiniRocketsEnhancement::GetHashCode() const {
-    return HashBuilder(3691u)
-        .Add(Spec)
-        .Value();
-}
-
-void WarmongerMiniRocketsEnhancement::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<WarmongerMiniRocketsEnhancement*>(ptr);
-    SerializeField(&p->Spec, serializer);
-}
-
-std::int32_t WaveElement::GetHashCode() const {
-    return HashBuilder(3697u)
-        .Add(dropperID)
-        .Add(previousPosition)
-        .Add(spawner)
-        .Add(stuckDuration)
-        .Value();
-}
-
-void WaveElement::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<WaveElement*>(ptr);
-    SerializeField(&p->spawner, serializer);
-    SerializeField(&p->stuckDuration, serializer);
-    SerializeField(&p->previousPosition, serializer);
-    SerializeField(&p->dropperID, serializer);
-}
-
 std::int32_t WaveManager::GetHashCode() const {
     return HashBuilder(3701u)
         .Add(Spec)
@@ -747,6 +614,129 @@ void ZoneControlGameMode::ClearPointers(Frame* f, EntityRef entityRef) {
 
 void ZoneControlGameMode::OnRemoved(Core::FrameBase* frame, EntityRef entityRef, void* ptr) {
     static_cast<ZoneControlGameMode*>(ptr)->ClearPointers(static_cast<Frame*>(frame), entityRef);
+}
+
+std::int32_t HealthHitResult::GetHashCode() const {
+    return HashBuilder(1559u)
+        .Add(damages)
+        .Add(overHealthDamages)
+        .Value();
+}
+
+std::int32_t ShieldHitResult::GetHashCode() const {
+    return HashBuilder(1831u)
+        .Add(damages)
+        .Value();
+}
+
+std::int32_t HitResult::GetHashCode() const {
+    return HashBuilder(2078259953u)
+        .Add(health)
+        .Add(shield)
+        .Value();
+}
+
+std::int32_t DamageToImpulseData::GetHashCode() const {
+    return HashBuilder(1427u)
+        .Add(delay)
+        .Add(impulse)
+        .Add(priority)
+        .Add(resetVelocity)
+        .Value();
+}
+
+std::int32_t OnSpawnEntityOnDeathParams::GetHashCode() const {
+    return HashBuilder(1663u)
+        .Add(dying)
+        .Add(raycastCoef)
+        .Add(spawning)
+        .Value();
+}
+
+std::int32_t OnPushedData::GetHashCode() const {
+    return HashBuilder(1657u)
+        .Add(isPushStop)
+        .Add(pushStopDuration)
+        .Value();
+}
+
+std::int32_t GameModeSettings::GetHashCode() const {
+    return HashBuilder(1523u)
+        .Add(gameMode)
+        .Add(showcaseWeaponId)
+        .Value();
+}
+
+std::int32_t BotWeightedExtraPower::GetHashCode() const {
+    return HashBuilder(1319u)
+        .Add(extraPowerStats)
+        .Add(weight)
+        .Value();
+}
+
+void BotWeightedExtraPower::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<BotWeightedExtraPower*>(ptr);
+    SerializeField(&p->extraPowerStats, serializer);
+    SerializeField(&p->weight, serializer);
+}
+
+std::int32_t CustomBotInfo::GetHashCode() const {
+    return HashBuilder(1399u)
+        .Add(nickname)
+        .Add(skinId)
+        .Add(teamId)
+        .Value();
+}
+
+void CustomBotInfo::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<CustomBotInfo*>(ptr);
+    SerializeField(&p->skinId, serializer);
+    SerializeField(&p->teamId, serializer);
+    SerializeField(&p->nickname, serializer);
+}
+
+std::int32_t BotsSettings::GetHashCode() const {
+    return HashBuilder(2u)
+        .Add(BackpackBracketPlayerPlacement)
+        .Add(BackpackLevelBracketPercentage)
+        .Add(BotLoadoutPresets)
+        .Add(BotsDifficulty_0_100)
+        .Add(BotsPowerStats)
+        .Add(CustomBotCount)
+        .Add(_CustomBots_)
+        .Add(DamageMultiplier)
+        .Add(_ExtraPowerLevels_)
+        .Add(FixedBotWeapons)
+        .Add(NumBotLoadoutPresets)
+        .Add(PossibleBotCharacterIDs)
+        .Add(PossibleBotWeaponIDs)
+        .Add(RoomMasterBucketIndex)
+        .Add(RoomMasterBucketIndexForChoosingHeroesAndWeapons)
+        .Value();
+}
+
+std::int32_t UnlockedFeatures::GetHashCode() const {
+    return HashBuilder(1931u)
+        .Add(Gameplay_CameraMovement)
+        .Add(Gameplay_CharacterMovement)
+        .Add(Gameplay_Dash)
+        .Add(Gameplay_DoubleJump)
+        .Add(Gameplay_Fire)
+        .Add(Gameplay_FirstWeapon)
+        .Add(Gameplay_GadgetWeapon)
+        .Add(Gameplay_Helipack)
+        .Add(Gameplay_Jump)
+        .Add(Gameplay_Melee)
+        .Add(Gameplay_SecondWeapon_Deprecated)
+        .Add(Gameplay_ThirdWeapon_Deprecated)
+        .Add(Gameplay_UltimateWeapon)
+        .Add(HUD_BoltCounter)
+        .Add(HUD_BoltLevel)
+        .Add(HUD_Health)
+        .Add(HUD_Ranking)
+        .Add(HUD_Shield)
+        .Add(HUD_Timer)
+        .Value();
 }
 
 std::int32_t BlackboardEntry::GetHashCode() const {

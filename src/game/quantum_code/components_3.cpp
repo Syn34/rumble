@@ -6,148 +6,6 @@
 
 namespace Quantum {
 
-std::int32_t MovementPackCache::GetHashCode() const {
-    return HashBuilder(3089u)
-        .Add(slopeTangent)
-        .Add(tangent)
-        .Add(updateFrequency)
-        .Value();
-}
-
-void MovementPackCache::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<MovementPackCache*>(ptr);
-    SerializeField(&p->updateFrequency, serializer);
-    SerializeField(&p->slopeTangent, serializer);
-    SerializeField(&p->tangent, serializer);
-}
-
-std::int32_t MovingWall::GetHashCode() const {
-    return HashBuilder(3109u)
-        .Add(Config)
-        .Add(initialPosition)
-        .Add(navmeshRegionID)
-        .Add(offsetIndex)
-        .Add(stopped)
-        .Add(stoppedFrame)
-        .Value();
-}
-
-void MovingWall::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<MovingWall*>(ptr);
-    SerializeField(&p->navmeshRegionID, serializer);
-    SerializeField(&p->offsetIndex, serializer);
-    SerializeField(&p->stoppedFrame, serializer);
-    SerializeField(&p->stopped, serializer);
-    SerializeField(&p->Config, serializer);
-    SerializeField(&p->initialPosition, serializer);
-}
-
-std::int32_t OnKillCallbacks::GetHashCode() const {
-    return HashBuilder(3119u)
-        .Add(onPlayerKilledPtr)
-        .Value();
-}
-
-void OnKillCallbacks::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<OnKillCallbacks*>(ptr);
-    SerializeList<AssetRefCallbackAction>(&p->onPlayerKilledPtr, serializer);
-}
-
-void OnKillCallbacks::AllocatePointers(Frame* f, EntityRef entityRef) {
-    (void)entityRef;
-    if (onPlayerKilledPtr == Ptr::Null()) {
-        onPlayerKilledPtr = AllocateListPtr<AssetRefCallbackAction>(f, 8);
-    }
-}
-
-void OnKillCallbacks::ClearPointers(Frame* f, EntityRef entityRef) {
-    (void)entityRef;
-    if (onPlayerKilledPtr != Ptr::Null()) {
-        f->FreeList(get_onPlayerKilled());
-    }
-    onPlayerKilledPtr = Ptr::Null();
-}
-
-void OnKillCallbacks::OnAdded(Core::FrameBase* frame, EntityRef entityRef, void* ptr) {
-    static_cast<OnKillCallbacks*>(ptr)->AllocatePointers(static_cast<Frame*>(frame), entityRef);
-}
-
-void OnKillCallbacks::OnRemoved(Core::FrameBase* frame, EntityRef entityRef, void* ptr) {
-    static_cast<OnKillCallbacks*>(ptr)->ClearPointers(static_cast<Frame*>(frame), entityRef);
-}
-
-std::int32_t OnTriggerEnter::GetHashCode() const {
-    return HashBuilder(3121u)
-        .Add(ActivationFrame)
-        .Add(Prototype)
-        .Add(onTriggerEnterPtr)
-        .Value();
-}
-
-void OnTriggerEnter::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<OnTriggerEnter*>(ptr);
-    SerializeField(&p->ActivationFrame, serializer);
-    SerializeList<AssetRefCallbackAction>(&p->onTriggerEnterPtr, serializer);
-    SerializeField(&p->Prototype, serializer);
-}
-
-void OnTriggerEnter::AllocatePointers(Frame* f, EntityRef entityRef) {
-    (void)entityRef;
-    if (onTriggerEnterPtr == Ptr::Null()) {
-        onTriggerEnterPtr = AllocateListPtr<AssetRefCallbackAction>(f, 8);
-    }
-}
-
-void OnTriggerEnter::ClearPointers(Frame* f, EntityRef entityRef) {
-    (void)entityRef;
-    if (onTriggerEnterPtr != Ptr::Null()) {
-        f->FreeList(get_onTriggerEnter());
-    }
-    onTriggerEnterPtr = Ptr::Null();
-}
-
-void OnTriggerEnter::OnAdded(Core::FrameBase* frame, EntityRef entityRef, void* ptr) {
-    static_cast<OnTriggerEnter*>(ptr)->AllocatePointers(static_cast<Frame*>(frame), entityRef);
-}
-
-void OnTriggerEnter::OnRemoved(Core::FrameBase* frame, EntityRef entityRef, void* ptr) {
-    static_cast<OnTriggerEnter*>(ptr)->ClearPointers(static_cast<Frame*>(frame), entityRef);
-}
-
-std::int32_t Ownership::GetHashCode() const {
-    return HashBuilder(3137u)
-        .Add(IsOwnerUltimate)
-        .Add(Owner)
-        .Add(Source)
-        .Add(Weapon)
-        .Value();
-}
-
-void Ownership::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<Ownership*>(ptr);
-    SerializeField(&p->IsOwnerUltimate, serializer);
-    SerializeField(&p->Owner, serializer);
-    SerializeField(&p->Source, serializer);
-    SerializeField(&p->Weapon, serializer);
-}
-
-std::int32_t ParabolaFollowerParams::GetHashCode() const {
-    return HashBuilder(1669u)
-        .Add(End)
-        .Add(MaxHeight)
-        .Add(Start)
-        .Add(WillStopAtEndPos)
-        .Value();
-}
-
-void ParabolaFollowerParams::Serialize(void* ptr, FrameSerializer* serializer) {
-    auto* p = static_cast<ParabolaFollowerParams*>(ptr);
-    SerializeField(&p->WillStopAtEndPos, serializer);
-    SerializeField(&p->MaxHeight, serializer);
-    SerializeField(&p->End, serializer);
-    SerializeField(&p->Start, serializer);
-}
-
 std::int32_t ParabolaFollower::GetHashCode() const {
     return HashBuilder(3163u)
         .Add(HomingTarget)
@@ -1822,6 +1680,139 @@ void VoidRepulserBulldozerEnhancement::Serialize(void* ptr, FrameSerializer* ser
     SerializeField(&p->UsageStartFrame, serializer);
     SerializeField(&p->IsMoveSpeedModifierApplied, serializer);
     SerializeField(&p->Spec, serializer);
+}
+
+std::int32_t VoidRepulserShield::GetHashCode() const {
+    return HashBuilder(3637u)
+        .Add(State)
+        .Value();
+}
+
+void VoidRepulserShield::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<VoidRepulserShield*>(ptr);
+    SerializeField(&p->State, serializer);
+}
+
+std::int32_t VoidRepulserSpeedBoostEnhancement::GetHashCode() const {
+    return HashBuilder(3643u)
+        .Add(Spec)
+        .Value();
+}
+
+void VoidRepulserSpeedBoostEnhancement::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<VoidRepulserSpeedBoostEnhancement*>(ptr);
+    SerializeField(&p->Spec, serializer);
+}
+
+std::int32_t VoidRepulserVoidWaveEnhancement::GetHashCode() const {
+    return HashBuilder(3659u)
+        .Add(ChargeStarted)
+        .Add(Spec)
+        .Value();
+}
+
+void VoidRepulserVoidWaveEnhancement::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<VoidRepulserVoidWaveEnhancement*>(ptr);
+    SerializeField(&p->ChargeStarted, serializer);
+    SerializeField(&p->Spec, serializer);
+}
+
+std::int32_t VoidRepulserData::GetHashCode() const {
+    return HashBuilder(1949u)
+        .Add(hp)
+        .Add(regenFrameReference)
+        .Add(shouldRestore)
+        .Add(startRegenHP)
+        .Add(state)
+        .Value();
+}
+
+void VoidRepulserData::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<VoidRepulserData*>(ptr);
+    SerializeField(&p->regenFrameReference, serializer);
+    SerializeField(&p->shouldRestore, serializer);
+    SerializeField(&p->state, serializer);
+    SerializeField(&p->hp, serializer);
+    SerializeField(&p->startRegenHP, serializer);
+}
+
+std::int32_t VoidRepulserWeapon::GetHashCode() const {
+    return HashBuilder(3671u)
+        .Add(data)
+        .Value();
+}
+
+void VoidRepulserWeapon::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<VoidRepulserWeapon*>(ptr);
+    SerializeField(&p->data, serializer);
+}
+
+std::int32_t WakeUpSurroundingsOnPushOrDestroy::GetHashCode() const {
+    return HashBuilder(3673u)
+        .Add(radius)
+        .Add(spawner)
+        .Value();
+}
+
+void WakeUpSurroundingsOnPushOrDestroy::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<WakeUpSurroundingsOnPushOrDestroy*>(ptr);
+    SerializeField(&p->spawner, serializer);
+    SerializeField(&p->radius, serializer);
+}
+
+std::int32_t WallRunningActor::GetHashCode() const {
+    return HashBuilder(3677u)
+        .Add(CanWallRun)
+        .Add(IsInitialized)
+        .Add(IsWallRunning)
+        .Add(PreviousPosition)
+        .Add(RunnableWallEntity)
+        .Add(RunningDirection)
+        .Add(RunningLeft)
+        .Add(RunningSpeed)
+        .Add(Spec)
+        .Value();
+}
+
+void WallRunningActor::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<WallRunningActor*>(ptr);
+    SerializeField(&p->CanWallRun, serializer);
+    SerializeField(&p->IsInitialized, serializer);
+    SerializeField(&p->IsWallRunning, serializer);
+    SerializeField(&p->RunningLeft, serializer);
+    SerializeField(&p->Spec, serializer);
+    SerializeField(&p->RunnableWallEntity, serializer);
+    SerializeField(&p->RunningSpeed, serializer);
+    SerializeField(&p->PreviousPosition, serializer);
+    SerializeField(&p->RunningDirection, serializer);
+}
+
+std::int32_t WarmongerMiniRocketsEnhancement::GetHashCode() const {
+    return HashBuilder(3691u)
+        .Add(Spec)
+        .Value();
+}
+
+void WarmongerMiniRocketsEnhancement::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<WarmongerMiniRocketsEnhancement*>(ptr);
+    SerializeField(&p->Spec, serializer);
+}
+
+std::int32_t WaveElement::GetHashCode() const {
+    return HashBuilder(3697u)
+        .Add(dropperID)
+        .Add(previousPosition)
+        .Add(spawner)
+        .Add(stuckDuration)
+        .Value();
+}
+
+void WaveElement::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* p = static_cast<WaveElement*>(ptr);
+    SerializeField(&p->spawner, serializer);
+    SerializeField(&p->stuckDuration, serializer);
+    SerializeField(&p->previousPosition, serializer);
+    SerializeField(&p->dropperID, serializer);
 }
 
 } // namespace Quantum

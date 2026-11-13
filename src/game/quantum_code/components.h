@@ -290,6 +290,17 @@ struct WrenchWeapon;
 struct ZoneControlTeamScoring;
 struct ZoneControlScoring;
 struct ZoneControlGameMode;
+struct HealthHitResult;
+struct ShieldHitResult;
+struct HitResult;
+struct DamageToImpulseData;
+struct OnSpawnEntityOnDeathParams;
+struct OnPushedData;
+struct GameModeSettings;
+struct BotWeightedExtraPower;
+struct CustomBotInfo;
+struct BotsSettings;
+struct UnlockedFeatures;
 struct BlackboardEntry;
 struct NavBlacklistEntry;
 struct AISpawned;
@@ -6030,6 +6041,185 @@ struct alignas(8) ZoneControlGameMode {
     static void OnRemoved(Core::FrameBase* frame, EntityRef entityRef, void* ptr);
 };
 static_assert(sizeof(ZoneControlGameMode) == ZoneControlGameMode::SIZE);
+
+struct alignas(8) HealthHitResult {
+    static constexpr int SIZE = 16;
+    static constexpr int ALIGNMENT = 8;
+
+    FP damages;
+    FP overHealthDamages;
+
+    // 0x7b98640
+    std::int32_t GetHashCode() const;
+};
+static_assert(sizeof(HealthHitResult) == HealthHitResult::SIZE);
+
+struct alignas(8) ShieldHitResult {
+    static constexpr int SIZE = 8;
+    static constexpr int ALIGNMENT = 8;
+
+    FP damages;
+
+    // 0x7b98d30
+    std::int32_t GetHashCode() const;
+};
+static_assert(sizeof(ShieldHitResult) == ShieldHitResult::SIZE);
+
+struct alignas(8) HitResult {
+    static constexpr int SIZE = 24;
+    static constexpr int ALIGNMENT = 8;
+
+    ShieldHitResult shield;
+    HealthHitResult health;
+
+    // 0x7b98cd4
+    std::int32_t GetHashCode() const;
+};
+static_assert(sizeof(HitResult) == HitResult::SIZE);
+
+struct alignas(8) DamageToImpulseData {
+    static constexpr int SIZE = 40;
+    static constexpr int ALIGNMENT = 8;
+
+    std::int32_t priority;
+    QBoolean resetVelocity;
+    FP delay;
+    FPVector3 impulse;
+
+    // 0x7b9696c
+    std::int32_t GetHashCode() const;
+};
+static_assert(sizeof(DamageToImpulseData) == DamageToImpulseData::SIZE);
+
+struct alignas(8) OnSpawnEntityOnDeathParams {
+    static constexpr int SIZE = 24;
+    static constexpr int ALIGNMENT = 8;
+
+    EntityRef dying;
+    EntityRef spawning;
+    FP raycastCoef;
+
+    // 0x7b99ef8
+    std::int32_t GetHashCode() const;
+};
+static_assert(sizeof(OnSpawnEntityOnDeathParams) == OnSpawnEntityOnDeathParams::SIZE);
+
+struct alignas(8) OnPushedData {
+    static constexpr int SIZE = 16;
+    static constexpr int ALIGNMENT = 8;
+
+    QBoolean isPushStop;
+    std::uint8_t _pad0[4];
+    FP pushStopDuration;
+
+    // 0x7b99ed0
+    std::int32_t GetHashCode() const;
+};
+static_assert(sizeof(OnPushedData) == OnPushedData::SIZE);
+
+struct alignas(4) GameModeSettings {
+    static constexpr int SIZE = 8;
+    static constexpr int ALIGNMENT = 4;
+
+    GAME_MODE gameMode;
+    GENERATED_WEAPON_ID showcaseWeaponId;
+
+    // 0x7b9808c
+    std::int32_t GetHashCode() const;
+};
+static_assert(sizeof(GameModeSettings) == GameModeSettings::SIZE);
+
+struct alignas(8) BotWeightedExtraPower {
+    static constexpr int SIZE = 16;
+    static constexpr int ALIGNMENT = 8;
+
+    std::int32_t extraPowerStats;
+    std::uint8_t _pad0[4];
+    FP weight;
+
+    // 0x7b95700
+    std::int32_t GetHashCode() const;
+    // 0x7b95740
+    static void Serialize(void* ptr, FrameSerializer* serializer);
+};
+static_assert(sizeof(BotWeightedExtraPower) == BotWeightedExtraPower::SIZE);
+
+struct alignas(4) CustomBotInfo {
+    static constexpr int SIZE = 44;
+    static constexpr int ALIGNMENT = 4;
+
+    std::int32_t skinId;
+    std::int32_t teamId;
+    QString34 nickname;
+
+    // 0x7b9651c
+    std::int32_t GetHashCode() const;
+    // 0x7b9657c
+    static void Serialize(void* ptr, FrameSerializer* serializer);
+};
+static_assert(sizeof(CustomBotInfo) == CustomBotInfo::SIZE);
+
+struct alignas(8) BotsSettings {
+    static constexpr int SIZE = 640;
+    static constexpr int ALIGNMENT = 8;
+
+    std::array<std::uint8_t, 32> BotLoadoutPresets;
+    std::uint8_t BotsDifficulty_0_100;
+    std::uint8_t CustomBotCount;
+    std::array<std::uint8_t, 22> PossibleBotCharacterIDs;
+    std::array<std::uint8_t, 128> PossibleBotWeaponIDs;
+    std::uint8_t RoomMasterBucketIndex;
+    std::uint8_t RoomMasterBucketIndexForChoosingHeroesAndWeapons;
+    std::uint8_t _pad0[2];
+    std::int32_t BotsPowerStats;
+    std::int32_t NumBotLoadoutPresets;
+    QBoolean FixedBotWeapons;
+    FP BackpackBracketPlayerPlacement;
+    FP BackpackLevelBracketPercentage;
+    FP DamageMultiplier;
+    std::array<BotWeightedExtraPower, 4> _ExtraPowerLevels_;
+    std::array<CustomBotInfo, 8> _CustomBots_;
+
+    // 0x7b9586c
+    std::span<BotWeightedExtraPower> get_ExtraPowerLevels() { return _ExtraPowerLevels_; }
+    std::span<const BotWeightedExtraPower> get_ExtraPowerLevels() const { return _ExtraPowerLevels_; }
+    // 0x7b95804
+    std::span<CustomBotInfo> get_CustomBots() { return _CustomBots_; }
+    std::span<const CustomBotInfo> get_CustomBots() const { return _CustomBots_; }
+
+    // 0x7b958d4
+    std::int32_t GetHashCode() const;
+};
+static_assert(sizeof(BotsSettings) == BotsSettings::SIZE);
+
+struct alignas(4) UnlockedFeatures {
+    static constexpr int SIZE = 76;
+    static constexpr int ALIGNMENT = 4;
+
+    QBoolean Gameplay_CameraMovement;
+    QBoolean Gameplay_CharacterMovement;
+    QBoolean Gameplay_Dash;
+    QBoolean Gameplay_DoubleJump;
+    QBoolean Gameplay_Fire;
+    QBoolean Gameplay_FirstWeapon;
+    QBoolean Gameplay_GadgetWeapon;
+    QBoolean Gameplay_Helipack;
+    QBoolean Gameplay_Jump;
+    QBoolean Gameplay_Melee;
+    QBoolean Gameplay_SecondWeapon_Deprecated;
+    QBoolean Gameplay_ThirdWeapon_Deprecated;
+    QBoolean Gameplay_UltimateWeapon;
+    QBoolean HUD_BoltCounter;
+    QBoolean HUD_BoltLevel;
+    QBoolean HUD_Health;
+    QBoolean HUD_Ranking;
+    QBoolean HUD_Shield;
+    QBoolean HUD_Timer;
+
+    // 0x7b9ca00
+    std::int32_t GetHashCode() const;
+};
+static_assert(sizeof(UnlockedFeatures) == UnlockedFeatures::SIZE);
 
 struct alignas(8) BlackboardEntry {
     static constexpr int SIZE = 40;
