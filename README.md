@@ -14,13 +14,13 @@ program never loads or calls into the original binaries.
 ## Status
 
 <!-- progress:start -->
-**Overall: 3.99%** — 6,842 of 171,382 original methods reimplemented
+**Overall: 4.01%** — 6,874 of 171,382 original methods reimplemented
 
 `█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░`
 
 | Part | Done | Methods | Progress |
 |---|---:|---:|---:|
-| Game code | 4,730 | 50,426 | 9.38% |
+| Game code | 4,762 | 50,426 | 9.44% |
 | Third-party libraries | 2,112 | 120,956 | 1.75% |
 
 <details><summary>Per assembly (started ones first, then largest)</summary>
@@ -28,7 +28,7 @@ program never loads or calls into the original binaries.
 | Assembly | Done | Methods | Progress |
 |---|---:|---:|---:|
 | PhotonDeterministic.dll | 686 | 904 | 75.9% |
-| quantum.code.dll | 4,730 | 7,251 | 65.2% |
+| quantum.code.dll | 4,762 | 7,251 | 65.7% |
 | quantum.core.dll | 1,402 | 2,608 | 53.8% |
 | PhotonQuantum.dll | 24 | 3,488 | 0.7% |
 | Assembly-CSharp.dll | 0 | 20,495 | 0.0% |
@@ -116,6 +116,36 @@ Other options: `--frames N` (quit after N frames), `--screenshot out.ppm` (save 
 frame), `--headless` (no window), `--scene-demo` (draw a synthetic scene through the engine's
 scene renderer). Set `RR_VULKAN_VALIDATION=1` to enable the Vulkan
 validation layer if it is installed.
+
+## Running a match
+
+An offline match runs the reimplemented simulation on your own copy of the game. Point the
+program at the extracted files once (they are remembered with `--save-content`):
+
+```sh
+RangerRumble --match q_ffa_megalopolis_01b \
+    --content  <asset pack>/assets/aa/Android \
+    --engine-lib <arm64 split>/lib/arm64-v8a/libunity.so \
+    --data <base apk>/assets/bin/Data --data <asset pack>/assets/bin/Data \
+    --save-content
+RangerRumble --match q_ffa_megalopolis_01b                       # in a window, either renderer
+RangerRumble --match q_ffa_megalopolis_01b --headless --ticks 600 # numbers only
+```
+
+`--match` takes a map name (or a unique part of it) or its GUID; `--game-mode` a mode name
+(`FREE_FOR_ALL`, `BLAST_BALL`...), number or game mode GUID (default: from the map name);
+`--hero`, `--players`, `--seed` set up the rest. In a window, W/A/S/D or the left stick move,
+the right mouse button or right stick turn the camera, Space jump, left mouse fire, Shift dash,
+F melee, Q gadget, E ultimate, R reload (fixed default bindings until the game's input-mapping
+library is reimplemented). `--headless` prints entities per component, the systems that ran
+or failed and a checksum every 60 ticks; `python3 tools/match_determinism.py` runs a match twice
+and compares them.
+
+FPMath's lookup tables are game data: the small ones come from `global-metadata.dat`, the large
+ones from the player's Resources files in `bin/Data` (or exported `LUT/*.bytes` in `--lut-dir`).
+If those files are missing, `--approx-math` computes stand-ins so the match still runs, but not
+bit-exactly like the original. Much of the gameplay is still being reimplemented; see
+[docs/PROGRESS.md](docs/PROGRESS.md) for what a match does today.
 
 ## Layout
 

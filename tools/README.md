@@ -126,3 +126,13 @@ python3 tools/compare_renderers.py build/src/app/RangerRumble
 python3 tools/compare_renderers.py build/src/app/RangerRumble --args=--scene-demo
 python3 tools/compare_renderers.py build/tools/sceneview --args=--demo
 ```
+
+## match_determinism.py
+
+Runs the same headless offline match twice (`RangerRumble --match ... --headless`) and checks
+that both print the same checksums (one every 60 ticks). Numbers only.
+
+```sh
+python3 tools/match_determinism.py build/src/app/RangerRumble --match q_ffa_megalopolis_01b --ticks 600 \
+    --args="--approx-math --content <aa/Android> --engine-lib <libunity.so> --data <bin/Data>"
+```

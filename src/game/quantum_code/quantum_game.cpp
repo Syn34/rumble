@@ -14,6 +14,12 @@
 #include <algorithm>
 #include <cstring>
 #include <stdexcept>
+#include <typeinfo>
+
+#if defined(__GNUC__) || defined(__clang__)
+#include <cstdlib>
+#include <cxxabi.h>
+#endif
 
 namespace Quantum {
 
@@ -41,6 +47,22 @@ class DisposableFrameContext final : public IDisposable {
 
 // Input buffers hold one serialised Input; 1 KiB as in the original.
 constexpr std::size_t InputBufferSize = 1024;
+
+// The system's C++ type name for log messages (the original logs the system's type).
+std::string TypeName(const SystemBase* system) {
+    if (system == nullptr) return "(system)";
+    const char* name = typeid(*system).name();
+#if defined(__GNUC__) || defined(__clang__)
+    int status = 0;
+    char* demangled = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+    if (status == 0 && demangled != nullptr) {
+        std::string result(demangled);
+        std::free(demangled);
+        return result;
+    }
+#endif
+    return name;
+}
 
 template <class T> bool HasSystem(const std::vector<SystemBase*>& systems) {
     return std::any_of(systems.begin(), systems.end(),
@@ -326,7 +348,7 @@ void QuantumGame::LogSimulationException(const SystemBase* system, const char* p
     ++stats.Exceptions;
     if (stats.LastException.empty() || stats.Exceptions <= 1) {
         stats.LastException = std::string(phase) + ": " + e.what();
-        Log::Error("{0} {1}: {2}", system != nullptr ? system->ScheduleSample() : std::string("(system)"), phase, e.what());
+        Log::Error("{0} {1}: {2}", TypeName(system), phase, e.what());
     }
 }
 
