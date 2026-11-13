@@ -20,6 +20,8 @@ add_library(rr_quantum_core
     physics3d/collision_manifold3d.cpp
     physics3d/hit3d.cpp
     physics3d/narrow_checks.cpp
+    physics3d/gjk3d.cpp
+    triangle_ccw.cpp
     entity_ref.cpp
     component_set.cpp
     component_type_id.cpp

@@ -7,6 +7,7 @@
 #include "photon_deterministic/fp_quaternion.h"
 #include "photon_deterministic/fp_vector3.h"
 #include "quantum_core/shape3d.h"
+#include "quantum_core/triangle_ccw.h"
 
 #include <cstdint>
 
@@ -119,9 +120,9 @@ struct CollisionManifold3D {
 };
 static_assert(sizeof(CollisionManifold3D) == CollisionManifold3D::SIZE);
 
-// Per-entry pose cached for the narrow phase. The original also caches the inverse
-// rotation and the box's edges and planes (CustomEdgesBox / CustomPlanesBox, local and
-// rotated) used by the box checks; those are added with the box checks.
+// Per-entry pose cached for the narrow phase. The original also caches the box's edges and
+// planes (CustomEdgesBox / CustomPlanesBox, local and rotated) used by the box-box and
+// box-triangle checks; those are not reproduced yet (see NarrowData3D.Init below).
 // TODO(0x7d7bdd4, Quantum.Physics3D.NarrowData3D.InitFromTransform): pose extrapolated by
 // the body's velocity for CCD; needs Entry3D and PhysicsBody3D.
 // TODO(0x7d7c128, Quantum.Physics3D.NarrowData3D.Init): fills the rotated axes, inverse
@@ -134,18 +135,31 @@ struct NarrowData3D {
     FPQuaternion RotationInverse;
 };
 
+// The parts of the entry's PhysicsBody3D component that the narrow phase reads.
+struct NarrowBody3D {
+    FPVector3 Velocity;
+    FPVector3 AngularVelocity;
+};
+
 // The fields of a broad-phase entry (Quantum.Physics3D.Entry3D) that the narrow-phase
-// checks read; filled by the scene once it exists (original: Entry3D.Shape, Entry3D.Narrow).
+// checks read; filled by the scene once it exists (original: Entry3D.Shape, Narrow, Body3D,
+// Transform3D, HasDynamicBody, RotatedCenterOfMass, UseSmoothSphereMeshCollision).
 struct NarrowEntry3D {
     const Shape3D* Shape = nullptr;
     NarrowData3D Narrow;
+    // Only read when a query extrapolates motion over a time step (CCD / time of impact).
+    const NarrowBody3D* Body = nullptr;
+    FPVector3 TransformPosition; // Entry3D.Transform3D->Position
+    bool HasDynamicBody = false;
+    bool UseSmoothSphereMeshCollision = false;
+    FPVector3 RotatedCenterOfMass;
 };
 
 struct CollisionManifoldInfo3D {
     CollisionManifold3D* Manifold = nullptr;
     const NarrowEntry3D* EntryA = nullptr;
     const NarrowEntry3D* EntryB = nullptr;
-    const void* Tri = nullptr; // TriangleCCW* of a static mesh pair (TriangleCCW not yet ported)
+    const TriangleCCW* Tri = nullptr; // the mesh triangle when B (or A) is a static mesh
 
     // 0x7d7b4d4 - swaps A and B and toggles NormalInverted. As in 2D, the original's
     // refresh of the (symmetric) cached flags from the scene is omitted.

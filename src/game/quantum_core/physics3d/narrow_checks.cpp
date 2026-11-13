@@ -1,13 +1,62 @@
 // narrow_checks.cpp - Quantum.Physics3D.NarrowChecks.
 #include "narrow_checks.h"
 
+#include "quantum_core/gjk_settings.h"
+
 #include "photon_deterministic/fp_internal.h"
 #include "photon_deterministic/fp_math.h"
+
+#include <cassert>
 
 namespace Quantum::Physics3D::NarrowChecks {
 
 namespace fpdetail = Photon::Deterministic::detail;
 namespace FPMath = Photon::Deterministic::FPMath;
+
+// The shape-pair dispatch of NarrowChecks.Check (0x7d7071c).
+bool CheckShapes(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
+    assert(mInfo != nullptr && mInfo->EntryA != nullptr && mInfo->EntryB != nullptr);
+    using T = Shape3DType;
+    const NarrowEntry3D* entryA = mInfo->EntryA;
+    const T a = entryA->Shape->Type();
+    const T b = mInfo->EntryB->Shape->Type();
+    auto is = [&](T first, T second) { return a == first && b == second; };
+
+    if (is(T::Sphere, T::Sphere)) {
+        return SphereSphere::Check(mInfo, detailedManifold);
+    }
+    if (is(T::Sphere, T::Box)) {
+        return SphereBox::Check(mInfo, detailedManifold);
+    }
+    if (is(T::Box, T::Sphere)) {
+        mInfo->InvertEntries();
+        return SphereBox::Check(mInfo, detailedManifold);
+    }
+    // The smooth-collision flag is read from the mesh entry.
+    if (is(T::Sphere, T::Mesh)) {
+        return SphereTriangle::Check(mInfo, detailedManifold, mInfo->EntryB->UseSmoothSphereMeshCollision);
+    }
+    if (is(T::Mesh, T::Sphere)) {
+        mInfo->InvertEntries();
+        return SphereTriangle::Check(mInfo, detailedManifold, entryA->UseSmoothSphereMeshCollision);
+    }
+    const bool boxPair = is(T::Box, T::Box) || is(T::Box, T::Mesh) || is(T::Mesh, T::Box);
+    assert(!boxPair && "Physics3D NarrowChecks: box-box / box-triangle not implemented yet");
+    (void)boxPair;
+    return false;
+}
+
+// 0x7d7071c
+bool Check(NarrowTls3D& tls, const CCDSettings& settings, FP deltaTime,
+           CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
+    const bool overlap = CheckShapes(mInfo, detailedManifold);
+    if (overlap || !mInfo->Manifold->_m.GetUsesCcd()) {
+        return overlap;
+    }
+    FP timeOfImpact;
+    return Gjk3D::ComputeTimeOfImpact(tls, mInfo, settings, detailedManifold, deltaTime,
+                                      timeOfImpact) == TimeOfImpactResult::Collision;
+}
 
 // 0x7d790cc
 bool SphereSphere::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
@@ -39,6 +88,186 @@ bool SphereSphere::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold) 
         CollisionManifold3D::AddContactPoint(manifold, contact);
     }
     return overlap;
+}
+
+// 0x7d78bec
+bool SphereBox::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
+    const NarrowEntry3D& sphere = *mInfo->EntryA;
+    const NarrowEntry3D& box = *mInfo->EntryB;
+    const FP radius = sphere.Shape->Sphere.Radius;
+    const NarrowData3D& frame = box.Narrow;
+    const FPVector3 axes[3] = {frame.RotatedRight, frame.RotatedUp, frame.RotatedForward};
+    const FPVector3 offset = sphere.Narrow.Position - frame.Position;
+    const FP local[3] = {FPVector3::Dot(axes[0], offset), FPVector3::Dot(axes[1], offset),
+                         FPVector3::Dot(axes[2], offset)};
+    const FPVector3 e = box.Shape->Box._extents;
+    const FP extents[3] = {e.X, e.Y, e.Z};
+
+    // Clamp the centre into the box, axis by axis.
+    FP closest[3];
+    FP delta[3]; // closest - centre
+    FP distanceSquared = FP::Zero();
+    bool inside = true;
+    for (int i = 0; i < 3; ++i) {
+        if (-extents[i] - local[i] > 0) {
+            closest[i] = -extents[i];
+            delta[i] = -extents[i] - local[i];
+            inside = false;
+        } else if (extents[i] - local[i] < 0) {
+            closest[i] = extents[i];
+            delta[i] = extents[i] - local[i];
+            inside = false;
+        } else {
+            closest[i] = local[i];
+            delta[i] = FP::Zero();
+        }
+        distanceSquared += delta[i] * delta[i];
+    }
+
+    CollisionManifold3D* manifold = mInfo->Manifold;
+    if (!inside) {
+        const FP penetration = radius - FPMath::Sqrt(distanceSquared);
+        if (penetration < 0) {
+            return false;
+        }
+        if (!detailedManifold) {
+            return true;
+        }
+        CollisionManifold3D::AddContactPoint(
+            manifold, frame.Position + axes[0] * closest[0] + axes[1] * closest[1] + axes[2] * closest[2]);
+        manifold->Penetration = penetration;
+        const FPVector3 n = FPVector3::Normalize({delta[0], delta[1], delta[2]});
+        manifold->Normal = axes[0] * n.X + axes[1] * n.Y + axes[2] * n.Z;
+        return true;
+    }
+    if (!detailedManifold) {
+        return true;
+    }
+
+    // Centre inside: leave through the nearest face (positive faces first; between +X and
+    // +Y a tie picks +Y, any later tie keeps the earlier face).
+    int axis = (extents[0] - local[0] < extents[1] - local[1]) ? 0 : 1;
+    FP nearest = extents[axis] - local[axis];
+    if (extents[2] - local[2] < nearest) {
+        axis = 2;
+        nearest = extents[2] - local[2];
+    }
+    bool positiveFace = true;
+    for (int i = 0; i < 3; ++i) {
+        if (local[i] + extents[i] < nearest) {
+            axis = i;
+            nearest = local[i] + extents[i];
+            positiveFace = false;
+        }
+    }
+    const FPVector3 normal = positiveFace ? -axes[axis] : axes[axis];
+    manifold->Penetration = nearest + radius;
+    manifold->Normal = normal;
+    const FPVector3 position = sphere.Narrow.Position;
+    CollisionManifold3D::AddContactPoint(
+        manifold, {position.X + FP::FromRaw(normal.X.RawValue() >> 8),
+                   position.Y + FP::FromRaw(normal.Y.RawValue() >> 8),
+                   position.Z + FP::FromRaw(normal.Z.RawValue() >> 8)});
+    return true;
+}
+
+// 0x7d79290
+bool SphereTriangle::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold,
+                           bool smoothSphereMeshCollision) {
+    const NarrowEntry3D& sphere = *mInfo->EntryA;
+    const FPVector3 center = sphere.Narrow.Position;
+    const FP radius = sphere.Shape->Sphere.Radius;
+    const TriangleCCW* tri = mInfo->Tri;
+    FPVector3 nearest;
+    FPVector3 onPlane;
+    const bool touches = GetNearestPoint(tri, center, radius.RawValue(), nearest, onPlane);
+    if (!touches || !detailedManifold) {
+        return touches;
+    }
+    CollisionManifold3D* manifold = mInfo->Manifold;
+    manifold->Penetration = radius - FPVector3::Distance(nearest, center);
+    if (manifold->Penetration < 0) {
+        return false;
+    }
+    CollisionManifold3D::AddContactPoint(manifold, smoothSphereMeshCollision ? onPlane : nearest);
+    manifold->Normal = -tri->Normal;
+    return true;
+}
+
+// 0x7d79418
+bool SphereTriangle::GetNearestPoint(const TriangleCCW* tri, const FPVector3& center, FP::Raw radiusRaw,
+                                     FPVector3& nearestPoint, FPVector3& pointOnPlane) {
+    const FP radius = FP::FromRaw(radiusRaw);
+    const FP height = FPVector3::Dot(tri->Normal, center - tri->Center);
+    if (FPMath::Abs(height) > radius) {
+        nearestPoint = FPVector3::Zero();
+        pointOnPlane = FPVector3::Zero();
+        return false;
+    }
+    pointOnPlane = center - tri->Normal * height;
+    const FP radiusSquared = radius * radius;
+    // Outside one of the edges: the nearest point is on that edge.
+    struct Edge {
+        const FPVector3& a;
+        const FPVector3& b;
+        const FPVector3& vector;
+        FP length;
+    };
+    const Edge edges[3] = {{tri->A, tri->B, tri->EdgeA, tri->LengthEdgeA},
+                           {tri->B, tri->C, tri->EdgeB, tri->LengthEdgeB},
+                           {tri->C, tri->A, tri->EdgeC, tri->LengthEdgeC}};
+    for (const Edge& edge : edges) {
+        const FPVector3 direction = FPVector3::Normalize(edge.vector);
+        const std::optional<bool> result = CheckForVertex(tri, pointOnPlane, edge.a, edge.b, direction,
+                                                          edge.length, center,
+                                                          radiusSquared.RawValue(), nearestPoint);
+        if (result.has_value()) {
+            return *result;
+        }
+    }
+    nearestPoint = pointOnPlane;
+    return true;
+}
+
+// 0x7d796d8
+std::optional<bool> SphereTriangle::CheckForVertex(const TriangleCCW* tri, const FPVector3& projected,
+                                                   const FPVector3& a, const FPVector3& b,
+                                                   const FPVector3& direction, FP length,
+                                                   const FPVector3& p, FP::Raw radiusSqr,
+                                                   FPVector3& nearestPoint) {
+    const FPVector3 side = FPVector3::Cross(direction, projected - b);
+    if (FPVector3::Dot(tri->Normal, side) <= 0) {
+        nearestPoint = FPVector3::Zero();
+        return std::nullopt; // inside this edge
+    }
+    const FP along = FPVector3::Dot(projected - a, direction);
+    if (along <= 0) {
+        nearestPoint = a;
+    } else if (along >= length) {
+        nearestPoint = b;
+    } else {
+        nearestPoint = a + direction * along;
+    }
+    return FPVector3::DistanceSquared(nearestPoint, p).RawValue() <= radiusSqr;
+}
+
+// 0x7d3a898
+FPVector3 TriangleCollisionIterator::AverageNormal() const {
+    const CollisionManifold3D* tri = &_triManifolds[_meshManifold->_m.NextInMesh];
+    FPVector3 sum = tri->Normal;
+    std::int32_t next = tri->_m.NextInMesh;
+    if (next != 0) {
+        std::int32_t count = 1;
+        while (next != 0) {
+            tri = &_triManifolds[next];
+            sum = sum + tri->Normal;
+            ++count;
+            next = tri->_m.NextInMesh;
+        }
+        sum = {fpdetail::DivInt(sum.X, count), fpdetail::DivInt(sum.Y, count),
+               fpdetail::DivInt(sum.Z, count)};
+    }
+    return -sum;
 }
 
 } // namespace Quantum::Physics3D::NarrowChecks
