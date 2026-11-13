@@ -635,3 +635,18 @@ TEST_CASE("Physics components serialise through the frame serializer") {
         CHECK(read.MaxSpeed == F(3) && read.Velocity == V3(1, 0, -1) && read._broadphaseQueryIndexPlusOne == 2);
     }
 }
+
+TEST_CASE("Hit3D: static collider lookups") {
+    MeshWorld w;
+    const EntityRef ball = w.AddBody(V3(1, 2, 1), Shape3D::CreateSphere(FP::_0_50()), false);
+    w.Init();
+    w.Step();
+    HitCollection3D hits(8, HitCollection3D::Temp, w.context.get());
+    w.engine->Linecast(w.frame.get(), &hits, V3(1, 5, 1), V3(1, -5, 1), false, -1, QueryOptions::HitAll);
+    CHECK(hits.Count() == 2);
+    hits.Sort(V3(1, 5, 1));
+    MapStaticCollider3D collider;
+    CHECK(!hits[0].TryGetStaticCollider(w.frame.get(), collider) && hits[0].Entity().Index == ball.Index);
+    CHECK(hits[1].TryGetStaticCollider(w.frame.get(), collider) && collider.ShapeType == Shape3DType::Mesh);
+    CHECK(hits[1].GetStaticCollider(w.frame.get()).ShapeType == Shape3DType::Mesh);
+}

@@ -1,6 +1,9 @@
 // hit3d.cpp - Quantum.Physics3D.Hit3D / HitCollection3D.
 #include "hit3d.h"
 
+#include "quantum_core/frame_base.h"
+#include "quantum_core/map.h"
+
 #include "quantum_core/physics2d/hit_collection_storage.h"
 
 #include "photon_deterministic/fp_internal.h"
@@ -91,6 +94,42 @@ void HitCollection3D::Add(const Hit3D& hit, Core::FrameContext* context) {
 // 0x7d6e120
 void HitCollection3D::ExpandCapacity(std::int32_t newCapacity, Core::FrameContext* context) {
     Physics2D::hit_storage::ExpandHits(_hits3D, _capacity, _mode, newCapacity, context);
+}
+
+namespace {
+// The map a static hit names: the frame's own map when it is that one, otherwise the asset.
+const Map* MapOfHit(Core::FrameBase* frame, AssetGuid guid, bool quiet) {
+    const Map* map = frame->get_Map();
+    if (map != nullptr && map->Guid == guid) {
+        return map;
+    }
+    if (quiet) {
+        Map* found = nullptr;
+        return frame->TryFindAsset<Map>(guid, found) ? found : nullptr;
+    }
+    return frame->FindAsset<Map>(guid);
+}
+} // namespace
+
+bool Hit3D::TryGetStaticCollider(Core::FrameBase* frame, MapStaticCollider3D& collider) const {
+    collider = MapStaticCollider3D{};
+    if (_staticColliderIndex < 0) {
+        return false;
+    }
+    const Map* map = MapOfHit(frame, _mapGuid, true);
+    if (map == nullptr || _staticColliderIndex >= static_cast<std::int32_t>(map->StaticColliders3D.size())) {
+        return false;
+    }
+    collider = map->StaticColliders3D[static_cast<std::size_t>(_staticColliderIndex)];
+    return true;
+}
+
+MapStaticCollider3D Hit3D::GetStaticCollider(Core::FrameBase* frame) const {
+    const Map* map = MapOfHit(frame, _mapGuid, false);
+    if (map == nullptr) {
+        throw std::invalid_argument("Hit3D.GetStaticCollider: map not found");
+    }
+    return map->StaticColliders3D.at(static_cast<std::size_t>(_staticColliderIndex));
 }
 
 } // namespace Quantum::Physics3D
