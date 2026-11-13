@@ -51,3 +51,16 @@ Updates the completion percentage in README.md and `docs/progress.json` (counts 
 python3 tools/il2cpp_inventory.py <global-metadata.dat> --binary <libil2cpp.so> --out build/inventory --assemblies all
 python3 tools/progress.py --inventory build/inventory
 ```
+
+## assetinfo
+
+Lists what a content file contains and can decode objects through their embedded type
+descriptions. Works on serialized files and on the content bundles in
+`split_UnityDataAssetPack/assets/aa/Android/` (extract that APK split first).
+
+```sh
+build/tools/assetinfo <file.bundle> --engine-lib <libunity.so from the arm64 split> --dump all
+```
+
+`--engine-lib` supplies the engine's shared field-name table, which isn't stored in the
+content files. Output is derived from your game files: don't commit it.

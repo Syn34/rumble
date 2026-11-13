@@ -5,6 +5,7 @@ add_executable(rr_tests
     test_fp_math.cpp
     test_fp_math_utility.cpp
     test_serialized_file.cpp
+    test_asset_bundle.cpp
     test_asset_guid.cpp
     test_bit_stream.cpp
     test_byte_utils.cpp
