@@ -41,10 +41,6 @@ std::string AssetGuid::ToString(bool brackets) const {
     return buffer;
 }
 
-std::string AssetRef::ToString() const {
-    // TODO(0x7ce0990, Quantum.AssetRef.ToString): the original formats through a
-    // shared helper whose exact text hasn't been confirmed yet; GUID text for now.
-    return Id.ToString(true);
-}
+std::string AssetRef::ToString(AssetGuid id) { return "Id: " + id.ToString(true); }
 
 } // namespace Quantum

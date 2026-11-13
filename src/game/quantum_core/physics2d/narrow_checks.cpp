@@ -1,5 +1,8 @@
 // narrow_checks.cpp - Quantum.Physics2D.NarrowChecks.
 #include "narrow_checks.h"
+#include "narrow_checks_detail.h"
+
+#include "quantum_core/gjk_settings.h"
 
 #include "photon_deterministic/fp_internal.h"
 #include "photon_deterministic/fp_math.h"
@@ -10,43 +13,12 @@
 
 namespace Quantum::Physics2D::NarrowChecks {
 
-namespace detail = Photon::Deterministic::detail;
+namespace fpdetail = Photon::Deterministic::detail;
 namespace FPMath = Photon::Deterministic::FPMath;
 
-namespace {
-
-// World offset -> box-local coordinates (inverse rotation by the box's sin/cos).
-constexpr FPVector2 ToLocal(FPVector2 offset, FP sin, FP cos) {
-    return {offset.Y * sin + offset.X * cos, offset.Y * cos - offset.X * sin};
-}
-
-// Outward normal of the box face nearest to a point inside the box. Ties keep the face
-// tested first (top, bottom, left, right).
-FPVector2 NearestFaceNormal(FPVector2 extents, FP x, FP y) {
-    FPVector2 normal = FPVector2::Up();
-    FP best = FPMath::Abs(y - extents.Y);
-    if (const FP d = FPMath::Abs(y - (-extents.Y)); d < best) {
-        normal = FPVector2::Down();
-        best = d;
-    }
-    if (const FP d = FPMath::Abs(x - (-extents.X)); d < best) {
-        normal = FPVector2::Left();
-        best = d;
-    }
-    if (FPMath::Abs(x - extents.X) < best) {
-        normal = FPVector2::Right();
-    }
-    return normal;
-}
-
-// Half of an edge shape in world orientation: the rotated (-Extent, 0). The endpoints are
-// centre + half and centre - half.
-FPVector2 EdgeHalf(const NarrowEntry2D& edge) {
-    return FPVector2::Rotate(FPVector2::Left() * edge.Shape->Edge.Extent, edge.Narrow.RotSin,
-                             edge.Narrow.RotCos);
-}
-
-} // namespace
+using detail::EdgeHalf;
+using detail::NearestFaceNormal;
+using detail::ToLocal;
 
 // 0x7d1381c
 bool LineBoxLocalSpace(const FPVector2& localStart, const FPVector2& localEnd,
@@ -93,47 +65,83 @@ bool LineBoxLocalSpace(const FPVector2& localStart, const FPVector2& localEnd,
     return true;
 }
 
-// Reimplementation of the dispatch in NarrowChecks.Check (0x7d139d4) without the CCD
-// fallback. Pairs are keyed by (type A, type B); mixed pairs whose check is written for
-// the other order are inverted first.
-bool CheckShapes(CollisionManifoldInfo2D* mInfo, bool detailedManifold) {
+// The shape-pair dispatch of NarrowChecks.Check (0x7d139d4). Pairs are keyed by
+// (type A, type B); pairs whose check is written for the other order are inverted first.
+bool CheckShapes(NarrowTls2D& tls, CollisionManifoldInfo2D* mInfo, bool detailedManifold) {
     assert(mInfo != nullptr && mInfo->EntryA != nullptr && mInfo->EntryB != nullptr);
-    const Shape2DType a = mInfo->EntryA->Shape->Type();
-    const Shape2DType b = mInfo->EntryB->Shape->Type();
     using T = Shape2DType;
+    const T a = mInfo->EntryA->Shape->Type();
+    const T b = mInfo->EntryB->Shape->Type();
+    auto is = [&](T first, T second) { return a == first && b == second; };
+    auto inverted = [&]() {
+        mInfo->InvertEntries();
+        return mInfo;
+    };
 
-    if (a == T::Circle && b == T::Circle) {
+    if (is(T::Circle, T::Circle)) {
         return CircleCircle::Check(mInfo, detailedManifold);
     }
-    if (a == T::Box && b == T::Circle) {
+    if (is(T::Circle, T::Polygon)) {
+        return CirclePolygon::Check(tls, mInfo, detailedManifold);
+    }
+    if (is(T::Polygon, T::Circle)) {
+        return CirclePolygon::Check(tls, inverted(), detailedManifold);
+    }
+    if (is(T::Box, T::Circle)) {
         return BoxCircle::Check(mInfo, detailedManifold);
     }
-    if (a == T::Circle && b == T::Box) {
-        mInfo->InvertEntries();
-        return BoxCircle::Check(mInfo, detailedManifold);
+    if (is(T::Circle, T::Box)) {
+        return BoxCircle::Check(inverted(), detailedManifold);
     }
-    if (a == T::Circle && b == T::Edge) {
+    if (is(T::Circle, T::Edge)) {
         return CircleEdge::Check(mInfo, detailedManifold);
     }
-    if (a == T::Edge && b == T::Circle) {
-        mInfo->InvertEntries();
-        return CircleEdge::Check(mInfo, detailedManifold);
+    if (is(T::Edge, T::Circle)) {
+        return CircleEdge::Check(inverted(), detailedManifold);
     }
-    if (a == T::Box && b == T::Edge) {
+    // Polygon-box pairs run the polygon clipper with the box as A.
+    if (is(T::Polygon, T::Polygon) || is(T::Box, T::Polygon)) {
+        return PolygonPolygon::Check(tls, mInfo, detailedManifold);
+    }
+    if (is(T::Polygon, T::Box)) {
+        return PolygonPolygon::Check(tls, inverted(), detailedManifold);
+    }
+    if (is(T::Polygon, T::Edge)) {
+        return PolygonEdge::Check(tls, mInfo, detailedManifold);
+    }
+    if (is(T::Edge, T::Polygon)) {
+        return PolygonEdge::Check(tls, inverted(), detailedManifold);
+    }
+    if (is(T::Box, T::Box)) {
+        return BoxBox::Check(mInfo, detailedManifold);
+    }
+    if (is(T::Box, T::Edge)) {
         return BoxEdge::Check(mInfo, detailedManifold);
     }
-    if (a == T::Edge && b == T::Box) {
-        mInfo->InvertEntries();
-        return BoxEdge::Check(mInfo, detailedManifold);
+    if (is(T::Edge, T::Box)) {
+        return BoxEdge::Check(inverted(), detailedManifold);
     }
-    // Remaining combinations of valid types need the checks that are still TODO
-    // (edge-edge, box-box and everything involving polygons); unknown types never collide.
-    auto isPrimitive = [](T t) {
-        return t == T::Circle || t == T::Polygon || t == T::Box || t == T::Edge;
-    };
-    assert(!(isPrimitive(a) && isPrimitive(b)) && "NarrowChecks: pair check not implemented yet");
-    (void)isPrimitive;
-    return false;
+    if (is(T::Edge, T::Edge)) {
+        return EdgeEdge::Check(mInfo, detailedManifold);
+    }
+    return false; // compounds and unknown types never collide here
+}
+
+bool CheckShapes(CollisionManifoldInfo2D* mInfo, bool detailedManifold) {
+    NarrowTls2D tls;
+    return CheckShapes(tls, mInfo, detailedManifold);
+}
+
+// 0x7d139d4
+bool Check(NarrowTls2D& tls, const CCDSettings& settings, FP deltaTime,
+           CollisionManifoldInfo2D* mInfo, bool detailedManifold) {
+    const bool overlap = CheckShapes(tls, mInfo, detailedManifold);
+    if (overlap || !mInfo->Manifold->_m.GetUsesCcd()) {
+        return overlap;
+    }
+    FP timeOfImpact;
+    return Gjk2D::ComputeTimeOfImpact(tls, mInfo, settings, detailedManifold, deltaTime,
+                                      timeOfImpact) == TimeOfImpactResult::Collision;
 }
 
 // 0x7d13e40
@@ -151,7 +159,7 @@ bool CircleCircle::Check(CollisionManifoldInfo2D* mInfo, bool detailedManifold) 
         CollisionManifold2D* manifold = mInfo->Manifold;
         const FP distance = FPMath::Sqrt(distanceSquared);
         FPVector2 contact;
-        if (distance > detail::Epsilon) {
+        if (distance > fpdetail::Epsilon) {
             const FPVector2 normal = {delta.X / distance, delta.Y / distance};
             manifold->Penetration = radii - distance;
             manifold->Normal = normal;
@@ -262,7 +270,7 @@ bool CircleEdge::Check(CollisionManifoldInfo2D* mInfo, bool detailedManifold) {
     if (along < 0) {
         return touchVertex(start);
     }
-    if (along > detail::MulInt(extent, 2)) {
+    if (along > fpdetail::MulInt(extent, 2)) {
         return touchVertex(end);
     }
     const FP distance = FPVector2::Distance(closest, centre);
@@ -313,7 +321,7 @@ bool BoxEdge::Check(CollisionManifoldInfo2D* mInfo, bool detailedManifold) {
         const FP b = exitX / d.X;
         tMax = FPMath::Max(a, b);
         tMin = FPMath::Min(a, b);
-        if (tMax < detail::Epsilon) {
+        if (tMax < fpdetail::Epsilon) {
             return false;
         }
     }
@@ -322,7 +330,7 @@ bool BoxEdge::Check(CollisionManifoldInfo2D* mInfo, bool detailedManifold) {
         const FP b = exitY / d.Y;
         tMin = FPMath::Max(tMin, FPMath::Min(a, b));
         tMax = FPMath::Min(tMax, FPMath::Max(a, b));
-        if (tMin > tMax || tMax < detail::Epsilon) {
+        if (tMin > tMax || tMax < fpdetail::Epsilon) {
             return false;
         }
     }
@@ -396,6 +404,79 @@ bool BoxEdge::Check(CollisionManifoldInfo2D* mInfo, bool detailedManifold) {
     manifold->Normal = FPVector2::Rotate(normal, sin, cos);
     CollisionManifold2D::AddContactPoint(manifold, FPVector2::Rotate(contact0, sin, cos) + boxPos);
     CollisionManifold2D::AddContactPoint(manifold, FPVector2::Rotate(contact1, sin, cos) + boxPos);
+    return true;
+}
+
+// 0x7d15970
+bool EdgeEdge::Check(CollisionManifoldInfo2D* mInfo, bool detailedManifold) {
+    const NarrowEntry2D& a = *mInfo->EntryA;
+    const NarrowEntry2D& b = *mInfo->EntryB;
+    const FP extentA = a.Shape->Edge.Extent;
+    const FP extentB = b.Shape->Edge.Extent;
+    const FP sinA = a.Narrow.RotSin;
+    const FP cosA = a.Narrow.RotCos;
+
+    // B in A's frame: its first endpoint, its unit direction towards that endpoint (the
+    // rotated (-1, 0)) and the vector from the first to the second endpoint (-span).
+    const FPVector2 start = ToLocal(b.Narrow.Position + EdgeHalf(b) - a.Narrow.Position, sinA, cosA);
+    const FPVector2 direction = ToLocal({-b.Narrow.RotCos, -b.Narrow.RotSin}, sinA, cosA);
+    const FPVector2 span = {fpdetail::TwiceProduct(direction.X, extentB),
+                            fpdetail::TwiceProduct(direction.Y, extentB)};
+    const FPVector2 end = start - span;
+
+    // Both endpoints beyond the same end of A, or on the same side of A's line, or both
+    // on the line (collinear): no crossing.
+    const FP minX = span.X < 0 ? start.X : end.X;
+    const FP maxX = span.X < 0 ? end.X : start.X;
+    if (minX > extentA || maxX < -extentA) {
+        return false;
+    }
+    if (span.Y == 0 && start.Y == 0) {
+        return false;
+    }
+    if (fpdetail::WrapMul(end.Y.RawValue(), start.Y.RawValue()) > 0) {
+        return false;
+    }
+    // Where B crosses A's line (raw product over raw divisor, as the original computes it).
+    assert(span.Y != 0);
+    const FP crossing =
+        FP::FromRaw(fpdetail::WrapMul(start.Y.RawValue(), span.X.RawValue()) / -span.Y.RawValue()) +
+        start.X;
+    const FP insideA = extentA - FPMath::Abs(crossing);
+    if (insideA < 0) {
+        return false;
+    }
+    if (!detailedManifold) {
+        return true;
+    }
+
+    // Push B off A's line by the shorter way, or along A's line if that is shorter still.
+    CollisionManifold2D* manifold = mInfo->Manifold;
+    if (start.Y > 0) {
+        if (start.Y < -end.Y) {
+            manifold->Penetration = start.Y;
+            manifold->Normal = FPVector2::Down();
+        } else {
+            manifold->Penetration = -end.Y;
+            manifold->Normal = FPVector2::Up();
+        }
+    } else if (end.Y <= -start.Y) {
+        manifold->Penetration = FPMath::Max(end.Y, FP::Zero());
+        manifold->Normal = FPVector2::Down();
+    } else {
+        manifold->Penetration = -start.Y;
+        manifold->Normal = FPVector2::Up();
+    }
+    const FP alongA = insideA * FPMath::Abs(direction.Y);
+    if (alongA < manifold->Penetration) {
+        manifold->Penetration = alongA;
+        const bool sameSide = fpdetail::WrapMul(crossing.RawValue(), start.Y.RawValue()) > 0;
+        manifold->Normal = sameSide ? FPVector2{direction.Y, -direction.X}
+                                    : FPVector2{-direction.Y, direction.X};
+    }
+    CollisionManifold2D::AddContactPoint(manifold,
+                                         a.Narrow.Position + FPVector2{crossing * cosA, crossing * sinA});
+    manifold->Normal = FPVector2::Rotate(manifold->Normal, sinA, cosA);
     return true;
 }
 

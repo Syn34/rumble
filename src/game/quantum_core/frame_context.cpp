@@ -1,6 +1,8 @@
 #include "frame_context.h"
 
 #include "photon_deterministic/log.h"
+#include "quantum_core/asset_db.h"
+#include "quantum_core/dynamic_asset_db.h"
 #include "quantum_core/frame_base.h"
 
 #include <exception>
@@ -16,8 +18,12 @@ FrameContext::FrameContext(const Args& args) {
         _allocator = args.PlatformInfo->Allocator;
         _taskRunner = args.PlatformInfo->TaskRunner;
     }
-    // (Missing, see the header: the asset database - which keeps a back reference to the
-    // context -, the initial dynamic assets and the asset serializer.)
+    _assetDB = args.AssetDatabase;
+    if (_assetDB != nullptr) {
+        _assetDB->_context = this;
+    }
+    _initialDynamicAssets = args.InitialDynamicAssets;
+    _assetSerializer = args.AssetSerializer;
     _commandSerializer = args.CommandSerializer;
 
     if (args.HeapConfig.HEAP_COUNT >= 1) {
@@ -94,9 +100,15 @@ void FrameContext::Dispose() {
     if (_allocator != nullptr) {
         FreeTempAllocations();
     }
-    // (Culling, Navigation, PhysicsEngine2D/3D, the asset database's resources and the
-    // task context are disposed here once they exist.)
+    // (Culling, Navigation and PhysicsEngine2D/3D are disposed here once they exist.)
     _culling = false;
+    if (_assetDB != nullptr) {
+        if (IResourceManager* manager = _assetDB->get_ResourceManager(); manager != nullptr) {
+            manager->DiposeAssetDatabase(_assetDB.get());
+        }
+        _assetDB.reset();
+    }
+    // (The task context is disposed here once it exists.)
     if (_heapGroup != nullptr) {
         Quantum::Allocator::Heap::Group::Free(_heapGroup, *_allocator);
         _heapGroup = nullptr;
