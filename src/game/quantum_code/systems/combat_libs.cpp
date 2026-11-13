@@ -7,7 +7,7 @@
 #include "quantum_code/assets/game_mode_specs.h"
 #include "quantum_code/assets/gameplay_specs.h"
 #include "quantum_code/assets/weapon_specs.h"
-#include "quantum_code/systems/killable_prototype.h"
+#include "quantum_code/prototypes/prototypes.h"
 #include "quantum_core/physics_components.h"
 
 namespace Quantum {

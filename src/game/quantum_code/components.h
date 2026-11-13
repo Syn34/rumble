@@ -3519,7 +3519,7 @@ struct alignas(8) Killable {
     KilledByData killedBy;
 
     // 0x7c560fc - The Killable prototype the component was made from (implemented in
-    // systems/combat_libs.cpp; see systems/killable_prototype.h).
+    // systems/combat_libs.cpp; see prototypes/prototypes.h).
     Prototypes::Killable_Prototype* GetPrototype(Frame* frame) const;
 
     // 0x7c55d7c

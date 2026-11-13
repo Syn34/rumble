@@ -245,8 +245,26 @@ struct PrototypeValidator {
     // error (result None) when the context cannot resolve it.
     static void FindMapEntity(MapEntityId link, const PrototypeMaterializationContext& context,
                               EntityRef& result);
-    // AddToDictionary<K, V> exists only as shared generic code (no address of its own) and
-    // is not reproduced until a generated prototype needs it.
+    // AddToDictionary<K, V> (shared generic code, no address of its own): adds an entry of
+    // a prototype dictionary; a key that is already present is reported as an error and
+    // the first value is kept.
+    template <class TDictionary, class K, class V>
+    static void AddToDictionary(TDictionary& dictionary, const K& key, const V& value,
+                                const PrototypeMaterializationContext& context) {
+        if (!dictionary.TryAdd(key, value)) DuplicateKey(KeyText(key), context);
+    }
+    static void DuplicateKey(const std::string& key, const PrototypeMaterializationContext& context);
+
+  private:
+    template <class K> static std::string KeyText(const K& key) {
+        if constexpr (std::is_arithmetic_v<K>) {
+            return std::to_string(key);
+        } else if constexpr (requires { key.ToString(); }) {
+            return key.ToString();
+        } else {
+            return "?";
+        }
+    }
 };
 
 // Marks a component type for the code generator (Quantum.Prototypes.PrototypeAttribute):

@@ -9,6 +9,9 @@
 //   * per-draw constants are a block of at most kMaxDrawConstantsSize bytes,
 //     std140 layout, vec4/mat4 members only
 //   * captured frames are RGBA8, rows ordered top to bottom
+//   * textures: rows are uploaded in memory order and texture coordinate (0, 0)
+//     addresses the first texel in memory on both APIs; shaders declare up to
+//     kMaxTextureSlots textures with RR_TEXTURE(slot, uTexture<slot>)
 #pragma once
 
 #include "rr/platform/platform.h"
@@ -17,6 +20,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -25,6 +29,7 @@ namespace rr::render {
 using platform::GraphicsApi;
 
 inline constexpr std::size_t kMaxDrawConstantsSize = 128;
+inline constexpr std::uint32_t kMaxTextureSlots = 4;
 
 struct BufferHandle {
     std::uint32_t id = 0;
@@ -32,6 +37,11 @@ struct BufferHandle {
 };
 
 struct PipelineHandle {
+    std::uint32_t id = 0;
+    explicit operator bool() const { return id != 0; }
+};
+
+struct TextureHandle {
     std::uint32_t id = 0;
     explicit operator bool() const { return id != 0; }
 };
@@ -71,6 +81,62 @@ struct PipelineDesc {
     bool depthWrite = true;
 };
 
+// Texture formats. Compressed formats are only usable where
+// SupportsTextureFormat() says so; RGBA8 always works.
+enum class TextureFormat {
+    RGBA8,
+    RGBA8_sRGB,
+    ASTC_4x4,
+    ASTC_4x4_sRGB,
+    ASTC_5x5,
+    ASTC_5x5_sRGB,
+    ASTC_6x6,
+    ASTC_6x6_sRGB,
+    ASTC_8x8,
+    ASTC_8x8_sRGB,
+    ASTC_10x10,
+    ASTC_10x10_sRGB,
+    ASTC_12x12,
+    ASTC_12x12_sRGB,
+};
+
+struct TextureFormatLayout {
+    int blockWidth = 1;
+    int blockHeight = 1;
+    int bytesPerBlock = 4;
+    bool compressed = false;
+    bool srgb = false;
+};
+TextureFormatLayout DescribeTextureFormat(TextureFormat format);
+// Bytes of one mip level of the given size.
+std::size_t TextureLevelBytes(TextureFormat format, int width, int height);
+const char* ToString(TextureFormat format);
+
+struct TextureDesc {
+    int width = 0;
+    int height = 0;
+    std::uint32_t mipCount = 1; // levels supplied to CreateTexture, largest first
+    TextureFormat format = TextureFormat::RGBA8;
+};
+
+struct TextureLevelData {
+    const void* data = nullptr;
+    std::size_t size = 0; // must equal TextureLevelBytes() for the level
+};
+
+enum class FilterMode { Nearest, Linear };
+enum class WrapMode { Repeat, ClampToEdge, MirroredRepeat };
+
+struct SamplerDesc {
+    FilterMode filter = FilterMode::Linear;    // magnification and minification
+    FilterMode mipFilter = FilterMode::Linear; // between mip levels
+    bool useMips = true;                       // false: sample level 0 only
+    WrapMode wrapU = WrapMode::Repeat;
+    WrapMode wrapV = WrapMode::Repeat;
+
+    bool operator==(const SamplerDesc&) const = default;
+};
+
 struct ClearValues {
     float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     float depth = 1.0f;
@@ -95,6 +161,15 @@ public:
     virtual PipelineHandle CreatePipeline(const PipelineDesc& desc) = 0;
     virtual void DestroyPipeline(PipelineHandle pipeline) = 0;
 
+    virtual bool SupportsTextureFormat(TextureFormat format) const = 0;
+    // Creates a 2D texture from `levels` (desc.mipCount entries). Returns an empty
+    // handle if the format is unsupported or the data doesn't match the size.
+    virtual TextureHandle CreateTexture(const TextureDesc& desc, std::span<const TextureLevelData> levels) = 0;
+    virtual void DestroyTexture(TextureHandle texture) = 0;
+    // Reads one mip level back as RGBA8 (decoded if the texture is compressed), for
+    // tests and tools. Returns nothing where the backend can't read the format back.
+    virtual std::optional<Image> ReadTexture(TextureHandle texture, std::uint32_t mipLevel) = 0;
+
     // Frame ----------------------------------------------------------------
     // Returns false when there is nothing to render into this frame (for
     // example while the window is minimised); skip drawing and EndFrame then.
@@ -104,6 +179,9 @@ public:
     virtual void BindVertexBuffer(BufferHandle buffer) = 0;
     virtual void BindIndexBuffer(BufferHandle buffer, IndexType type) = 0;
     virtual void SetDrawConstants(const void* data, std::size_t size) = 0;
+    // Binds a texture to slot 0..kMaxTextureSlots-1 for the following draws. Slots
+    // without a texture sample opaque white.
+    virtual void BindTexture(std::uint32_t slot, TextureHandle texture, const SamplerDesc& sampler) = 0;
     virtual void Draw(std::uint32_t vertexCount, std::uint32_t firstVertex = 0) = 0;
     virtual void DrawIndexed(std::uint32_t indexCount, std::uint32_t firstIndex = 0,
                              std::int32_t vertexOffset = 0) = 0;

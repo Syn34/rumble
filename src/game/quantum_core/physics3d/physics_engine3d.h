@@ -38,6 +38,11 @@ class PhysicsEngine3D {
                       const FPQuaternion& rot, const Shape3D& shape, std::int32_t layerMask,
                       std::int32_t options);
 
+    // 0x7d48c6c / 0x7d48d54 - `shape` from `start` moved by `translation`.
+    void ShapeCast(Core::FrameBase* frame, HitCollection3D* collection, const FPVector3& start,
+                   const FPQuaternion& rot, const Shape3D& shape, const FPVector3& translation,
+                   bool firstHitOnly, std::int32_t layerMask, std::int32_t options);
+
     Scene3D* Scene() { return _scene3D.get(); }
     Core::FrameContext* Context() const { return _context; }
 
@@ -51,7 +56,6 @@ class PhysicsEngine3D {
     // TODO(0x7d48b50, Quantum.Physics3D.PhysicsEngine3D.AddLinecastQuery),
     // TODO(0x7d48d84, Quantum.Physics3D.PhysicsEngine3D.AddOverlapShapeQuery): broad-phase
     // queries resolved during the step.
-    // TODO(0x7d48c6c, Quantum.Physics3D.PhysicsEngine3D.ShapeCast), also 0x7d48d54.
     // TODO(0x7d48e7c, Quantum.Physics3D.PhysicsEngine3D.get_SceneMesh): needs TriangleMesh.
     // TODO(0x7d48fd4, Quantum.Physics3D.PhysicsEngine3D.RegisterInternalTypes)
 

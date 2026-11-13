@@ -14,22 +14,23 @@ program never loads or calls into the original binaries.
 ## Status
 
 <!-- progress:start -->
-**Overall: 3.02%** — 5,174 of 171,382 original methods reimplemented
+**Overall: 3.91%** — 6,697 of 171,382 original methods reimplemented
 
 `█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░`
 
 | Part | Done | Methods | Progress |
 |---|---:|---:|---:|
-| Game code | 3,147 | 50,426 | 6.24% |
-| Third-party libraries | 2,027 | 120,956 | 1.68% |
+| Game code | 4,585 | 50,426 | 9.09% |
+| Third-party libraries | 2,112 | 120,956 | 1.75% |
 
 <details><summary>Per assembly (started ones first, then largest)</summary>
 
 | Assembly | Done | Methods | Progress |
 |---|---:|---:|---:|
 | PhotonDeterministic.dll | 686 | 904 | 75.9% |
-| quantum.core.dll | 1,341 | 2,608 | 51.4% |
-| quantum.code.dll | 3,147 | 7,251 | 43.4% |
+| quantum.code.dll | 4,585 | 7,251 | 63.2% |
+| quantum.core.dll | 1,402 | 2,608 | 53.8% |
+| PhotonQuantum.dll | 24 | 3,488 | 0.7% |
 | Assembly-CSharp.dll | 0 | 20,495 | 0.0% |
 | Fidelio-Framework.dll | 0 | 15,081 | 0.0% |
 | mscorlib.dll | 0 | 13,074 | 0.0% |
@@ -40,7 +41,6 @@ program never loads or calls into the original binaries.
 | System.dll | 0 | 5,442 | 0.0% |
 | Unity.RenderPipelines.Core.Runtime.dll | 0 | 4,981 | 0.0% |
 | Newtonsoft.Json.dll | 0 | 4,096 | 0.0% |
-| PhotonQuantum.dll | 0 | 3,488 | 0.0% |
 | System.Core.dll | 0 | 3,461 | 0.0% |
 | Unity.RenderPipelines.Universal.Runtime.dll | 0 | 3,340 | 0.0% |
 | System.Data.dll | 0 | 3,279 | 0.0% |

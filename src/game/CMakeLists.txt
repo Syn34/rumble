@@ -70,3 +70,12 @@ target_sources(rr_game PRIVATE
 target_sources(rr_game PRIVATE
     quantum_code/systems/actor_manager_systems.cpp
 )
+
+# Component prototypes of the gameplay simulation (quantum_code/prototypes/).
+target_sources(rr_game PRIVATE
+    quantum_code/prototypes/prototypes_values.cpp
+    quantum_code/prototypes/prototypes_a.cpp
+    quantum_code/prototypes/prototypes_b.cpp
+    quantum_code/prototypes/component_prototype_visitor.cpp
+    quantum_code/prototypes/flat_entity_prototype_container.cpp
+)

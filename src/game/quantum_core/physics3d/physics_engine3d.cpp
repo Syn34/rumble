@@ -25,6 +25,12 @@ void PhysicsEngine3D::OverlapShape(Core::FrameBase* frame, HitCollection3D* coll
     _scene3D->OverlapShape(frame, collection, pos, rot, shape, layerMask, options);
 }
 
+void PhysicsEngine3D::ShapeCast(Core::FrameBase* frame, HitCollection3D* collection, const FPVector3& start,
+                                const FPQuaternion& rot, const Shape3D& shape, const FPVector3& translation,
+                                bool firstHitOnly, std::int32_t layerMask, std::int32_t options) {
+    _scene3D->ShapeCast(frame, collection, start, rot, shape, translation, firstHitOnly, layerMask, options);
+}
+
 // 0x7d487c8
 void PhysicsEngine3D::SetCallbacks(Core::FrameBase* frame, EntityRef entity, CallbackFlags flags) {
     if (frame->Has<PhysicsCallbacks3D>(entity)) {

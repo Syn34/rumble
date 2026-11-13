@@ -19,7 +19,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 | Original assembly | Role | Methods | Done |
 |---|---|---:|---:|
 | quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | ~2,860 (data types, Frame, events, signals, system framework, first systems) |
-| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | 3,147 (data types, Frame, events, signals, asset classes) |
+| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | 4,585 (data types, Frame, events, signals, asset classes, component prototypes) |
 | GameClasses.dll | Shared game types | 1,162 | 0 |
 | Assembly-CSharp.dll | Game client (UI, presentation, flow) | 20,495 | 0 |
 | Fidelio-Framework.dll, FidelioFramework-Core.dll | Developer's client framework | 16,438 | 0 |
@@ -34,7 +34,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 | Rewired_Core.dll | Input mapping | 7,149 | 0 |
 | Newtonsoft.Json.dll | JSON | 4,096 | 0 |
 | PhotonDeterministic.dll | Deterministic maths, RNG, bit streams, session runtime | 904 | ~790 (maths, RNGSession, ByteUtils, BitStream, offline session runtime) |
-| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, assets, prototypes, physics, navigation) | ~6,100 | 1,336 (quantum.core) |
+| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, assets, prototypes, physics, navigation) | ~6,100 | 1,341 (quantum.core), 24 (PhotonQuantum: entity prototype loading) |
 | AK.Wwise.*.dll | Audio middleware bindings | ~2,500 | 0 |
 | MessagePack.dll, protobuf-net.dll | Binary serialisation | ~2,750 | 0 |
 | DOTween*.dll, Cinemachine.dll, NGUI.dll | Tweening, cameras, UI | ~4,400 | 0 |
@@ -52,7 +52,11 @@ local no-ops with documented behaviour.
 | Renderer interface + Vulkan 1.0 backend | done (first version) |
 | Shader pipeline (one GLSL source → GL text + SPIR-V, embedded) | done |
 | Textures, materials, render targets, text | not started |
-| Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); prefabs/scenes, textures, meshes not started |
+| Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); prefab hierarchies (`rr/assets/prefab.h`) with entity prototype components from prefabs and baked map entities; scenes, textures, meshes not started |
+| Textures (2D, mips, samplers, ASTC upload where supported) and a lit textured shader, both backends | done (first version) |
+| Materials (shader variants), render targets, text | not started |
+| Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); meshes, textures, materials, shader identification: readers done (`src/engine/assets`); prefabs/scenes not started |
+| Texture decoders | ASTC LDR 4x4..12x12 (linear and sRGB; the only compressed format the game uses) and the uncompressed formats, to RGBA8 |
 | Audio | not started |
 | Physics / animation | not started |
 
@@ -109,15 +113,22 @@ local no-ops with documented behaviour.
 - quantum.core 3D physics scene: Scene3D step run task by task on one thread (entry creation
   with statics first, first/second-half force integration, bucketed sweep-and-prune broad
   phase with the original endpoint order and active/stabbing lists, narrow phase, trigger and
-  collision callbacks with enter/stay/exit lists, islands, legacy Gauss-Seidel contact solver,
-  penetration correction, velocity integration, sleeping), Entry3D world body settings /
-  integration / AABBs, PhysicsSceneSettings, map static colliders (spheres/boxes),
-  PhysicsEngine3D (owned by FrameContext with UsePhysics3D; SetCallbacks; immediate line casts
-  and shape overlaps). Partly verified against the original and marked TODO: callback
-  handlers, islands, the velocity solver loop, sleep detection, UpdateMap, immediate queries.
-  Not ported: static meshes (TriangleMesh), broad-phase queries resolved in the step, shape
-  casts, compounds, CCD integration, joints, the hybrid Jacobi/Gauss-Seidel solver, the
-  whole 2D scene/engine
+  collision callbacks with the original handler order, post-callback component checks and
+  enter/stay/exit lists, CCD pairs sorted by time of impact with their callbacks and
+  first-TOI integration, post-callback entry/manifold updates, islands, both contact
+  solvers - legacy Gauss-Seidel (accumulated impulses) and hybrid Jacobi/Gauss-Seidel
+  (per-body impulse chains) - penetration correction, velocity integration, per-entry and
+  per-island sleep detection), UpdateMap (world/bucket sizes, radix-sorted static endpoints,
+  static stabbing lists), Entry3D world body settings / integration / AABBs,
+  PhysicsSceneSettings, map static colliders (spheres/boxes), CollisionInfo3D /
+  TriggerInfo3D / ExitInfo3D, PhysicsEngine3D (owned by FrameContext with UsePhysics3D;
+  SetCallbacks; immediate line casts, shape overlaps and shape casts walking the buckets as
+  the original, hit order included), CharacterController3D movement (Init, SetConfig, Move,
+  ComputeRawMovement, ComputeRawSteer) and its prototype. Not ported: static triangle meshes
+  (TriangleMesh, mesh manifolds and their solver/callback paths), broad-phase queries
+  resolved in the step (Query3D, Task_QueryResolve, the controller's query hits), compound
+  shapes, joints and the joint position solver, the static colliders' mutable state, the
+  whole 2D scene/engine and the 2D controller
 - `Photon.Deterministic.RNGSession` (13/13; PCG32 seeded by SplitMix64), `BitStream` (107/107,
   incl. generic `SerializeArrayLength`), `ByteUtils` (20/20; the gzip writer emits stored deflate
   blocks, so compressed bytes differ from zlib's)
@@ -163,7 +174,22 @@ local no-ops with documented behaviour.
   assets and quantum.core's built-ins (Map with static colliders, NavMesh, BinaryData,
   PhysicsMaterial, character controller configs, EntityView, EntityPrototype, SimulationConfig).
   `contentindex --load` builds all 1,868 simulation assets of the game's bundles with C++
-  types. Entity prototypes come with empty containers until the prefab reader exists
+  types.
+- Component prototypes: engine-side prefab reader (`rr/assets/prefab.h`: game objects with
+  components, transforms, hierarchies and world transforms, script data via type trees,
+  pointers across bundles); all 185 quantum.code component prototypes and the 15 value-type
+  prototypes (`quantum_code/prototypes/`) with Materialize/AddToEntity/Dispatch (map entity
+  links, heap lists and dictionaries in the original allocation order, fixed buffers, unions,
+  prototype references for the user-extended ones), Quantum.ComponentPrototypeVisitor,
+  FlatEntityPrototypeContainer (Collect/Store) and its StoreVisitor; readers for every game and
+  framework prototype; PhotonQuantum's entity prototype side (`content/unity_entity_prototype.h`:
+  the EntityPrototype script's PreSerialize / SerializeImplicitComponents, source-collider
+  shapes, body config upgrade, EntityPrototypeConverter, the editor-side twins of linking
+  prototypes, EntityPrototypeAsset.PrepareAsset and MapAsset.PrepareAsset, FPMathUtils
+  conversions). `contentindex --load` now fills all 251 entity prototypes from their prefabs and
+  all 997 baked map entities of the 52 maps, and reports prototypes per type. Pending: 2D
+  source colliders and 2D shape configs (the game has none), joint prototypes on prefabs,
+  the framework component scripts' Refresh overrides (unused by the game's prefabs)
 
 - quantum.code systems (`src/game/quantum_code/systems/`): the system framework
   (SystemMainThread, SystemMainThreadFilter with filter structs, groups, signal-only systems,
@@ -186,20 +212,46 @@ local no-ops with documented behaviour.
   (DamageableSystem, HealthLib.ApplyHit, shields), respawning (ActorManager), and the parts
   that need the 3D scene (death animations, spawn-on-death ray casts, culling, physics step)
 
+- Engine asset readers (`src/engine/assets`): Mesh (vertex streams in every component format,
+  multiple streams, streamed `.resS` data, compressed/quantised meshes with packed bit vectors,
+  16/32-bit indices, submeshes, bind poses, bone hashes, blend shapes), Texture2D (formats, mip
+  chains, stripped mips, sampler settings, streamed data), Material (shader, textures with tiling,
+  floats/ints/colours), Shader identification, ResourceStore for `StreamingInfo` ranges. Checked on
+  the game's files numerically only (`meshview --check-meshes`): all 226 meshes decode, vertex
+  bounds match the stored submesh bounds (worst 0.22% of size, quantisation), indices in range,
+  normals unit length within 8-bit quantisation, skin weights sum to 1, 99.7% of triangles wind
+  consistently with their normals
+- ASTC LDR decoder written from the specification: bit-exact against Mesa's decoder on 242k random
+  blocks (all six block sizes, both profiles) and on every mip of the game's 419 ASTC textures
+  (`meshview --check-textures`, GPU readback compared with our decode)
+- Renderer textures on both backends (RGBA8/sRGB, ASTC where the device has it, mips, samplers,
+  four slots per draw, readback for checks), `lit_textured` shader program; the placeholder scene
+  adds a lit mipmapped checker cube and an ASTC-textured quad built in code (compare_renderers:
+  0.06% edge-pixel difference)
+- `tools/meshview`: viewer (orbit camera, either renderer) for a mesh with its material's main
+  texture, plus `--list`, `--check-meshes`, `--check-textures`, `--astc-selftest`, `--demo`
+
 ## Known issues
 
 - On Mesa's software Vulkan driver (lavapipe), line primitives crossing the near plane
   rasterised incorrectly. The placeholder grid avoids it; needs checking on real GPUs.
 - Swapchain resize is implemented but has only been exercised at a fixed size so far.
-- Buffer/pipeline destruction on Vulkan stalls the GPU; replace with deferred deletion.
+- Buffer/pipeline/texture destruction on Vulkan stalls the GPU; replace with deferred deletion.
+  Texture uploads also wait for the queue (fine at load time, not for streaming).
+- Lavapipe has no ASTC, so the native ASTC upload path on Vulkan is untested (it falls back to
+  software decoding there); the OpenGL native path is tested on llvmpipe.
+- Mesh bounds (`m_LocalAABB`) of some skinned meshes are larger than their vertices; the
+  submesh bounds match. Not investigated further.
+- The game's meshes are left-handed with clockwise front faces; meshview mirrors X and reverses
+  each triangle. The real scene renderer needs the same conversion (and for transforms).
 
 ## Next
 
 1. quantum.core: memory/collections (in progress), collision geometry, frame/ECS
 2. Concrete Native::Allocator/Utility for the PC platform; hook DeterministicSession to quantum.core's game
-3. Renderer: textures, materials, render targets
+3. Renderer: materials (map the game's shaders to PC shader programs), skinning, render targets
 4. Asset reader for the game's content files (from the user's own copy)
 5. Gameplay systems from quantum.code.dll: damage pipeline and respawning next, then movement,
    weapons and projectiles (need the 3D scene from quantum.core)
-4. Asset reader for the game's content files: prefabs (entity prototype components), scenes, textures, meshes
+4. Asset reader for the game's content files: scenes, textures, meshes
 5. Gameplay systems from quantum.code.dll, starting with movement and damage

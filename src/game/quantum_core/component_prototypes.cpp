@@ -186,9 +186,15 @@ bool CharacterController2D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,
     NotImplemented(*this);
 }
 
-bool CharacterController3D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,
+bool CharacterController3D_Prototype::AddToEntity(Core::FrameBase* f, EntityRef entity,
                                                   const PrototypeMaterializationContext&) {
-    NotImplemented(*this);
+    CharacterController3D controller{};
+    Materialize(f, controller);
+    return f->Set(entity, controller) == SetResult::ComponentAdded;
+}
+
+void CharacterController3D_Prototype::Materialize(Core::FrameBase* frame, CharacterController3D& result) const {
+    result.Init(frame, frame->FindAsset<CharacterController3DConfig>(Config.Id));
 }
 
 bool PhysicsBody2D_Prototype::AddToEntity(Core::FrameBase* f, EntityRef entity,

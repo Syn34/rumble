@@ -5,6 +5,8 @@
 // shapes). Each Loaded() then derives the runtime data as in the original.
 #include "content/quantum_code_factories.h"
 
+#include "content/entity_prototype_loader.h"
+
 #include "content/quantum_content_provider.h"
 #include "content/settings_reader.h"
 #include "quantum_code/components.h"
@@ -289,9 +291,9 @@ void ReadBinaryData(const Value& v, BinaryData& out) {
     Read(v, "IsCompressed", out.IsCompressed);
 }
 
-// EntityPrototype's stored container is empty: the editor fills prototypes from the
-// components of the prefab the asset belongs to. Building them needs the engine-side
-// prefab reader; until then the asset has an empty container.
+// EntityPrototype's stored container is empty: its prototypes come from the prefab the
+// asset belongs to (see entity_prototype_loader.cpp, which the provider prefers). Built
+// from Settings alone, the asset has an empty container.
 std::shared_ptr<AssetObject> MakeEntityPrototype(const Value&) {
     auto asset = std::make_shared<EntityPrototype>();
     asset->Container = std::make_shared<EntityPrototypeContainer>();
@@ -315,6 +317,7 @@ void RegisterBuiltInAssetFactories() {
     RegisterAssetFactory("PolygonColliderAsset", &Make<PolygonCollider, ReadPolygonCollider>);
     RegisterAssetFactory("TerrainColliderAsset", &Make<TerrainCollider, ReadTerrainCollider>);
     RegisterAssetFactory("SimulationConfigAsset", &Make<SimulationConfig, ReadSimulationConfig>);
+    RegisterPrefabAssetFactories();
 }
 
 } // namespace rr::content

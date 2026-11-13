@@ -16,6 +16,11 @@ std::map<std::string, AssetFactory>& Factories() {
     return factories;
 }
 
+std::map<std::string, SourceAssetFactory>& SourceFactories() {
+    static std::map<std::string, SourceAssetFactory> factories;
+    return factories;
+}
+
 // Settings.Identifier.{Path, Guid.Value}, if this object is a simulation asset.
 std::optional<Quantum::AssetObjectIdentifier> IdentifierOf(const rr::assets::Value& object) {
     const auto* settings = object.Get("Settings");
@@ -35,6 +40,11 @@ std::optional<Quantum::AssetObjectIdentifier> IdentifierOf(const rr::assets::Val
 void RegisterAssetFactory(const std::string& scriptClass, AssetFactory factory) {
     std::lock_guard lock(FactoryMutex());
     Factories()[scriptClass] = std::move(factory);
+}
+
+void RegisterSourceAssetFactory(const std::string& scriptClass, SourceAssetFactory factory) {
+    std::lock_guard lock(FactoryMutex());
+    SourceFactories()[scriptClass] = std::move(factory);
 }
 
 std::shared_ptr<Quantum::AssetObject> BuildAsset(const std::string& scriptClass,
@@ -63,6 +73,7 @@ QuantumContentProvider::QuantumContentProvider(rr::assets::ContentLibrary& libra
                     if (auto id = IdentifierOf(*value)) {
                         if (byGuid_.count(id->Guid.Value)) continue; // first occurrence wins
                         byGuid_[id->Guid.Value] = entries_.size();
+                        byPath_.emplace(id->Path, entries_.size());
                         entries_.push_back({*id, cab, object.pathId});
                     }
                 } catch (const rr::assets::ReadError& e) {
@@ -85,6 +96,11 @@ const QuantumContentProvider::Entry* QuantumContentProvider::Find(
     const Quantum::AssetObjectIdentifier& id) const {
     auto it = byGuid_.find(id.Guid.Value);
     return it != byGuid_.end() ? &entries_[it->second] : nullptr;
+}
+
+Quantum::AssetGuid QuantumContentProvider::GuidOfPath(const std::string& path) const {
+    auto it = byPath_.find(path);
+    return it != byPath_.end() ? entries_[it->second].id.Guid : Quantum::AssetGuid{};
 }
 
 std::string QuantumContentProvider::ScriptClassOf(const Quantum::AssetObjectIdentifier& id) {
@@ -110,12 +126,18 @@ std::shared_ptr<Quantum::AssetObject> QuantumContentProvider::LoadAsset(
     const std::string scriptClass = ScriptClassOf(id);
 
     AssetFactory factory;
+    SourceAssetFactory sourceFactory;
     {
         std::lock_guard lock(FactoryMutex());
         if (auto it = Factories().find(scriptClass); it != Factories().end()) factory = it->second;
+        if (auto it = SourceFactories().find(scriptClass); it != SourceFactories().end()) {
+            sourceFactory = it->second;
+        }
     }
     std::shared_ptr<Quantum::AssetObject> asset;
-    if (factory && settings) {
+    if (sourceFactory) {
+        asset = sourceFactory(AssetSource{library_, {file, object, entry->cab}, *value, settings, *this});
+    } else if (factory && settings) {
         asset = factory(*settings);
     } else {
         auto unmapped = std::make_shared<UnmappedAsset>();

@@ -69,3 +69,8 @@ rr_set_warnings(rr_quantum_core)
 
 # Asset value types used by the gameplay assets (FPAnimationCurve).
 target_sources(rr_quantum_core PRIVATE fp_animation_curve.cpp)
+# 3D/2D physics scene (agent/qcore-physics2)
+target_sources(rr_quantum_core PRIVATE
+    physics3d/collision_info3d.cpp
+    physics3d/character_controller3d.cpp
+)
