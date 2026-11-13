@@ -38,6 +38,14 @@ void CollisionManifold2D::AddContactPoint(CollisionManifold2D* manifold, const F
     manifold->_contactPoints[manifold->_contactPointsCount++] = contact;
 }
 
+// 0x7d18774
+void PolygonData::Init(const PolygonCollider& polygonCollider) {
+    Vertices = polygonCollider.Vertices.data();
+    Normals = polygonCollider.Normals.data();
+    VerticesCount = static_cast<std::int32_t>(polygonCollider.Vertices.size());
+    NormalsCount = static_cast<std::int32_t>(polygonCollider.Normals.size());
+}
+
 // 0x7d18dcc
 void CollisionManifoldInfo2D::InvertEntries() {
     assert(Manifold != nullptr);

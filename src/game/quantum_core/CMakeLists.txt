@@ -10,9 +10,13 @@ add_library(rr_quantum_core
     transform.cpp
     shape2d.cpp
     shape3d.cpp
+    gjk_settings.cpp
     physics2d/collision_manifold2d.cpp
     physics2d/hit.cpp
     physics2d/narrow_checks.cpp
+    physics2d/narrow_checks_box.cpp
+    physics2d/narrow_checks_polygon.cpp
+    physics2d/gjk2d.cpp
     physics3d/collision_manifold3d.cpp
     physics3d/hit3d.cpp
     physics3d/narrow_checks.cpp
@@ -26,6 +30,8 @@ add_library(rr_quantum_core
     navigation/navmesh_components.cpp
     navigation/navigation.cpp
     path_utils.cpp
+    physics3d/gjk3d.cpp
+    triangle_ccw.cpp
     entity_ref.cpp
     component_set.cpp
     component_type_id.cpp
