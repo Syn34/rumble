@@ -54,8 +54,12 @@ struct alignas(8) _globals_ {
 
     // TODO(0x7b9ea74, Quantum._globals_.GetHashCode): needs the GetHashCode of quantum.core's
     // PhysicsEngineState and PhysicsSceneSettings.
-    // TODO(0x7b9ed9c, Quantum._globals_.Serialize): fields in layout order; needs the
-    // serialisers of PhysicsEngineState and PhysicsSceneSettings (physics engine work).
+    // 0x7b9ed9c - Fields in layout order. TODO(0x7b9ed9c, Quantum._globals_.Serialize):
+    // PhysicsState2D/3D (PhysicsEngineState.Serialize 0x7d2eae4: the static colliders'
+    // disabled-state bits and tracked map) and PhysicsSettings
+    // (PhysicsSceneSettings.Serialize 0x7d3c514) are skipped until the physics work
+    // provides their serialisers; everything else is written as the original does.
+    static void Serialize(void* ptr, FrameSerializer* serializer);
 };
 static_assert(sizeof(_globals_) == _globals_::SIZE);
 

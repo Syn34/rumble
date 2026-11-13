@@ -64,7 +64,8 @@ class Frame : public Core::FrameBase {
 
     // 0x7c6ad28 - Registers the component types (once per process), allocates the global
     // block, collects the systems' signal receivers and creates the entity store sized by
-    // the simulation config. The frame keeps the configs and systems by pointer; they must
+    // the simulation config; takes the map and the RNG seed from the runtime config and
+    // sets the enable bit of every system that starts enabled. The frame keeps the configs and systems by pointer; they must
     // outlive it. `systemsAll` lists every system in runtime-index order.
     Frame(Core::FrameContext* context, std::vector<SystemBase*> systemsAll,
           std::vector<SystemBase*> systemsRoots, Photon::Deterministic::DeterministicSessionConfig* sessionConfig,
@@ -146,11 +147,13 @@ class Frame : public Core::FrameBase {
     void Deserialize(std::span<const std::uint8_t> data) override;
     // TODO(0x7c71964, Quantum.Frame.DumpFrame): needs FramePrinter.
     std::string DumpFrame(int dumpFlags) override;
-    // TODO(0x7c72b60, Quantum.Frame.CalculateChecksum), TODO(0x7c70a20,
-    // Quantum.Frame.CalculateChecksum(bool)), TODO(0x7c72b84,
-    // Quantum.Frame.CalculateChecksumInternal): the checksum covers the global block (see
-    // Serialize).
+    // 0x7c72b60 - With the context's shared checksum serializer if it has one.
     std::uint64_t CalculateChecksum() override;
+    // 0x7c70a20 - The shared serializer, or a new one over a FrameChecksumerBitStream.
+    std::uint64_t CalculateChecksum(bool useSharedSerializer);
+    // 0x7c72b84 - CRC64 of the global block and the entity store, seeded with the frame
+    // number. The global block leaves out the physics parts (see _globals_::Serialize).
+    std::uint64_t CalculateChecksumInternal(FrameSerializer* serializer);
 
     // --- systems -------------------------------------------------------------------------
 
