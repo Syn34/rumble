@@ -23,6 +23,8 @@ add_library(rr_quantum_core
     navigation/navmesh.cpp
     navigation/navmesh_agent_config.cpp
     navigation/path_finder.cpp
+    navigation/navmesh_components.cpp
+    navigation/navigation.cpp
 )
 add_library(rr::quantum_core ALIAS rr_quantum_core)
 target_include_directories(rr_quantum_core PUBLIC ..)
