@@ -93,6 +93,20 @@ int MatchView::Spawn(Quantum::AssetGuid view) {
     return node;
 }
 
+std::size_t MatchView::CheckViews(const std::vector<Quantum::AssetObjectIdentifier>& views) {
+    std::size_t resolved = 0;
+    for (const auto& id : views) {
+        const int node = Spawn(id.Guid);
+        if (node < 0) continue;
+        ++resolved;
+        scene_.Nodes()[static_cast<std::size_t>(node)].active = false;
+        pooled_[id.Guid.Value].push_back(node);
+    }
+    scene_.UpdateTransforms();
+    scene_.UpdateBounds(resources_);
+    return resolved;
+}
+
 void MatchView::Sync(Quantum::Frame& current, Quantum::Frame* previous, float alpha) {
     for (auto& [key, instance] : instances_) instance.seen = false;
     stats_.viewedEntities = 0;

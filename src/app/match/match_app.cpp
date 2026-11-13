@@ -97,6 +97,21 @@ int RunMatchHeadless(const MatchCommand& command) {
         }
     }
     runner.PrintDiagnostics(stdout);
+    if (command.checkViews) {
+        MatchView view(*match.content);
+        const auto views = match.content->AssetsOfClass("EntityViewAsset");
+        const std::size_t resolved = view.CheckViews(views);
+        std::size_t renderers = 0, skinned = 0;
+        for (const auto& instance : view.Scene().Instances()) {
+            ++renderers;
+            if (instance.kind == scene::RendererKind::Skinned) ++skinned;
+        }
+        const scene::ContentStats& cs = view.ContentStats();
+        std::printf("views: %zu EntityView assets, %zu prefabs instantiated, %zu renderers (%zu skinned), "
+                    "%zu meshes / %zu materials / %zu textures loaded, %zu meshes failed, %zu pointers into missing files\n",
+                    views.size(), resolved, renderers, skinned, cs.meshesLoaded, cs.materialsLoaded, cs.texturesLoaded,
+                    cs.meshesFailed, cs.unresolvedPointers);
+    }
     return 0;
 }
 

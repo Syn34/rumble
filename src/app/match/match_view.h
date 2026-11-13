@@ -45,6 +45,10 @@ public:
     // The camera for the given angles around the followed point.
     scene::Camera Camera(const CameraAngles& angles) const;
 
+    // Instantiates the prefab of every given EntityView asset once (numeric check of the
+    // EntityView -> prefab path; the instances stay hidden). Returns how many resolved.
+    std::size_t CheckViews(const std::vector<Quantum::AssetObjectIdentifier>& views);
+
     scene::Scene& Scene() { return scene_; }
     scene::ResourceLibrary& Resources() { return resources_; }
     const ViewStats& Stats() const { return stats_; }

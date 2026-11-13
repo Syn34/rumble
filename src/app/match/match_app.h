@@ -18,6 +18,7 @@ struct MatchCommand {
     std::uint64_t ticks = 600;   // headless: ticks to run
     std::uint64_t frames = 0;    // windowed: quit after this many frames (fixed time step)
     bool quiet = false;          // headless: only the summary lines
+    bool checkViews = false;     // headless: also instantiate every EntityView prefab (numbers)
 };
 
 // Runs `ticks` ticks without a window and prints numbers only (entities per component,

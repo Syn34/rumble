@@ -66,6 +66,7 @@ void PrintUsage() {
         "  --seed <n>                  simulation seed (default 1)\n"
         "  --ticks <n>                 with --headless: ticks to run (default 600)\n"
         "  --quiet                     with --headless: no log messages\n"
+        "  --check-views               with --headless: instantiate every EntityView prefab and print counts\n"
         "  --content <dir>             asset pack aa/Android folder (*.bundle)\n"
         "  --engine-lib <file>         libunity.so from the arm64 split\n"
         "  --data <dir>                player data folder (bin/Data); repeatable\n"
@@ -140,6 +141,8 @@ bool ParseOptions(int argc, char** argv, Options& options) {
             options.matchCommand.content.allowApproximateMath = true;
         } else if (arg == "--quiet") {
             options.matchCommand.quiet = true;
+        } else if (arg == "--check-views") {
+            options.matchCommand.checkViews = true;
         } else if (arg == "--save-content") {
             options.saveContent = true;
         } else {

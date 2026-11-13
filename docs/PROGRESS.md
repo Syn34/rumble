@@ -292,7 +292,11 @@ local no-ops with documented behaviour.
   each entity's EntityView prefab through `src/engine/scene`, interpolates transforms and orbits a
   camera around the local player's actor, drawn with either renderer; `--headless --ticks N`
   prints entities per component, systems run/failing, events and a checksum every 60 ticks.
-  Determinism: two runs give identical checksums (`tests/test_quantum_game.cpp` with content
+  On the staged content (numbers only): all 52 maps start and run 180 ticks headless (1,049 map
+  entities in total; 4 maps lose some entities to compound collider shapes, which quantum.core
+  doesn't create yet; no other system throws, because the systems that would act on actors are
+  still TODO shells and no actors spawn yet); `--check-views` instantiates the prefabs of all 247
+  EntityView assets (185 renderers, 81 skinned). Determinism: two runs give identical checksums (`tests/test_quantum_game.cpp` with content
   built in code; `tools/match_determinism.py` on the real content). Pending: RuntimePlayer and
   `Frame.UpdatePlayerData` (no player data reaches the simulation, so no player actor spawns),
   event confirmation/dispatch (events are counted and released), the checksum/replay snapshot

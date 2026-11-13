@@ -138,7 +138,8 @@ RangerRumble --match q_ffa_megalopolis_01b --headless --ticks 600 # numbers only
 the right mouse button or right stick turn the camera, Space jump, left mouse fire, Shift dash,
 F melee, Q gadget, E ultimate, R reload (fixed default bindings until the game's input-mapping
 library is reimplemented). `--headless` prints entities per component, the systems that ran
-or failed and a checksum every 60 ticks; `python3 tools/match_determinism.py` runs a match twice
+or failed and a checksum every 60 ticks (`--check-views` also instantiates every entity view
+prefab and prints counts); `python3 tools/match_determinism.py` runs a match twice
 and compares them.
 
 FPMath's lookup tables are game data: the small ones come from `global-metadata.dat`, the large
