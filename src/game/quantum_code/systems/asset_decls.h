@@ -26,9 +26,42 @@ class EnhancementSpec : public AssetObject {};
 
 class GameModeSpec : public AssetObject {
   public:
+    // Quantum.GameModeSpec.BoltsLossMode
+    enum class BoltsLossMode : std::int32_t {
+        FixedAmount = 0,
+        Percentage = 1,
+    };
+
     GAME_MODE id{};
     FP gameDuration;
     FP overTimeDuration;
+    BoltsLossMode boltLossMode{};
+    std::int32_t boltsLostOnRespawn = 0;
+    std::int32_t boltsLostOnRespawnPercentage = 0;
+    std::int32_t boltsLostOnDeath = 0;
+    std::int32_t boltsLostOnDeathPercentage = 0;
+    std::int32_t boltsLostOnElimination = 0;
+    std::int32_t boltsLostOnEliminationPercentage = 0;
+    bool isCoop = false;
+    FP outroTimeScale;
+    FP outroTimeScalingDuration;
+};
+
+class FreeForAllGameModeSpec : public GameModeSpec {
+  public:
+    std::uint32_t killsToWin = 0;
+};
+
+class TeamTotalRumbleGameModeSpec : public GameModeSpec {
+  public:
+    std::uint32_t killsToWin = 0;
+};
+
+class BoltGathererActorSpec : public AssetObject {
+  public:
+    FP PreventBoltCollectionDefaultDuration;
+    std::uint16_t InitialBoltCount = 0;
+    std::uint16_t MaxBoltsCollectable = 0;
 };
 
 class HealthSpec : public AssetObject {

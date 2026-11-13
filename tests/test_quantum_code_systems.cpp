@@ -10,7 +10,9 @@
 #include "quantum_code/systems/asset_decls.h"
 #include "quantum_code/systems/combat_libs.h"
 #include "quantum_code/systems/health_systems.h"
+#include "quantum_code/systems/game_mode_systems.h"
 #include "quantum_code/systems/killable_systems.h"
+#include "quantum_code/systems/reward_systems.h"
 #include "quantum_code/systems/libs.h"
 #include "quantum_code/systems/transform_systems.h"
 #include "quantum_core/frame_context.h"
@@ -339,4 +341,66 @@ TEST_CASE("quantum.code systems: kill history, combat activity and hierarchy") {
     CHECK(f.GetPointer<Hierarchy>(child)->LocalRotation == FPQuaternion::Identity());
     RunFrames(sim, 1);
     CHECK(f.GetPointer<Transform3D>(child)->Position == FPVector3(FP::FromInt(10), FP::FromInt(2), FP{}));
+}
+
+TEST_CASE("quantum.code systems: bolts, kill-count wins and slow motion") {
+    auto gathererSpec = MakeAsset<BoltGathererActorSpec>(400);
+    gathererSpec->MaxBoltsCollectable = 50;
+    auto modeSpec = MakeAsset<FreeForAllGameModeSpec>(401);
+    modeSpec->killsToWin = 2;
+    modeSpec->boltLossMode = GameModeSpec::BoltsLossMode::Percentage;
+    modeSpec->boltsLostOnDeathPercentage = 50;
+    modeSpec->outroTimeScale = FP::FromRaw(32768);
+    modeSpec->outroTimeScalingDuration = FP::One();
+    SystemsSimulation sim(MakeSystems<BoltSignalSystem, GameModeKillCountSystem, TimeScaleSystem>(),
+                          {gathererSpec, modeSpec});
+    Frame& f = *sim.frame;
+    f.get_Global()->Systems.Set(sim.Find<GameModeKillCountSystem>()->get_RuntimeIndex());
+    StartSystems(&f);
+    f.set_UnscaledDeltaTime(f.get_DeltaTime());
+    f.Number = 1;
+    GameModeHandler* handler = f.GetOrAddSingletonPointer<GameModeHandler>();
+    handler->state = GAME_MODE_HANDLER_STATE::MainLoop;
+    handler->gameModeSpecRef.Id = AssetGuid(401);
+
+    const EntityRef player = f.Create();
+    f.Add<PlayerActor>(player);
+    BoltGathererActor gatherer{};
+    gatherer.Spec.Id = AssetGuid(400);
+    f.Add<BoltGathererActor>(player, gatherer);
+    f.Signals.Reward_OnCollected(player, DroppableType::Bolt, 30);
+    CHECK(BoltLib::GetCollectedBolts(&f, player) == 30);
+    f.Signals.Reward_OnCollected(player, DroppableType::Bolt, 30);
+    CHECK(BoltLib::GetCollectedBolts(&f, player) == 50); // capped by the spec
+    // Dying costs half of the bolts carried.
+    f.Signals.Killable_OnKill(player, KilledByData{});
+    CHECK(BoltLib::GetCollectedBolts(&f, player) == 25);
+    // A gatherer without a spec does not stay.
+    const EntityRef stray = f.Create();
+    f.Add<BoltGathererActor>(stray);
+    f.CommitAllCommands();
+    CHECK(!f.Has<BoltGathererActor>(stray));
+
+    // Two player kills win the free-for-all.
+    const EntityRef victim = f.Create();
+    f.Add<PlayerActor>(victim);
+    KilledByData killedBy{};
+    killedBy.owner = player;
+    f.GetPointer<PlayerActor>(player)->killCount = 1;
+    f.Signals.Killable_OnKill(victim, killedBy);
+    CHECK(!GameModeHandlerLib::IsGameModeFinished(&f));
+    f.GetPointer<PlayerActor>(player)->killCount = 2;
+    f.Signals.Killable_OnKill(victim, killedBy);
+    CHECK(GameModeHandlerLib::IsGameModeFinished(&f));
+
+    // The outro slows the simulation down to half speed over a second.
+    f.Signals.GameMode_OnStateChanged(GAME_MODE_HANDLER_STATE::MainLoop, GAME_MODE_HANDLER_STATE::GameModeOutro);
+    CHECK(TimeScaleLib::IsTimeScaleActive(&f));
+    RunFrames(sim, 30);
+    CHECK(f.get_DeltaTime() < f.get_UnscaledDeltaTime());
+    CHECK(f.get_DeltaTime() > f.get_UnscaledDeltaTime() / 2);
+    RunFrames(sim, 40);
+    CHECK(!TimeScaleLib::IsTimeScaleActive(&f));
+    f.Signals.GameMode_OnStateChanged(GAME_MODE_HANDLER_STATE::GameModeOutro, GAME_MODE_HANDLER_STATE::Ended);
+    CHECK(f.get_DeltaTime() == f.get_UnscaledDeltaTime());
 }

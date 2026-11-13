@@ -57,6 +57,22 @@ class BoltLib {
     static std::int32_t GetCollectedBolts(Frame* frame, EntityRef entity);
     // 0x7bb71b4 - Sum over every gatherer of the team.
     static std::int32_t GetTeamCollectedBolts(Frame* frame, std::int32_t teamId);
+    // 0x7bb6f48
+    static void TryGiveBolts(Frame* f, EntityRef gathererEntity, std::int32_t boltsToGive) {
+        TryChangeBolts(f, gathererEntity, boltsToGive);
+    }
+    // 0x7bb6ff0
+    static void TryRemoveBolts(Frame* f, EntityRef gathererEntity, BoltGathererActor* boltGathererActor,
+                               std::int32_t boltsToRemove) {
+        TryChangeBolts(f, gathererEntity, boltGathererActor, -boltsToRemove);
+    }
+    // 0x7bb6f4c - For entities with a BoltGathererActor.
+    static void TryChangeBolts(Frame* f, EntityRef gathererEntity, std::int32_t changeAmount);
+    // 0x7bb6ff8 - Adds (or removes) bolts within 0..the spec's maximum (unlimited when it
+    // is 0 or there is no spec) and reports what was actually collected or lost. Players
+    // whose game mode has finished keep their bolts.
+    static void TryChangeBolts(Frame* frame, EntityRef entity, BoltGathererActor* boltGathererActor,
+                               std::int32_t changeAmount);
 };
 
 class HeroSpec;

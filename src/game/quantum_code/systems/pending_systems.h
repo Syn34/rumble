@@ -545,20 +545,6 @@ class BoltRankingSystem : public RankingSystem {
     void Update(Frame* f) override { (void)f; }
 };
 
-// Quantum.BoltSignalSystem (original base: Quantum.SystemSignalsOnly)
-class BoltSignalSystem : public SystemSignalsOnly {
-  public:
-    // TODO(0x7bb72ec, Quantum.BoltSignalSystem.Reward_OnCollected): Reward_OnCollected(frame, collectorEntity, type, amount); not reimplemented yet.
-    // TODO(0x7bb7310, Quantum.BoltSignalSystem.OnAdded): OnAdded(f, entity, component); not reimplemented yet.
-    // TODO(0x7bb7490, Quantum.BoltSignalSystem.Killable_OnKill): Killable_OnKill(frame, killedEntity, killedBy); not reimplemented yet.
-    // TODO(0x7bb770c, Quantum.BoltSignalSystem.GameMode_OnPlayerEliminated): GameMode_OnPlayerEliminated(frame, playerEntity); not reimplemented yet.
-    // TODO(0x7bb788c, Quantum.BoltSignalSystem.Killable_OnRevive): Killable_OnRevive(frame, toRevive, position, rotation); not reimplemented yet.
-    // TODO(0x7bb755c, Quantum.BoltSignalSystem.LoseBoltsFixedAmount): LoseBoltsFixedAmount(frame, playerEntity, amount); not reimplemented yet.
-    // TODO(0x7bb761c, Quantum.BoltSignalSystem.LoseBoltsPercentage): LoseBoltsPercentage(frame, entity, percentage); not reimplemented yet.
-    // TODO(0x7bb7918, Quantum.BoltSignalSystem.LoseBolts): LoseBolts(frame, entity, boltGatherer, amount); not reimplemented yet.
-    // TODO(0x7bb79e8, Quantum.BoltSignalSystem..ctor): .ctor(); not reimplemented yet.
-};
-
 // Quantum.BombardierDroneSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
 class BombardierDroneSystem : public SystemMainThread {
   public:
@@ -941,15 +927,6 @@ class GameModeHandlerSystem : public SystemMainThread {
     // TODO(0x7ba5d40, Quantum.GameModeHandlerSystem.BalancingLog): BalancingLog(text); not reimplemented yet.
     // TODO(0x7ba7030, Quantum.GameModeHandlerSystem..ctor): .ctor(); not reimplemented yet.
     void Update(Frame* f) override { (void)f; }
-};
-
-// Quantum.GameModeKillCountSystem (original base: Quantum.SystemSignalsOnly)
-class GameModeKillCountSystem : public SystemSignalsOnly {
-  public:
-    // 0x7ba7158
-    bool get_StartEnabled() const override { return false; }
-    // TODO(0x7ba7160, Quantum.GameModeKillCountSystem.Killable_OnKill): Killable_OnKill(f, toKill, killedBy); not reimplemented yet.
-    // TODO(0x7ba73f0, Quantum.GameModeKillCountSystem..ctor): .ctor(); not reimplemented yet.
 };
 
 // Quantum.GameModifiersSystem (original base: Quantum.SystemMainThreadGroup)
@@ -1649,16 +1626,6 @@ class TeamTotalRumbleRankingSystem : public RankingSystem {
     // TODO(0x7baab64, Quantum.TeamTotalRumbleRankingSystem.FillRankingList): FillRankingList(frame, list); not reimplemented yet.
     // TODO(0x7baaa34, Quantum.TeamTotalRumbleRankingSystem.CloseToWinCheck): CloseToWinCheck(f, rankingManager); not reimplemented yet.
     // TODO(0x7ba7a54, Quantum.TeamTotalRumbleRankingSystem..ctor): .ctor(); not reimplemented yet.
-    void Update(Frame* f) override { (void)f; }
-};
-
-// Quantum.TimeScaleSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
-class TimeScaleSystem : public SystemMainThread {
-  public:
-    // TODO(0x7bab1f0, Quantum.TimeScaleSystem.OnInit): OnInit(frame); not reimplemented yet.
-    // TODO(0x7bab284, Quantum.TimeScaleSystem.Update): Update(frame, filter); not reimplemented yet.
-    // TODO(0x7bab3cc, Quantum.TimeScaleSystem.GameMode_OnStateChanged): GameMode_OnStateChanged(frame, prevState, newState); not reimplemented yet.
-    // TODO(0x7ba796c, Quantum.TimeScaleSystem..ctor): .ctor(); not reimplemented yet.
     void Update(Frame* f) override { (void)f; }
 };
 

@@ -2,7 +2,11 @@
 // cell manager component helpers.
 #include "quantum_code/systems/asset_decls.h"
 #include "quantum_code/systems/libs.h"
+#include "quantum_code/systems/combat_libs.h"
 #include "quantum_core/component_filter_struct.h"
+
+#include <algorithm>
+#include <limits>
 
 namespace Quantum {
 
@@ -101,6 +105,38 @@ std::int32_t BoltLib::GetTeamCollectedBolts(Frame* frame, std::int32_t teamId) {
         }
     }
     return total;
+}
+
+void BoltLib::TryChangeBolts(Frame* f, EntityRef gathererEntity, std::int32_t changeAmount) {
+    BoltGathererActor* gatherer = nullptr;
+    if (f->TryGetPointer<BoltGathererActor>(gathererEntity, gatherer)) {
+        TryChangeBolts(f, gathererEntity, gatherer, changeAmount);
+    }
+}
+
+void BoltLib::TryChangeBolts(Frame* frame, EntityRef entity, BoltGathererActor* boltGathererActor,
+                             std::int32_t changeAmount) {
+    if (PlayerActorLib::IsGameModeFinished(frame, entity)) {
+        return;
+    }
+    std::int32_t maximum = std::numeric_limits<std::int32_t>::max();
+    BoltGathererActorSpec* spec = nullptr;
+    if (frame->TryFindAssetInternal(boltGathererActor->Spec.Id, true, spec) && spec->MaxBoltsCollectable != 0) {
+        maximum = spec->MaxBoltsCollectable;
+    }
+    const std::int32_t previous = boltGathererActor->BoltsCollected;
+    const std::int32_t current = std::clamp(previous + changeAmount, 0, maximum);
+    boltGathererActor->BoltsCollected = current;
+    const std::int32_t delta = current - previous;
+    if (delta >= 1) {
+        frame->Events.OnBoltCollected(entity, delta);
+        frame->Signals.Bolt_OnCollected(entity, delta);
+        return;
+    }
+    if (changeAmount < 0 || current != previous) {
+        frame->Events.OnBoltLost(entity, -delta);
+        frame->Signals.Bolt_OnLost(entity, -delta);
+    }
 }
 
 // --- EnergyCellManager (component) --------------------------------------------------------

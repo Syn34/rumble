@@ -14,13 +14,13 @@ program never loads or calls into the original binaries.
 ## Status
 
 <!-- progress:start -->
-**Overall: 2.63%** — 4,506 of 171,382 original methods reimplemented
+**Overall: 2.78%** — 4,758 of 171,382 original methods reimplemented
 
 `█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░`
 
 | Part | Done | Methods | Progress |
 |---|---:|---:|---:|
-| Game code | 2,570 | 50,426 | 5.10% |
+| Game code | 2,822 | 50,426 | 5.60% |
 | Third-party libraries | 1,936 | 120,956 | 1.60% |
 
 <details><summary>Per assembly (started ones first, then largest)</summary>
@@ -29,7 +29,7 @@ program never loads or calls into the original binaries.
 |---|---:|---:|---:|
 | PhotonDeterministic.dll | 686 | 904 | 75.9% |
 | quantum.core.dll | 1,250 | 2,608 | 47.9% |
-| quantum.code.dll | 2,570 | 7,251 | 35.4% |
+| quantum.code.dll | 2,822 | 7,251 | 38.9% |
 | Assembly-CSharp.dll | 0 | 20,495 | 0.0% |
 | Fidelio-Framework.dll | 0 | 15,081 | 0.0% |
 | mscorlib.dll | 0 | 13,074 | 0.0% |
@@ -71,7 +71,7 @@ program never loads or calls into the original binaries.
 
 </details>
 
-<sub>Counted by `tools/progress.py` on 2026-11-12: a method is done when its original address is cited above a reimplementation under `src/game/`. The engine layer (platform, renderers, asset readers) is new code and isn't counted.</sub>
+<sub>Counted by `tools/progress.py` on 2026-11-13: a method is done when its original address is cited above a reimplementation under `src/game/`. The engine layer (platform, renderers, asset readers) is new code and isn't counted.</sub>
 <!-- progress:end -->
 
 See [docs/PROGRESS.md](docs/PROGRESS.md) for details and what's next.
