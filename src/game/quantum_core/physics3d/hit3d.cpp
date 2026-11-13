@@ -1,6 +1,8 @@
 // hit3d.cpp - Quantum.Physics3D.Hit3D / HitCollection3D.
 #include "hit3d.h"
 
+#include "quantum_core/physics2d/hit_collection_storage.h"
+
 #include "photon_deterministic/fp_internal.h"
 #include "quantum_core/hit_quick_sort.h"
 
@@ -65,6 +67,30 @@ void HitCollection3D::QuickSort(Hit3D* hits, std::int32_t lo, std::int32_t hi) {
 void HitCollection3D::QuickSortCastDistance(Hit3D* hits, std::int32_t lo, std::int32_t hi) {
     Quantum::detail::LomutoQuickSort(hits, lo, hi,
                                      [](const Hit3D& hit) { return hit.CastDistanceNormalized; });
+}
+
+// 0x7d6dc90
+HitCollection3D::HitCollection3D(std::int32_t capacity, Modes mode, Core::FrameContext* context)
+    : _mode(mode), _count(0), _capacity(capacity) {
+    _hits3D = Physics2D::hit_storage::AllocateHits<Hit3D>(capacity, mode, context);
+}
+
+// 0x7d6e07c
+void HitCollection3D::Free(Photon::Deterministic::Native::Allocator* allocator) {
+    Physics2D::hit_storage::FreeHits(_hits3D, _count, _capacity, _mode, allocator);
+}
+
+// 0x7d6e0cc
+void HitCollection3D::Add(const Hit3D& hit, Core::FrameContext* context) {
+    if (_count == _capacity) {
+        ExpandCapacity(_count * 2, context);
+    }
+    _hits3D[_count++] = hit;
+}
+
+// 0x7d6e120
+void HitCollection3D::ExpandCapacity(std::int32_t newCapacity, Core::FrameContext* context) {
+    Physics2D::hit_storage::ExpandHits(_hits3D, _capacity, _mode, newCapacity, context);
 }
 
 } // namespace Quantum::Physics3D

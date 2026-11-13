@@ -4,10 +4,14 @@
 #include "quantum_core/asset_guid.h"
 
 #include "photon_deterministic/fp.h"
+#include "photon_deterministic/native.h"
 #include "photon_deterministic/fp_vector2.h"
 
 #include <cstdint>
 
+namespace Quantum::Core {
+class FrameContext;
+}
 namespace Quantum::Physics2D {
 
 using Photon::Deterministic::FP;
@@ -79,13 +83,16 @@ struct HitCollection {
     // 0x7d11764 - the same on CastDistanceNormalized.
     static void QuickSortCastDistance(Hit* hits, std::int32_t lo, std::int32_t hi);
 
-    // Need FrameContext / Allocator:
-    // TODO(0x7d11520, Quantum.Physics2D.HitCollection..ctor): allocates capacity hits
-    // (temp memory for Temp mode, the allocator otherwise).
-    // TODO(0x7d118b4, Quantum.Physics2D.HitCollection.Free): frees persistent buffers.
-    // TODO(0x7d118fc, Quantum.Physics2D.HitCollection.Add): doubles the capacity when
-    // full (ExpandCapacity), then appends.
-    // TODO(0x7d11958, Quantum.Physics2D.HitCollection.ExpandCapacity)
+    HitCollection() = default;
+    // 0x7d11520 - `capacity` zeroed hits from the frame's temp memory (Temp) or the
+    // context's allocator (otherwise).
+    HitCollection(std::int32_t capacity, Modes mode, Core::FrameContext* context);
+    // 0x7d118b4 - releases a persistent buffer (temp memory goes with the frame).
+    void Free(Photon::Deterministic::Native::Allocator* allocator);
+    // 0x7d118fc - appends, doubling the capacity when full.
+    void Add(const Hit& hit, Core::FrameContext* context);
+    // 0x7d11958 - moves the hits into a new buffer of `newCapacity`.
+    void ExpandCapacity(std::int32_t newCapacity, Core::FrameContext* context);
 };
 
 } // namespace Quantum::Physics2D

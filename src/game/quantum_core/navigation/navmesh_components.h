@@ -48,6 +48,8 @@ enum class WaypointFlag : std::uint8_t {
 // Steers an entity along a NavMeshPathfinder's waypoints.
 struct NavMeshSteeringAgent {
     static constexpr int SIZE = 40;
+    // Registered component name (see component_type_id.h).
+    static constexpr const char* ComponentTypeName = "NavMeshSteeringAgent";
 
     NullableNonNegativeFP _maxSpeed;     // unset: taken from the agent config
     NullableNonNegativeFP _acceleration; // unset: taken from the agent config
@@ -95,6 +97,8 @@ static_assert(sizeof(NavMeshSteeringAgent) == NavMeshSteeringAgent::SIZE);
 // Local avoidance participant (other agents steer around it and it around them).
 struct NavMeshAvoidanceAgent {
     static constexpr int SIZE = 40;
+    // Registered component name (see component_type_id.h).
+    static constexpr const char* ComponentTypeName = "NavMeshAvoidanceAgent";
 
     std::uint8_t _priority = 0;
     std::uint8_t _avoidanceLayer = 0;
@@ -138,6 +142,8 @@ static_assert(sizeof(NavMeshAvoidanceAgent) == NavMeshAvoidanceAgent::SIZE);
 // A static or moving obstacle other agents avoid (without avoiding anything itself).
 struct NavMeshAvoidanceObstacle {
     static constexpr int SIZE = 32;
+    // Registered component name (see component_type_id.h).
+    static constexpr const char* ComponentTypeName = "NavMeshAvoidanceObstacle";
 
     std::uint8_t _disabled = 0;
     std::uint8_t _avoidanceLayer = 0;
@@ -253,21 +259,6 @@ struct NavMeshPathfinder {
 };
 static_assert(sizeof(NavMeshPathfinder) == NavMeshPathfinder::SIZE);
 
-// TODO(0x7d7e814, Quantum.Prototypes.NavMeshAvoidanceObstacle_Prototype.AddToEntity): prototype
-// materialisation; needs the entity prototype system.
-// TODO(0x7d7e8f0, Quantum.Prototypes.NavMeshAvoidanceObstacle_Prototype.Materialize)
-// TODO(0x7d7e92c, Quantum.Prototypes.NavMeshAvoidanceObstacle_Prototype.Dispatch)
-// TODO(0x7d7e950, Quantum.Prototypes.NavMeshAvoidanceObstacle_Prototype..ctor)
-// TODO(0x7d7eb48, Quantum.Prototypes.NavMeshSteeringAgent_Prototype.AddToEntity)
-// TODO(0x7d7ec18, Quantum.Prototypes.NavMeshSteeringAgent_Prototype.PostMaterialize)
-// TODO(0x7d7ec6c, Quantum.Prototypes.NavMeshSteeringAgent_Prototype.Dispatch)
-// TODO(0x7d7ec90, Quantum.Prototypes.NavMeshSteeringAgent_Prototype..ctor)
-// TODO(0x7d7ecd8, Quantum.Prototypes.NavMeshPathfinder_Prototype.AddToEntity)
-// TODO(0x7d7edf4, Quantum.Prototypes.NavMeshPathfinder_Prototype.Materialize)
-// TODO(0x7d7f0b4, Quantum.Prototypes.NavMeshPathfinder_Prototype.Dispatch)
-// TODO(0x7d7f0d8, Quantum.Prototypes.NavMeshPathfinder_Prototype..ctor)
-// TODO(0x7d8014c, Quantum.Prototypes.NavMeshAvoidanceAgent_Prototype.AddToEntity)
-// TODO(0x7d80200, Quantum.Prototypes.NavMeshAvoidanceAgent_Prototype.Dispatch)
-// TODO(0x7d80224, Quantum.Prototypes.NavMeshAvoidanceAgent_Prototype..ctor)
+// The prototypes that create these components are in component_prototypes.h.
 
 } // namespace Quantum

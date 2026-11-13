@@ -2,9 +2,13 @@
 
 #include "photon_deterministic/log.h"
 #include "quantum_core/asset_db.h"
+#include "quantum_core/builtin_assets.h"
+#include "quantum_core/component_prototype.h"
 #include "quantum_core/component_reference.h"
 #include "quantum_core/dynamic_asset_db.h"
 #include "quantum_core/frame_serializer.h"
+#include "quantum_core/map.h"
+#include "quantum_core/map_entity_id.h"
 
 #include <algorithm>
 #include <bit>
@@ -423,6 +427,147 @@ EntityRef FrameBase::Create() {
     info.Ref.Index = index;
     info.Ref.Version = (info.Ref.Version + 1) | EntityInfo::ACTIVE_BIT;
     return info.Ref;
+}
+
+// --- entity prototypes -------------------------------------------------------------------------
+
+EntityRef FrameBase::Create(AssetRefEntityPrototype prototype) {
+    return Create(FindAssetInternal<EntityPrototype>(prototype.Id, true));
+}
+
+EntityRef FrameBase::Create(EntityPrototype* prototype) {
+    const EntityRef entity = Create();
+    if (prototype == nullptr || prototype->Container == nullptr) {
+        throw std::invalid_argument("FrameBase::Create: no entity prototype to materialise");
+    }
+    const EntityPrototypeRef prototypeRef = EntityPrototypeRef::FromPrototypeAsset(prototype);
+    EntityPrototypeContainer* container = prototype->Container.get();
+
+    MaterializePrototypeInternal(entity, container, prototypeRef, nullptr, nullptr);
+    if (container->HasAnyListeners) {
+        InvokeEntityPrototypeMaterializedListeners(entity, container, prototypeRef);
+    }
+    if (_SignalOnEntityPrototypeMaterialized) {
+        _SignalOnEntityPrototypeMaterialized(entity, prototypeRef);
+    }
+    return entity;
+}
+
+void FrameBase::Create(const std::vector<std::shared_ptr<EntityPrototypeContainer>>& prototypes,
+                       Map* parentAsset) {
+    const int count = static_cast<int>(prototypes.size());
+
+    std::vector<EntityRef> entities(prototypes.size());
+    for (EntityRef& entity : entities) {
+        entity = Create();
+    }
+
+    bool anyListeners = false;
+    for (int i = 0; i < count; ++i) {
+        EntityPrototypeContainer* container = prototypes[static_cast<std::size_t>(i)].get();
+        const EntityRef entity = entities[static_cast<std::size_t>(i)];
+        MaterializePrototypeInternal(entity, container,
+                                     EntityPrototypeRef::FromMasterAsset(parentAsset, i), &entities,
+                                     nullptr);
+        Add(entity, MapEntityLink{i});
+        anyListeners = anyListeners || container->HasAnyListeners;
+    }
+
+    if (anyListeners) {
+        for (int i = 0; i < count; ++i) {
+            EntityPrototypeContainer* container = prototypes[static_cast<std::size_t>(i)].get();
+            if (container->HasAnyListeners) {
+                InvokeEntityPrototypeMaterializedListeners(
+                    entities[static_cast<std::size_t>(i)], container,
+                    EntityPrototypeRef::FromMasterAsset(parentAsset, i));
+            }
+        }
+    }
+
+    if (_SignalOnEntityPrototypeMaterialized) {
+        for (int i = 0; i < count; ++i) {
+            _SignalOnEntityPrototypeMaterialized(entities[static_cast<std::size_t>(i)],
+                                                 EntityPrototypeRef::FromMasterAsset(parentAsset, i));
+        }
+    }
+}
+
+bool FrameBase::MaterializePrototypeInternal(EntityRef entity, EntityPrototypeContainer* container,
+                                             EntityPrototypeRef prototypeRef,
+                                             const std::vector<EntityRef>* mapEntities,
+                                             ComponentSet* overridenComponents) {
+    if (container == nullptr) {
+        throw std::invalid_argument("FrameBase: no entity prototype container");
+    }
+    container->EnsureIsSorted();
+
+    bool anyOverwritten = false;
+    for (const std::shared_ptr<ComponentPrototype>& component : container->Components) {
+        const int componentIndex = component->get_ComponentTypeId();
+        const PrototypeMaterializationContext context(entity, prototypeRef, container,
+                                                      componentIndex, mapEntities);
+        if (component->AddToEntity(this, entity, context)) {
+            continue;
+        }
+        anyOverwritten = true;
+        if (overridenComponents != nullptr) {
+            overridenComponents->Add(componentIndex);
+        } else {
+            PrototypeValidator::ComponentOverwritten(entity, *component, context);
+        }
+    }
+    return anyOverwritten;
+}
+
+void FrameBase::InvokeEntityPrototypeMaterializedListeners(EntityRef entity,
+                                                           EntityPrototypeContainer* container,
+                                                           EntityPrototypeRef prototypeRef) {
+    if (container == nullptr) {
+        throw std::invalid_argument("FrameBase: no entity prototype container");
+    }
+    for (const std::shared_ptr<ComponentPrototype>& component : container->Components) {
+        if (auto* listener = dynamic_cast<IEntityPrototypeMaterializedListener*>(component.get())) {
+            listener->OnEntityPrototypeMaterialized(this, entity, prototypeRef);
+        }
+    }
+}
+
+EntityPrototypeContainer* FrameBase::FindPrototype(EntityPrototypeRef prototypeRef) {
+    AssetObject* asset = FindAssetInternal<AssetObject>(prototypeRef.Asset.Id, true);
+    if (asset == nullptr) {
+        return nullptr;
+    }
+
+    if (prototypeRef.InnerAssetId >= 0) {
+        auto* map = dynamic_cast<Map*>(asset);
+        if (map == nullptr) {
+            throw std::logic_error("FindPrototype: asset " + prototypeRef.Asset.Id.ToString(true) +
+                                   " should be a Map holding entity prototypes but is a " +
+                                   AssetTypeName(typeid(*asset)));
+        }
+        const int count = static_cast<int>(map->MapEntities.size());
+        if (prototypeRef.InnerAssetId >= count) {
+            throw std::logic_error("FindPrototype: map " + prototypeRef.Asset.Id.ToString(true) +
+                                   " has no entity prototype " +
+                                   std::to_string(prototypeRef.InnerAssetId) + " (it has " +
+                                   std::to_string(count) + ")");
+        }
+        return map->MapEntities[static_cast<std::size_t>(prototypeRef.InnerAssetId)].get();
+    }
+
+    auto* prototype = dynamic_cast<EntityPrototype*>(asset);
+    if (prototype == nullptr) {
+        throw std::logic_error("FindPrototype: asset " + prototypeRef.Asset.Id.ToString(true) +
+                               " should be an EntityPrototype but is a " +
+                               AssetTypeName(typeid(*asset)));
+    }
+    return prototype->Container.get();
+}
+
+ComponentPrototype* FrameBase::FindPrototype(ComponentPrototypeRef prototypeRef) {
+    EntityPrototypeContainer* container = FindPrototype(prototypeRef.get_EntityPrototypeRef());
+    return container != nullptr ? container->GetComponentPrototype(prototypeRef.ComponentTypeIndex)
+                                : nullptr;
 }
 
 bool FrameBase::Destroy(EntityRef entityRef) {

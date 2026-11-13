@@ -5,6 +5,7 @@ add_executable(rr_tests
     test_fp_math.cpp
     test_fp_math_utility.cpp
     test_serialized_file.cpp
+    test_asset_bundle.cpp
     test_asset_guid.cpp
     test_bit_stream.cpp
     test_byte_utils.cpp
@@ -24,6 +25,9 @@ add_executable(rr_tests
     test_quantum_narrow2d.cpp
     test_quantum_narrow3d.cpp
     test_quantum_code_frame.cpp
+    test_quantum_box3d.cpp
+    test_quantum_physics_components.cpp
+    test_quantum_prototypes.cpp
 )
 target_link_libraries(rr_tests PRIVATE rr::game rr::assets)
 rr_set_warnings(rr_tests)

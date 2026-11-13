@@ -1,6 +1,11 @@
 #include "component_type_id.h"
 
+#include "quantum_core/physics_components.h"
 #include "quantum_core/transform.h"
+#include "quantum_core/frame_serializer.h"
+#include "quantum_core/map_entity_id.h"
+#include "quantum_core/navigation/navmesh_components.h"
+#include "quantum_core/view.h"
 
 #include <stdexcept>
 #include <thread>
@@ -24,6 +29,18 @@ namespace {
 // 0x7ced6a8 (<>c.<Setup>b__18_0) - Serializer of the reserved index 0; never meant to run.
 void SerializeReservedSlot(void* /*component*/, FrameSerializer* /*serializer*/) {
     throw std::logic_error("ComponentTypeId: component index 0 is reserved");
+}
+
+// The navigation components serialise through the interface type; component callbacks
+// receive the frame serializer.
+void SerializeNavMeshSteeringAgent(void* component, FrameSerializer* serializer) {
+    NavMeshSteeringAgent::Serialize(component, serializer);
+}
+void SerializeNavMeshAvoidanceAgent(void* component, FrameSerializer* serializer) {
+    NavMeshAvoidanceAgent::Serialize(component, serializer);
+}
+void SerializeNavMeshAvoidanceObstacle(void* component, FrameSerializer* serializer) {
+    NavMeshAvoidanceObstacle::Serialize(component, serializer);
 }
 
 void WaitUntilFinished(const std::atomic<bool>& finished) {
@@ -62,25 +79,27 @@ void ComponentTypeId<void>::RegisterFrameworkComponents() {
     Add<Transform2D>(ComponentCallbacks(&Transform2D::Serialize), none);
     Add<Transform3D>(ComponentCallbacks(&Transform3D::Serialize), none);
     Add<Transform2DVertical>(ComponentCallbacks(&Transform2DVertical::Serialize), none);
-    // Pending their C++ types: once they exist these become Add<T> calls with their
-    // Serialize/OnAdded/OnRemoved callbacks. Name and size already keep every later index
-    // and buffer layout identical to the original's.
-    AddEntry(nullptr, "PhysicsCollider2D", 80, {}, none);
-    AddEntry(nullptr, "PhysicsBody2D", 120, {}, none);
-    AddEntry(nullptr, "PhysicsCollider3D", 112, {}, none);
-    AddEntry(nullptr, "PhysicsBody3D", 184, {}, none);
-    AddEntry(nullptr, "PhysicsJoints2D", 8, {}, none);
-    AddEntry(nullptr, "PhysicsJoints3D", 8, {}, none);
-    AddEntry(nullptr, "PhysicsCallbacks2D", 16, {}, none);
-    AddEntry(nullptr, "PhysicsCallbacks3D", 16, {}, none);
-    AddEntry(nullptr, "CharacterController2D", 40, {}, none);
-    AddEntry(nullptr, "CharacterController3D", 48, {}, none);
+    // Physics components. Their Serialize callbacks are still TODO (null here).
+    Add<PhysicsCollider2D>(ComponentCallbacks(nullptr, &PhysicsCollider2D::OnAdded, nullptr), none);
+    Add<PhysicsBody2D>(ComponentCallbacks(nullptr, &PhysicsBody2D::OnAdded, &PhysicsBody2D::OnRemoved), none);
+    Add<PhysicsCollider3D>(ComponentCallbacks(nullptr, &PhysicsCollider3D::OnAdded, nullptr), none);
+    Add<PhysicsBody3D>(ComponentCallbacks(nullptr, &PhysicsBody3D::OnAdded, &PhysicsBody3D::OnRemoved), none);
+    Add<PhysicsJoints2D>(ComponentCallbacks(), none);
+    Add<PhysicsJoints3D>(ComponentCallbacks(), none);
+    Add<PhysicsCallbacks2D>(
+        ComponentCallbacks(nullptr, &PhysicsCallbacks2D::OnAdded, &PhysicsCallbacks2D::OnRemoved), none);
+    Add<PhysicsCallbacks3D>(
+        ComponentCallbacks(nullptr, &PhysicsCallbacks3D::OnAdded, &PhysicsCallbacks3D::OnRemoved), none);
+    Add<CharacterController2D>(ComponentCallbacks(), none);
+    Add<CharacterController3D>(ComponentCallbacks(), none);
+    // Pending their C++ types (registered by name and size so later indices stay right):
     AddEntry(nullptr, "NavMeshPathfinder", 96, {}, none);
-    AddEntry(nullptr, "NavMeshSteeringAgent", 40, {}, none);
-    AddEntry(nullptr, "NavMeshAvoidanceAgent", 40, {}, none);
-    AddEntry(nullptr, "NavMeshAvoidanceObstacle", 32, {}, none);
-    AddEntry(nullptr, "View", 8, {}, none);
-    AddEntry(nullptr, "MapEntityLink", 4, {}, none);
+    // The navigation agents' OnAdded/OnRemoved callbacks are still TODO (null here).
+    Add<NavMeshSteeringAgent>(ComponentCallbacks(&SerializeNavMeshSteeringAgent), none);
+    Add<NavMeshAvoidanceAgent>(ComponentCallbacks(&SerializeNavMeshAvoidanceAgent), none);
+    Add<NavMeshAvoidanceObstacle>(ComponentCallbacks(&SerializeNavMeshAvoidanceObstacle), none);
+    Add<View>(ComponentCallbacks(&View::Serialize), none);
+    Add<MapEntityLink>(ComponentCallbacks(&MapEntityLink::Serialize), none);
 }
 
 void ComponentTypeId<void>::Setup(const std::function<void()>& action) {

@@ -85,8 +85,8 @@ struct SeparationFunction3D {
     std::uint8_t _dynamicState = 0; // EntriesDynamicState flags
     FPVector3 _separationAxis;
     CollisionManifoldInfo3D _mInfo;
-    const NarrowEntry3D* _entry = nullptr;     // provides the point
-    const NarrowEntry3D* _faceEntry = nullptr; // provides the point, edge or face
+    const Entry3D* _entry = nullptr;     // provides the point
+    const Entry3D* _faceEntry = nullptr; // provides the point, edge or face
     FPVector3 _comPoint;
     FPVector3 _comOffsetPoint;
     FPVector3 _faceComPoint;
@@ -105,19 +105,19 @@ struct SeparationFunction3D {
 // support point along `worldDir`; spheres report only the motion of their centre. With a
 // time it adds the dynamic body's motion over that time (linear, and the rotation by the
 // yaw/pitch/roll angular step about the centre of mass).
-FPVector3 GetSupportOffset(const NarrowEntry3D& entry, FPVector3 worldDir,
+FPVector3 GetSupportOffset(const Entry3D& entry, FPVector3 worldDir,
                            std::optional<FP> deltaTime, std::int32_t dtShift);
 
 namespace Gjk3D {
 
 // 0x7d4eff8
-void ComputeDistance(SimplexDataPointers3D* ptrs, const NarrowEntry3D* entryA,
-                     const NarrowEntry3D* entryB, const TriangleCCW* tri, FP& distance,
+void ComputeDistance(SimplexDataPointers3D* ptrs, const Entry3D* entryA,
+                     const Entry3D* entryB, const TriangleCCW* tri, FP& distance,
                      FPVector3& separationAxis, std::int32_t iterations,
                      std::optional<FP> deltaTime, std::int32_t dtShift);
 // 0x7d4f360 - mesh entries use `tri` (centre + support offset). Negates `worldDir` in place,
 // like the original.
-void GetSimplexVertex(const NarrowEntry3D* entryA, const NarrowEntry3D* entryB,
+void GetSimplexVertex(const Entry3D* entryA, const Entry3D* entryB,
                       const TriangleCCW* tri, FPVector3& worldDir, SimplexVertex3D* vertex,
                       std::int32_t bitShift, std::optional<FP> deltaTime, std::int32_t dtShift);
 // 0x7d4f7e0
@@ -152,12 +152,12 @@ TimeOfImpactResult ComputeTimeOfImpact(NarrowTls3D& tls, CollisionManifoldInfo3D
 // triangle the normal is the triangle's, and hits from behind it are ignored.
 TimeOfImpactResult ComputeTimeOfImpactDetailedInfo(SimplexDataPointers3D* ptrs,
                                                    CollisionManifold3D* m,
-                                                   const NarrowEntry3D* entryA,
-                                                   const NarrowEntry3D* entryB,
+                                                   const Entry3D* entryA,
+                                                   const Entry3D* entryB,
                                                    const TriangleCCW* tri, FP distance);
 // 0x7d5122c - moves B along `castDistance` towards A (GJK ray cast); see the 2D version.
 // Casts into the back of a mesh triangle never hit.
-bool ShapeCastManifold(NarrowTls3D& tls, const NarrowEntry3D* entryA, const NarrowEntry3D* entryB,
+bool ShapeCastManifold(NarrowTls3D& tls, const Entry3D* entryA, const Entry3D* entryB,
                        const TriangleCCW* tri, const GJKSettings& settings,
                        const FPVector3& castDistance, bool computeDetailedInfo, Hit3D& hit);
 

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "quantum_core/asset_guid.h"
+#include "quantum_core/entity_prototype_ref.h"
 
 #include <cstdint>
 #include <string>
@@ -19,10 +20,9 @@ struct ComponentPrototypeRef {
     std::int32_t InnerAssetId = 0;
     std::int32_t ComponentTypeIndex = 0;
 
-    // 0x7ceb178 - The entity prototype part (asset and inner id); returned as a copy with
-    // the component index cleared.
-    ComponentPrototypeRef EntityPrototypeRef() const {
-        ComponentPrototypeRef entity;
+    // 0x7ceb178 get_EntityPrototypeRef - The entity prototype part (asset and inner id).
+    EntityPrototypeRef get_EntityPrototypeRef() const {
+        EntityPrototypeRef entity;
         entity.Asset = Asset;
         entity.InnerAssetId = InnerAssetId;
         return entity;

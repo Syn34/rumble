@@ -20,6 +20,8 @@ add_library(rr_quantum_core
     physics3d/collision_manifold3d.cpp
     physics3d/hit3d.cpp
     physics3d/narrow_checks.cpp
+    physics3d/narrow_checks_box.cpp
+    physics_components.cpp
     byte_stream.cpp
     mailbox_set8.cpp
     navigation/navmesh_region_mask.cpp
@@ -54,6 +56,9 @@ add_library(rr_quantum_core
     polygon_collider.cpp
     map.cpp
     asset_resource_provider.cpp
+    entity_prototype.cpp
+    component_prototype.cpp
+    component_prototypes.cpp
 )
 add_library(rr::quantum_core ALIAS rr_quantum_core)
 target_include_directories(rr_quantum_core PUBLIC ..)

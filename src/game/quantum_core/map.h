@@ -48,9 +48,11 @@ class Map final : public AssetObject, public IBuiltInAssetObject {
     std::int32_t GridNodeSize = 0;
     std::vector<AssetRefNavMesh> NavMeshLinks;
     std::vector<std::string> Regions;
-    // Not reproduced yet: StaticColliders2D (MapStaticCollider2D[]), StaticColliders3D
-    // (MapStaticCollider3D[]) and MapEntities (EntityPrototypeContainer[]); they belong to
-    // the physics and prototype systems.
+    // Not reproduced yet: StaticColliders2D (MapStaticCollider2D[]) and StaticColliders3D
+    // (MapStaticCollider3D[]); they belong to the physics system.
+    // The map's baked entities, created together by FrameBase::Create(prototypes, map);
+    // they refer to each other by index (MapEntityId).
+    std::vector<std::shared_ptr<EntityPrototypeContainer>> MapEntities;
 
     // Filled by Loaded.
     std::map<std::int32_t, std::vector<TriangleCCW>> StaticColliders3DTriangles;

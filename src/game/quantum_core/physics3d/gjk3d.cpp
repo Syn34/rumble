@@ -2,6 +2,8 @@
 // mapping of 3D entries (Entry3D.GetSupportOffset).
 #include "gjk3d.h"
 
+#include "quantum_core/physics_components.h"
+
 #include "quantum_core/gjk_settings.h"
 
 #include "photon_deterministic/fp_internal.h"
@@ -57,22 +59,23 @@ FP ShiftedSqrMagnitude(const FPVector3& point, std::int32_t shift) {
     return FP::FromRaw(square(point.X) + square(point.Y) + square(point.Z));
 }
 
-FP SphereRadius(const NarrowEntry3D& entry) {
+FP SphereRadius(const Entry3D& entry) {
     return entry.Shape->Type() == Shape3DType::Sphere ? entry.Shape->Sphere.Radius : FP::Zero();
 }
 
-FPVector3 CentreOfMass(const NarrowEntry3D& entry) {
-    return entry.TransformPosition + entry.RotatedCenterOfMass;
+FPVector3 CentreOfMass(const Entry3D& entry) {
+    assert(entry.Transform3D != nullptr);
+    return entry.Transform3D->Position + entry.RotatedCenterOfMass;
 }
 
-const NarrowBody3D& BodyOf(const NarrowEntry3D& entry) {
-    assert(entry.Body != nullptr);
-    return *entry.Body;
+const PhysicsBody3D& BodyOf(const Entry3D& entry) {
+    assert(entry.Body3D != nullptr);
+    return *entry.Body3D;
 }
 
 // Angular motion that turns the shape's support points: none for a sphere spinning about
 // its own centre.
-bool TurnsSupport(const NarrowEntry3D& entry) {
+bool TurnsSupport(const Entry3D& entry) {
     if (entry.Shape->Type() == Shape3DType::Sphere && entry.RotatedCenterOfMass == FPVector3::Zero()) {
         return false;
     }
@@ -82,7 +85,7 @@ bool TurnsSupport(const NarrowEntry3D& entry) {
 } // namespace
 
 // 0x7d79e54
-FPVector3 GetSupportOffset(const NarrowEntry3D& entry, FPVector3 worldDir, std::optional<FP> deltaTime,
+FPVector3 GetSupportOffset(const Entry3D& entry, FPVector3 worldDir, std::optional<FP> deltaTime,
                            std::int32_t dtShift) {
     const Shape3D& shape = *entry.Shape;
     FPVector3 offset;
@@ -102,7 +105,7 @@ FPVector3 GetSupportOffset(const NarrowEntry3D& entry, FPVector3 worldDir, std::
             BodyOf(entry).AngularVelocity != FPVector3::Zero()) {
             step = AngularStep(BodyOf(entry).AngularVelocity, *deltaTime, dtShift);
             worldDir = FPQuaternion::Inverse(step) * worldDir;
-            const FPVector3 pivot = (entry.TransformPosition - entry.Narrow.Position) + entry.RotatedCenterOfMass;
+            const FPVector3 pivot = (entry.Transform3D->Position - entry.Narrow.Position) + entry.RotatedCenterOfMass;
             if (pivot != FPVector3::Zero()) {
                 centroidOffset = pivot - step * pivot;
             }
@@ -141,10 +144,10 @@ void SimplexDataPointers3D::ResetPointers(SimplexDataPointers3D* ptrs, SimplexDa
 }
 
 // 0x7d4f360
-void Gjk3D::GetSimplexVertex(const NarrowEntry3D* entryA, const NarrowEntry3D* entryB,
+void Gjk3D::GetSimplexVertex(const Entry3D* entryA, const Entry3D* entryB,
                              const TriangleCCW* tri, FPVector3& worldDir, SimplexVertex3D* vertex,
                              std::int32_t bitShift, std::optional<FP> deltaTime, std::int32_t dtShift) {
-    auto support = [&](const NarrowEntry3D& entry, FPVector3& base, FPVector3& offset) {
+    auto support = [&](const Entry3D& entry, FPVector3& base, FPVector3& offset) {
         if (entry.Shape->Type() == Shape3DType::Mesh) {
             assert(tri != nullptr);
             base = tri->Center;
@@ -165,8 +168,8 @@ void Gjk3D::GetSimplexVertex(const NarrowEntry3D* entryA, const NarrowEntry3D* e
 }
 
 // 0x7d4eff8
-void Gjk3D::ComputeDistance(SimplexDataPointers3D* ptrs, const NarrowEntry3D* entryA,
-                            const NarrowEntry3D* entryB, const TriangleCCW* tri, FP& distance,
+void Gjk3D::ComputeDistance(SimplexDataPointers3D* ptrs, const Entry3D* entryA,
+                            const Entry3D* entryB, const TriangleCCW* tri, FP& distance,
                             FPVector3& separationAxis, std::int32_t iterations,
                             std::optional<FP> deltaTime, std::int32_t dtShift) {
     ptrs->UsedCount = 0;
@@ -528,13 +531,13 @@ void SeparationFunction3D::Initialize(const SimplexDataPointers3D* ptrs,
         _faceComPoint = CentreOfMass(*_faceEntry);
         _separationAxis = pointA - pointB;
         if (_entry->HasDynamicBody) {
-            const NarrowBody3D& body = BodyOf(*_entry);
+            const PhysicsBody3D& body = BodyOf(*_entry);
             _dynamicState = static_cast<std::uint8_t>(
                 _dynamicState | (body.Velocity != FPVector3::Zero() ? PointEntryHasLinearMotion : 0) |
                 (body.AngularVelocity != FPVector3::Zero() ? PointEntryHasAngularMotion : 0));
         }
         if (_faceEntry->HasDynamicBody) {
-            const NarrowBody3D& body = BodyOf(*_faceEntry);
+            const PhysicsBody3D& body = BodyOf(*_faceEntry);
             _dynamicState = static_cast<std::uint8_t>(
                 _dynamicState | (body.Velocity != FPVector3::Zero() ? FaceEntryHasLinearMotion : 0) |
                 (body.AngularVelocity != FPVector3::Zero() ? FaceEntryHasAngularMotion : 0));
@@ -564,7 +567,7 @@ void SeparationFunction3D::Initialize(const SimplexDataPointers3D* ptrs,
     if (_entry->HasDynamicBody) {
         // The original keeps the "has a body" flag in the same register, so angular motion
         // marks the linear flag too.
-        const NarrowBody3D& body = BodyOf(*_entry);
+        const PhysicsBody3D& body = BodyOf(*_entry);
         if (body.Velocity != FPVector3::Zero()) {
             _dynamicState = PointEntryHasLinearMotion;
         }
@@ -577,7 +580,7 @@ void SeparationFunction3D::Initialize(const SimplexDataPointers3D* ptrs,
     _faceComPoint = CentreOfMass(*_faceEntry);
     _faceComOffsetPoint = facePoint - _faceComPoint;
     if (_faceEntry->HasDynamicBody) {
-        const NarrowBody3D& body = BodyOf(*_faceEntry);
+        const PhysicsBody3D& body = BodyOf(*_faceEntry);
         // Same register reuse: the face flags are or'ed onto the "has a body" value.
         std::uint8_t flags = _dynamicState != 0 ? _dynamicState : pointFlags;
         if (body.Velocity != FPVector3::Zero()) {
@@ -602,7 +605,7 @@ void SeparationFunction3D::Initialize(const SimplexDataPointers3D* ptrs,
 // 0x7d51f70
 FP SeparationFunction3D::GetMinimumSeparation(FP deltaTime, std::int32_t dtBitshift) {
     // Offset of a point of `entry` from its centre of mass in the entry's starting pose.
-    auto startPoseOffset = [&](const NarrowEntry3D& entry, FPVector3 offset, std::uint8_t linear,
+    auto startPoseOffset = [&](const Entry3D& entry, FPVector3 offset, std::uint8_t linear,
                                std::uint8_t angular) {
         if ((_dynamicState & linear) != 0) {
             offset = offset - ScaleByTime(BodyOf(entry).Velocity, deltaTime, dtBitshift);
@@ -682,8 +685,8 @@ FP SeparationFunction3D::GetSeparation(FP deltaTime, std::int32_t dtBitshift) co
 // 0x7d51020
 TimeOfImpactResult Gjk3D::ComputeTimeOfImpactDetailedInfo(SimplexDataPointers3D* ptrs,
                                                           CollisionManifold3D* m,
-                                                          const NarrowEntry3D* entryA,
-                                                          const NarrowEntry3D* entryB,
+                                                          const Entry3D* entryA,
+                                                          const Entry3D* entryB,
                                                           const TriangleCCW* tri, FP distance) {
     FPVector3 contact;
     GetWitnessPointB(ptrs, contact);
@@ -721,8 +724,8 @@ TimeOfImpactResult Gjk3D::ComputeTimeOfImpact(NarrowTls3D& tls, CollisionManifol
                                               FP deltaTime, FP& timeOfImpact) {
     SimplexDataPointers3D* ptrs = &tls.SimplexPointers;
     SimplexDataPointers3D::ResetPointers(ptrs, &tls.SimplexData);
-    const NarrowEntry3D* entryA = mInfo->EntryA;
-    const NarrowEntry3D* entryB = mInfo->EntryB;
+    const Entry3D* entryA = mInfo->EntryA;
+    const Entry3D* entryB = mInfo->EntryB;
     const TriangleCCW* tri = mInfo->Tri;
     CollisionManifold3D* manifold = mInfo->Manifold;
     const FP tolerance = settings.CCDDistanceTolerance;
@@ -815,7 +818,7 @@ TimeOfImpactResult Gjk3D::ComputeTimeOfImpact(NarrowTls3D& tls, CollisionManifol
 }
 
 // 0x7d5122c
-bool Gjk3D::ShapeCastManifold(NarrowTls3D& tls, const NarrowEntry3D* entryA, const NarrowEntry3D* entryB,
+bool Gjk3D::ShapeCastManifold(NarrowTls3D& tls, const Entry3D* entryA, const Entry3D* entryB,
                               const TriangleCCW* tri, const GJKSettings& settings,
                               const FPVector3& castDistance, bool computeDetailedInfo, Hit3D& hit) {
     if (tri != nullptr && FPVector3::Dot(tri->Normal, castDistance) > 0) {

@@ -1,6 +1,8 @@
 // collision_manifold2d.cpp - Quantum.Physics2D manifold helpers.
 #include "collision_manifold2d.h"
 
+#include "photon_deterministic/fp_math.h"
+
 #include <cassert>
 #include <utility>
 
@@ -52,6 +54,34 @@ void CollisionManifoldInfo2D::InvertEntries() {
     std::swap(Manifold->_m._entryIdxA, Manifold->_m._entryIdxB);
     std::swap(EntryA, EntryB);
     Manifold->_flags ^= CollisionManifold2D::NormalInverted;
+}
+
+// 0x7d18fac
+void NarrowData2D::InitFromTransform(NarrowData2D* narrow, const NarrowEntry2D* entry, FPVector2 tPos,
+                                     FP tRot, std::optional<FP> deltaTime) {
+    assert(narrow != nullptr && entry != nullptr && entry->Shape != nullptr);
+    if (deltaTime.has_value()) {
+        assert(entry->Body != nullptr);
+        const FP dt = *deltaTime;
+        const FPVector2 linearStep = entry->Body->Velocity * dt;
+        const FP angularStep = entry->Body->AngularVelocity * dt;
+        // Rotating about the centre of mass moves the origin by com - rotate(com).
+        const FPVector2 com = entry->RotatedCenterOfMass;
+        const FPVector2 rotatedCom =
+            com == FPVector2::Zero() ? FPVector2::Zero() : FPVector2::Rotate(com, angularStep);
+        tPos = (linearStep + tPos - rotatedCom) + com;
+        tRot = angularStep + tRot;
+    }
+    narrow->Position = tPos;
+    const Transform2D& local = entry->Shape->LocalTransform;
+    if (local.Position != FPVector2::Zero()) {
+        FP sin;
+        FP cos;
+        Photon::Deterministic::FPMath::SinCos(tRot, sin, cos);
+        narrow->Position.X = narrow->Position.X + local.Position.X * cos - sin * local.Position.Y;
+        narrow->Position.Y = narrow->Position.Y + local.Position.X * sin + local.Position.Y * cos;
+    }
+    Photon::Deterministic::FPMath::SinCos(local.Rotation + tRot, narrow->RotSin, narrow->RotCos);
 }
 
 } // namespace Quantum::Physics2D

@@ -33,7 +33,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 | Rewired_Core.dll | Input mapping | 7,149 | 0 |
 | Newtonsoft.Json.dll | JSON | 4,096 | 0 |
 | PhotonDeterministic.dll | Deterministic maths, RNG, bit streams, session runtime | 904 | ~790 (maths, RNGSession, ByteUtils, BitStream, offline session runtime) |
-| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, assets, physics, navigation) | ~6,100 | 1,008 (quantum.core) |
+| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, assets, prototypes, physics, navigation) | ~6,100 | 1,137 (quantum.core) |
 | AK.Wwise.*.dll | Audio middleware bindings | ~2,500 | 0 |
 | MessagePack.dll, protobuf-net.dll | Binary serialisation | ~2,750 | 0 |
 | DOTween*.dll, Cinemachine.dll, NGUI.dll | Tweening, cameras, UI | ~4,400 | 0 |
@@ -77,15 +77,34 @@ local no-ops with documented behaviour.
   into FrameContext (AssetDB, serializer, initial dynamic assets), FrameBase/FrameThreadSafe
   FindAsset/TryFindAsset and the navigation config lookups. The PC pipeline plugs in through
   `IAssetResourceProvider` (asset_resource_provider.h). Pending: Map static colliders and
-  triangle data (need MapStaticCollider2D/3D and TriangleCCW.Serialize), EntityPrototype contents,
-  TerrainCollider.Bake
+  triangle data (need MapStaticCollider2D/3D and TriangleCCW.Serialize), TerrainCollider.Bake
+- quantum.core prototypes: EntityPrototype asset, EntityPrototypeContainer (lazy thread-safe sort,
+  lookup by component type), EntityPrototypeRef, AssetRefEntityPrototype, ComponentPrototype /
+  ComponentPrototype<T> (TypedComponentPrototype), ComponentPrototypeVisitorBase,
+  PrototypeMaterializationContext, PrototypeValidator, MapEntityId, MapEntityLink and View
+  components, Map.MapEntities; FrameBase.Create(EntityPrototype / AssetRefEntityPrototype / map
+  entities), MaterializePrototypeInternal, materialised listeners and signal, FindPrototype.
+  Prototypes of Transform2D/3D/2DVertical, View and the navmesh steering/avoidance/obstacle
+  components materialise; NavMeshSteeringAgent/AvoidanceAgent/AvoidanceObstacle, View and
+  MapEntityLink are registered with their C++ types. Pending: the physics, character controller
+  and joint prototypes' Materialize/AddToEntity (fields, defaults and dispatch are done; they wait
+  for the physics component types) and NavMeshPathfinder_Prototype (needs NavMeshPathfinder.Create
+  and SetTarget)
 - quantum.core narrow phase: 2D checks for every primitive pair (circle, box, polygon, edge,
   incl. PolygonPolygon clipping, PolygonEdge, oriented BoxBox), 3D sphere-sphere/box/triangle,
-  Gjk2D/Gjk3D (distance, simplex solvers, GJK ray-cast shape casts, conservative-advancement time
-  of impact with separation functions), Entry2D/3D support mapping with CCD motion extrapolation,
-  GJKSettings/CCDSettings, TriangleCCW, line casts against bodies (LinecastBody). Pending: 3D
-  box-box and box-triangle (with NarrowData3D's box edge/plane caches); the scene (entries, Tls)
-  is represented by small stand-in views until Scene2D/Scene3D exist
+  box-box (15-axis SAT, edge/face clipping contacts) and box-triangle (Akenine-Moller SAT, deepest
+  corner penetration, clipped contacts), NarrowData2D/3D init from transforms (box edge/plane
+  caches), Gjk2D/Gjk3D (distance, simplex solvers, GJK ray-cast shape casts,
+  conservative-advancement time of impact with separation functions), Entry2D/3D support mapping
+  with CCD motion extrapolation, GJKSettings/CCDSettings, TriangleCCW, line casts against bodies
+  (LinecastBody). 3D code works on the real Entry3D layout; 2D still uses a stand-in entry view
+- quantum.core physics components: PhysicsBody2D/3D (init, impulses, forces, sleep, world inertia
+  tensor), PhysicsCollider2D/3D, PhysicsCallbacks2D/3D collision lists (frame heap),
+  PhysicsJoints/CharacterController layouts, all registered with their real types;
+  HitCollection/HitCollection3D buffers. Pending: component Serialize callbacks, inertia reset
+  (Shape inertia factors), character controller movement, joints, and the whole scene/engine
+  layer (Scene2D/Scene3D, buckets, broad phase, queries, solver, islands/sleeping, callback
+  dispatch, PhysicsEngine2D/3D, FrameBase physics hooks)
 - `Photon.Deterministic.RNGSession` (13/13; PCG32 seeded by SplitMix64), `BitStream` (107/107,
   incl. generic `SerializeArrayLength`), `ByteUtils` (20/20; the gzip writer emits stored deflate
   blocks, so compressed bytes differ from zlib's)
