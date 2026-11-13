@@ -114,7 +114,8 @@ class Frame : public Core::FrameBase {
     Photon::Deterministic::DeterministicSessionConfig* get_SessionConfig() const { return _sessionConfig; }
     void set_SessionConfig(Photon::Deterministic::DeterministicSessionConfig* value) { _sessionConfig = value; }
     // 0x7c6ac68
-    PhysicsSceneSettingsStorage* get_PhysicsSceneSettings() const { return &_globals->PhysicsSettings; }
+    const PhysicsSceneSettings* get_PhysicsSceneSettings() const override { return &_globals->PhysicsSettings; }
+    PhysicsSceneSettings* MutablePhysicsSceneSettings() { return &_globals->PhysicsSettings; }
     // 0x7c6ac80, 0x7c6ac98
     FP get_DeltaTime() const override { return _globals->DeltaTime; }
     void set_DeltaTime(FP value) override { _globals->DeltaTime = value; }

@@ -1,5 +1,7 @@
 #include "frame_context.h"
 
+#include "quantum_core/physics3d/physics_engine3d.h"
+
 #include "photon_deterministic/log.h"
 #include "quantum_core/asset_db.h"
 #include "quantum_core/dynamic_asset_db.h"
@@ -29,6 +31,9 @@ FrameContext::FrameContext(const Args& args) {
     if (args.HeapConfig.HEAP_COUNT >= 1) {
         _events = std::make_unique<EventList>();
         _heapGroup = Quantum::Allocator::Heap::Group::Allocate(args.HeapConfig, *_allocator);
+        if (args.UsePhysics3D) {
+            _physics3D = std::make_shared<Physics3D::PhysicsEngine3D>(this);
+        }
         _heapTrackingMode = args.HeapTrackingMode;
         _heapTracker = Quantum::Allocator::FrameHeap::GetAllocationTrackerForMode(_heapTrackingMode);
         // (Missing, see the header: the task context, the physics layer table,
@@ -59,7 +64,11 @@ FrameContext::FrameContext(const Args& args) {
 
 FrameContext::~FrameContext() { Dispose(); }
 
-void FrameContext::OnFrameSimulationBegin(FrameBase* /*f*/) {}
+void FrameContext::OnFrameSimulationBegin(FrameBase* f) {
+    if (_physics3D) {
+        _physics3D->OnFrameSimulationBegin(f);
+    }
+}
 
 void FrameContext::OnFrameSimulationEnd() {
     // (PhysicsEngine2D/3D.OnFrameSimulationEnd go here once the engines exist.)

@@ -61,6 +61,7 @@ class EntityPrototype;
 class EntityPrototypeContainer;
 class FrameSerializer;
 class Map;
+struct PhysicsSceneSettings;
 
 template <class T> struct ComponentIterator;
 template <class... Ts> struct ComponentFilter;
@@ -173,6 +174,9 @@ class FrameBase : public Photon::Deterministic::DeterministicFrame {
     // 0x600092c (abstract): the map the game's frame runs on. The base has none; the
     // game's Frame overrides this.
     virtual Map* get_Map() const { return nullptr; }
+    // The physics settings of this frame (the game's frame returns its simulation
+    // config's); null keeps the scenes' current settings.
+    virtual const PhysicsSceneSettings* get_PhysicsSceneSettings() const { return nullptr; }
     // Also abstract in the original, waiting for their types: get_PhysicsSceneSettings,
     // get_Map, get_NavMeshRegionMask, get__physicsState2D, get__physicsState3D.
 

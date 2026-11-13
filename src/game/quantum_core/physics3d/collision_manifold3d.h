@@ -21,6 +21,7 @@ struct PhysicsCollider3D;
 struct PhysicsBody3D;
 struct PhysicsJoints3D;
 struct PhysicsCallbacks3D;
+struct PhysicsSceneSettings;
 } // namespace Quantum
 
 namespace Quantum::Physics3D {
@@ -28,6 +29,9 @@ namespace Quantum::Physics3D {
 using Photon::Deterministic::FP;
 using Photon::Deterministic::FPQuaternion;
 using Photon::Deterministic::FPVector3;
+
+struct Entry3D;
+class Scene3D;
 
 struct ManifoldData3D {
     static constexpr int SIZE = 32;
@@ -60,13 +64,16 @@ struct ManifoldData3D {
     bool GetUsesCcd() const { return HasFlag(UsesCcd); }         // 0x7d7b394
     void SetUsesCcd(bool value) { SetFlag(UsesCcd, value); }     // 0x7d7b3a0
 
-    // Scene-dependent (Scene3D entry storage, out of scope here):
-    // TODO(0x7d7b3c0, Quantum.Physics3D.ManifoldData3D.SetEntries): stores both entry
-    // indices and the triangle index, optionally refreshing the cached state.
-    // TODO(0x7d7b3d8, Quantum.Physics3D.ManifoldData3D.UpdateCachedState): IsDynamic = both
-    // entries dynamic; UsesCcd = either entry (or its compound root) uses CCD.
-    // TODO(0x7d7b4a4, Quantum.Physics3D.ManifoldData3D.GetEntryA),
-    // TODO(0x7d7b4bc, Quantum.Physics3D.ManifoldData3D.GetEntryB).
+    // 0x7d7b3c0 - stores both entry indices and the triangle index; optionally refreshes
+    // the cached flags from the scene.
+    void SetEntries(Scene3D* scene, std::int32_t entryA, std::int32_t entryB, std::int32_t tri,
+                    bool updateCachedState);
+    // 0x7d7b3d8 - IsDynamic = both entries are entities; UsesCcd = either (or its compound
+    // root) uses CCD.
+    void UpdateCachedState(const Scene3D* scene);
+    // 0x7d7b4a4 / 0x7d7b4bc
+    Entry3D* GetEntryA(Scene3D* scene) const;
+    Entry3D* GetEntryB(Scene3D* scene) const;
 
     bool HasFlag(Flags flag) const { return (_flags & flag) != 0; }
     void SetFlag(Flags flag, bool value) { _flags = value ? (_flags | flag) : (_flags & ~flag); }
@@ -119,9 +126,13 @@ struct CollisionManifold3D {
     std::int32_t GetConstraintDataIndex() const { return _constraintDataIdx; }     // 0x7d7b5e4
     void SetConstraintDataIndex(std::int32_t value) { _constraintDataIdx = value; } // 0x7d7b5ec
 
-    // TODO(0x7d7b5f4, Quantum.Physics3D.CollisionManifold3D.SetEntries),
-    // TODO(0x7d7b60c, Quantum.Physics3D.CollisionManifold3D.GetEntryA),
-    // TODO(0x7d7b624, Quantum.Physics3D.CollisionManifold3D.GetEntryB): scene-dependent.
+    // 0x7d7b5f4 / 0x7d7b60c / 0x7d7b624 - as ManifoldData3D's.
+    void SetEntries(Scene3D* scene, std::int32_t entryA, std::int32_t entryB, std::int32_t tri,
+                    bool updateCachedState) {
+        _m.SetEntries(scene, entryA, entryB, tri, updateCachedState);
+    }
+    Entry3D* GetEntryA(Scene3D* scene) const { return _m.GetEntryA(scene); }
+    Entry3D* GetEntryB(Scene3D* scene) const { return _m.GetEntryB(scene); }
 
     // 0x7d7b63c
     static FPVector3 GetContactPoint(const CollisionManifold3D* manifold, std::int32_t index);
@@ -282,15 +293,19 @@ struct Entry3D {
     // 0x7d7ac64 - narrow-phase pose from the transform; dynamic bodies (not compound parts)
     // also refresh their world-space body settings.
     static void InitNarrowData(Entry3D* entry, const FPVector3* pos, const FPQuaternion* rot);
-    // TODO(0x7d7a3dc, Quantum.Physics3D.Entry3D.CalculateWorldBodySettings): rotated centre
-    // of mass and world inverse inertia tensor (optionally for an explicit rotation).
+    // 0x7d7a3dc - rotated centre of mass and world inverse inertia tensor, from the narrow
+    // phase's rotated axes or an explicit rotation.
     static void CalculateWorldBodySettings(Entry3D* entry, std::optional<FPQuaternion> rotation);
-    // TODO(0x7d7a724, Quantum.Physics3D.Entry3D.IntegrateVelocity): gravity, forces, drag and
-    // torque into the body's velocities.
-    // TODO(0x7d7aa88, Quantum.Physics3D.Entry3D.ApplyMinVelocityIntegration)
-    // TODO(0x7d7ab5c, Quantum.Physics3D.Entry3D.ComputeEntryAabb)
-    // TODO(0x7d7adc8, Quantum.Physics3D.Entry3D.InitBroadAabb): bounds swept over the step
-    // for CCD entries.
+    // 0x7d7a724 - position and rotation over dt, then linear/angular drag.
+    static void IntegrateVelocity(Entry3D* entry, FP dt, const PhysicsSceneSettings& settings,
+                                  bool applyMinVelThreshold, bool integrateAngVel);
+    // 0x7d7aa88
+    static void ApplyMinVelocityIntegration(Entry3D* entry, const PhysicsSceneSettings& settings);
+    // 0x7d7ab5c
+    static void ComputeEntryAabb(const Shape3D* shape, const NarrowData3D* narrow, IntAABB* aabb);
+    // 0x7d7adc8
+    static void InitBroadAabb(Entry3D* entry, const FPVector3* pos, const FPQuaternion* rot,
+                              std::optional<FP> deltaTime);
 };
 static_assert(sizeof(Entry3D) == 0x8d0);
 static_assert(offsetof(Entry3D, Narrow) == 0xb0 && offsetof(Entry3D, SolverImpulsesAdr) == 0x8c8);
@@ -322,8 +337,8 @@ struct FPVector3RawInt {
     explicit operator FPVector3() const;
     // 0x7d7b9e4 op_Explicit(FPVector3) -> FPVector3RawInt
     static FPVector3RawInt FromFPVector3(const FPVector3& value);
-    // TODO(0x7d7b6f4, Quantum.Physics3D.FPVector3RawInt.Serialize): three ints through the
-    // frame serializer's stream.
+    // 0x7d7b6f4 - three ints through the frame serializer's stream.
+    static void Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer);
 };
 static_assert(sizeof(FPVector3RawInt) == FPVector3RawInt::SIZE);
 
@@ -341,7 +356,8 @@ struct FPQuaternionRawInt {
     explicit operator FPQuaternion() const;
     // 0x7d7bdb8 op_Explicit(FPQuaternion) -> FPQuaternionRawInt
     static FPQuaternionRawInt FromFPQuaternion(const FPQuaternion& value);
-    // TODO(0x7d7b9f8, Quantum.Physics3D.FPQuaternionRawInt.Serialize)
+    // 0x7d7b9f8 - four ints.
+    static void Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer);
 };
 static_assert(sizeof(FPQuaternionRawInt) == FPQuaternionRawInt::SIZE);
 

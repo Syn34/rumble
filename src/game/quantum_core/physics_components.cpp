@@ -2,6 +2,8 @@
 // callbacks lists).
 #include "physics_components.h"
 
+#include "quantum_core/frame_serializer.h"
+
 #include "quantum_core/frame_base.h"
 #include "quantum_core/frame_heap.h"
 
@@ -198,6 +200,31 @@ void PhysicsBody3D::OnAdded(Core::FrameBase* f, EntityRef entity, void* componen
     }
 }
 
+// 0x7d34bf4
+void PhysicsBody3D::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* body = static_cast<PhysicsBody3D*>(ptr);
+    Photon::Deterministic::IBitStream& stream = serializer->Stream();
+    stream.Serialize(&body->Config);
+    stream.Serialize(reinterpret_cast<std::uint8_t*>(&body->RotationFreeze));
+    stream.Serialize(reinterpret_cast<std::uint8_t*>(&body->Status));
+    stream.Serialize(&body->_padding1);
+    stream.Serialize(&body->_drag);
+    stream.Serialize(&body->_angularDrag);
+    stream.Serialize(&body->_sleepTimeRawInt);
+    stream.Serialize(&body->_massInverseRawInt);
+    stream.Serialize(&body->_gravityScaleRawInt);
+    stream.Serialize(&body->_padding2);
+    Physics3D::FPVector3RawInt::Serialize(&body->_inertiaTensorInverse, serializer);
+    Physics3D::FPVector3RawInt::Serialize(&body->_centerOfMass, serializer);
+    Physics3D::FPVector3RawInt::Serialize(&body->_angularImpulse, serializer);
+    Physics3D::FPVector3RawInt::Serialize(&body->_lastPosition, serializer);
+    Physics3D::FPQuaternionRawInt::Serialize(&body->_lastRotation, serializer);
+    FPVector3::Serialize(&body->_force, serializer);
+    FPVector3::Serialize(&body->_torque, serializer);
+    FPVector3::Serialize(&body->Velocity, serializer);
+    FPVector3::Serialize(&body->AngularVelocity, serializer);
+}
+
 // 0x7d34234
 void PhysicsBody3D::ResetCenterOfMass(Core::FrameBase* f, EntityRef entity) {
     assert(f != nullptr);
@@ -205,8 +232,22 @@ void PhysicsBody3D::ResetCenterOfMass(Core::FrameBase* f, EntityRef entity) {
     _centerOfMass = Physics3D::FPVector3RawInt::FromFPVector3(collider->Shape.LocalTransform.Position);
 }
 
-void PhysicsBody3D::ResetInertia(Core::FrameBase* /*f*/, EntityRef /*entity*/) {
-    // See the TODO in the header; the inertia is left unchanged.
+// 0x7d33d60 - inverse inertia = massInverse / factor per axis (zero for a non-positive
+// factor, and all zero for an infinite mass).
+void PhysicsBody3D::ResetInertia(Core::FrameBase* f, EntityRef entity) {
+    if (_massInverseRawInt == 0) {
+        _inertiaTensorInverse = {};
+        return;
+    }
+    const PhysicsCollider3D* collider = f->GetPointer<PhysicsCollider3D>(entity);
+    const FPVector3 factor = collider->Shape.CalculateInertiaTensorFactor(CenterOfMass());
+    const FP::Raw scaled = FP::Raw{_massInverseRawInt} << 16;
+    const auto axis = [scaled](FP value) {
+        return value.RawValue() >= 1 ? static_cast<std::int32_t>(scaled / value.RawValue()) : 0;
+    };
+    _inertiaTensorInverse.RawIntX = axis(factor.X);
+    _inertiaTensorInverse.RawIntY = axis(factor.Y);
+    _inertiaTensorInverse.RawIntZ = axis(factor.Z);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -271,6 +312,28 @@ void PhysicsBody2D::OnAdded(Core::FrameBase* f, EntityRef entity, void* componen
     if ((body->Config & ConfigFlags::ResetInertiaOnAdded) != 0) {
         body->ResetInertia(f, entity);
     }
+}
+
+// 0x7d3159c
+void PhysicsBody2D::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* body = static_cast<PhysicsBody2D*>(ptr);
+    Photon::Deterministic::IBitStream& stream = serializer->Stream();
+    stream.Serialize(&body->Config);
+    stream.Serialize(reinterpret_cast<std::uint8_t*>(&body->Status));
+    stream.Serialize(&body->_padding);
+    stream.Serialize(&body->_drag);
+    stream.Serialize(&body->_angularDrag);
+    stream.Serialize(&body->_massInverseRawInt);
+    stream.Serialize(&body->_gravityScaleRawInt);
+    FP::Serialize(&body->InertiaInverse, *serializer);
+    FP::Serialize(&body->AngularVelocity, *serializer);
+    FP::Serialize(&body->_torque, *serializer);
+    FP::Serialize(&body->SleepTime, *serializer);
+    FP::Serialize(&body->LastRotation, *serializer);
+    FPVector2::Serialize(&body->Velocity, serializer);
+    FPVector2::Serialize(&body->_force, serializer);
+    FPVector2::Serialize(&body->LastPosition, serializer);
+    FPVector2::Serialize(&body->CenterOfMass, serializer);
 }
 
 // 0x7d314fc
