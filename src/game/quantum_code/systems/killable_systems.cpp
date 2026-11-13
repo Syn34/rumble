@@ -140,4 +140,14 @@ void LifetimeInitSystem::OnAdded(Frame* f, EntityRef entity, Lifetime* lifetime)
     f->Remove<Lifetime>(entity);
 }
 
+void ProjectileInitSystem::OnAdded(Frame* f, EntityRef entity, Projectile* component) {
+    ProjectileSpec* spec = nullptr;
+    if (f->TryFindAssetInternal(component->Spec.Id, true, spec)) {
+        component->SpawnedFrame = f->Number;
+        return;
+    }
+    Photon::Deterministic::Log::Error("ProjectileInitSystem: a projectile without a spec was removed");
+    f->Remove<Projectile>(entity);
+}
+
 } // namespace Quantum

@@ -1301,13 +1301,6 @@ class ProjectileCollisionInjectionSystem : public SystemMainThread {
     void Update(Frame* f) override { (void)f; }
 };
 
-// Quantum.ProjectileInitSystem (original base: Quantum.SystemSignalsOnly)
-class ProjectileInitSystem : public SystemSignalsOnly {
-  public:
-    // TODO(0x7c0741c, Quantum.ProjectileInitSystem.OnAdded): OnAdded(f, entity, projectile); not reimplemented yet.
-    // TODO(0x7c075ac, Quantum.ProjectileInitSystem..ctor): .ctor(); not reimplemented yet.
-};
-
 // Quantum.ProjectileMovementSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
 class ProjectileMovementSystem : public SystemMainThread {
   public:

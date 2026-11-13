@@ -107,4 +107,13 @@ class LifetimeInitSystem final : public SystemSignalsOnly, public ISignalOnCompo
     // damageable); not reimplemented yet.
 };
 
+// Projectiles remember when they were spawned; one without a spec is removed.
+class ProjectileInitSystem final : public SystemSignalsOnly, public ISignalOnComponentAdded<Projectile> {
+  public:
+    // 0x7c075ac
+    ProjectileInitSystem() = default;
+    // 0x7c0741c
+    void OnAdded(Frame* f, EntityRef entity, Projectile* component) override;
+};
+
 } // namespace Quantum

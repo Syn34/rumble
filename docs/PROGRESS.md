@@ -18,7 +18,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 
 | Original assembly | Role | Methods | Done |
 |---|---|---:|---:|
-| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | 2,570 (data types, Frame, events, signals) |
+| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | ~2,860 (data types, Frame, events, signals, system framework, first systems) |
 | GameClasses.dll | Shared game types | 1,162 | 0 |
 | Assembly-CSharp.dll | Game client (UI, presentation, flow) | 20,495 | 0 |
 | Fidelio-Framework.dll, FidelioFramework-Core.dll | Developer's client framework | 16,438 | 0 |
@@ -134,6 +134,27 @@ local no-ops with documented behaviour.
   serialisation/checksum/dump (the global block needs quantum.core's physics state and
   scene settings serialisers), player data, component-specific gameplay methods, systems
 
+- quantum.code systems (`src/game/quantum_code/systems/`): the system framework
+  (SystemMainThread, SystemMainThreadFilter with filter structs, groups, signal-only systems,
+  generic component-driven enablers/disablers), SystemSetup's full list (186 root systems, six
+  groups, 65 grouped systems, in the original order with each system's start state; systems not
+  reimplemented yet are TODO shells in `pending_systems.h` so indices and enable bits match), a
+  small PC driver (start/update) standing in for the session layer; quantum.core's
+  ComponentFilterStruct/ComponentGetter (`quantum_core/component_filter_struct.h`). Reimplemented
+  systems: health (initialisation per spec mode, regeneration, overhealth decay, pickups, max-HP
+  multipliers), killables (delayed kills, kill/revive with kill-source resolution, extra lives),
+  lifetimes, game timer, time scale, kill-count and bolt-count wins, bolts (gathering, losses),
+  teams, actor status events and status requests, actor initialisation, combat activity, kill
+  history, entity groups, hierarchy, map entities, player connection, physics sleep, KCC surface
+  reset, energy cells, game-mode activators, collider scaler and the physics/navigation signal
+  forwarders, plus the helper libs they use (KillableLib, HealthLib, GameModeHandlerLib, BoltLib,
+  GameTimerLib, TimeScaleLib, PhysicsAbstraction, Ownership, FrameUtility.CreateDynamic, ...).
+  The quantum.code asset classes the systems read are declared temporarily in
+  `systems/asset_decls.h` until the asset reimplementation lands. Pending: the remaining ~180
+  systems (movement, weapons, projectiles, abilities, AI, game modes...), the damage pipeline
+  (DamageableSystem, HealthLib.ApplyHit, shields), respawning (ActorManager), and the parts
+  that need the 3D scene (death animations, spawn-on-death ray casts, culling, physics step)
+
 ## Known issues
 
 - On Mesa's software Vulkan driver (lavapipe), line primitives crossing the near plane
@@ -147,4 +168,5 @@ local no-ops with documented behaviour.
 2. Concrete Native::Allocator/Utility for the PC platform; hook DeterministicSession to quantum.core's game
 3. Renderer: textures, materials, render targets
 4. Asset reader for the game's content files (from the user's own copy)
-5. Gameplay systems from quantum.code.dll, starting with movement and damage
+5. Gameplay systems from quantum.code.dll: damage pipeline and respawning next, then movement,
+   weapons and projectiles (need the 3D scene from quantum.core)

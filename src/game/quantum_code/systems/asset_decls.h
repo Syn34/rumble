@@ -133,6 +133,8 @@ class EntityGroupSpec : public AssetObject {
     std::int32_t GroupMaxMembers = 0;
 };
 
+class ProjectileSpec : public AssetObject {};
+
 // Something to run on an entity (subclasses implement it).
 class CallbackAction : public AssetObject {
   public:
