@@ -14,6 +14,7 @@ add_executable(rr_tests
     test_fp_quaternion_matrix.cpp
     test_quantum_heap.cpp
     test_quantum_collections.cpp
+    test_quantum_frame.cpp
     test_deterministic_session.cpp
     test_fp_collision.cpp
     test_quantum_collision.cpp

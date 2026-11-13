@@ -1,11 +1,13 @@
 #include "frame_heap.h"
 
+#include "quantum_core/frame_serializer.h"
+
 #include <stdexcept>
 #include <string>
 
 namespace Quantum::Allocator {
 
-FrameHeap::FrameHeap(Heap* heap, std::unique_ptr<IHeapAllocationTracker> tracker)
+FrameHeap::FrameHeap(Heap* heap, std::shared_ptr<IHeapAllocationTracker> tracker)
     : _heap(heap), _tracker(std::move(tracker)) {
     if (_tracker == nullptr) {
         throw std::invalid_argument("FrameHeap: null tracker");
@@ -66,6 +68,22 @@ void Heap::AllocationTracker::FreeAllTracked(FrameHeap& heap) {
         heap.Free(entries[i]);
     }
     _trackAllocCount = 0;
+}
+
+void Heap::AllocationTracker::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* tracker = static_cast<AllocationTracker*>(ptr);
+    Photon::Deterministic::IBitStream& stream = serializer->Stream();
+    stream.Serialize(&tracker->_trackAllocCount);
+    stream.Serialize(&tracker->_trackAllocCapacity);
+    FrameSerializer::PtrKey key;
+    if (!serializer->PointerSerialize(&tracker->_trackAllocPtr, key)) {
+        return;
+    }
+    auto* entries =
+        static_cast<Ptr*>(serializer->PointerResolve(key, tracker->_trackAllocCapacity * Ptr::SIZE));
+    for (int i = 0; i < tracker->_trackAllocCapacity; ++i) {
+        stream.Serialize(entries[i].Offset);
+    }
 }
 
 } // namespace Quantum::Allocator

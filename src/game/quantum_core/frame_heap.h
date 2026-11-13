@@ -43,11 +43,13 @@ concept FrameHeapLike = requires(H& heap, Ptr p, void* block, int size) {
 
 class FrameHeap final : public IFrameHeap {
   public:
-    // 0x7d26210 - Takes ownership of the tracker and resets it.
-    FrameHeap(Heap* heap, std::unique_ptr<IHeapAllocationTracker> tracker);
+    // 0x7d26210 - Keeps the tracker and resets it. The tracker is shared: the frame
+    // context hands the same one to every frame (FrameContext.HookHeapAllocTrackerToFrame).
+    FrameHeap(Heap* heap, std::shared_ptr<IHeapAllocationTracker> tracker);
 
     // 0x7d26208
     IHeapAllocationTracker* get_Tracker() const { return _tracker.get(); }
+    const std::shared_ptr<IHeapAllocationTracker>& SharedTracker() const { return _tracker; }
     Heap* GetHeap() const { return _heap; }
 
     // 0x7d262e0
@@ -78,7 +80,7 @@ class FrameHeap final : public IFrameHeap {
 
   private:
     Heap* _heap;
-    std::unique_ptr<IHeapAllocationTracker> _tracker;
+    std::shared_ptr<IHeapAllocationTracker> _tracker;
 };
 
 } // namespace Quantum::Allocator

@@ -62,6 +62,12 @@ local no-ops with documented behaviour.
   user's game files), FPLut, FPVector2/3, FPQuaternion, FPMatrix2x2/3x3, FPBounds2, nullable types
 - PhotonDeterministic RNGSession (PCG32), ByteUtils, BitStream
 - `Quantum.FPMathUtility`: 14 of 16 methods (RandomOnUnitCircle, OrientOnNormal pending)
+- quantum.core frame/ECS core: EntityRef, ComponentSet, ComponentTypeId registry, ComponentDataBuffer,
+  block/component iterators and filters, FrameBase (entities, components, singletons, deferred
+  commits, capacity changes, copy, serialisation), FrameContext (heaps, events, temp memory,
+  prediction area), FrameMetaData, FrameSerializer with pointer keys, FrameChecksumerBitStream,
+  CRC64. Pending: physics/navigation/asset/prototype parts of the frame, FilterStruct/ComponentGetter,
+  DispatcherBase subscriptions
 - `Photon.Deterministic.RNGSession` (13/13; PCG32 seeded by SplitMix64), `BitStream` (107/107,
   incl. generic `SerializeArrayLength`), `ByteUtils` (20/20; the gzip writer emits stored deflate
   blocks, so compressed bytes differ from zlib's)
