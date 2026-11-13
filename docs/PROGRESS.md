@@ -18,7 +18,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 
 | Original assembly | Role | Methods | Done |
 |---|---|---:|---:|
-| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | 14 |
+| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | 2,570 (data types, Frame, events, signals) |
 | GameClasses.dll | Shared game types | 1,162 | 0 |
 | Assembly-CSharp.dll | Game client (UI, presentation, flow) | 20,495 | 0 |
 | Fidelio-Framework.dll, FidelioFramework-Core.dll | Developer's client framework | 16,438 | 0 |
@@ -124,6 +124,15 @@ local no-ops with documented behaviour.
 - Desktop platform backend; renderer selection (CLI, settings file, automatic fallback)
 - OpenGL and Vulkan backends rendering an identical placeholder scene; frame capture;
   `tools/compare_renderers.py` (0.08% edge-pixel difference between backends on Mesa)
+
+- quantum.code foundation: all 113 enums, 179 typed asset refs, the 222 component types and
+  the ~95 value types they use (exact layouts, GetHashCode, Serialize, collection lifetime);
+  every hash (505 types, events, Input) checked against the original for random data.
+  Component registration in the original order, Frame (globals, input, systems, events,
+  copy), FrameEvents (121 event classes), FrameSignals (94 ISignal interfaces), Input,
+  InputProvider, RuntimeConfig, SimulationConfig, Constants, SystemBase. Pending: frame
+  serialisation/checksum/dump (the global block needs quantum.core's physics state and
+  scene settings serialisers), player data, component-specific gameplay methods, systems
 
 ## Known issues
 
