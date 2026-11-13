@@ -39,6 +39,7 @@ class PhysicsEngine3D {
                       std::int32_t options);
 
     Scene3D* Scene() { return _scene3D.get(); }
+    Core::FrameContext* Context() const { return _context; }
 
     // 0x7d487c8 - no flags removes the entity's PhysicsCallbacks3D; otherwise adds it when
     // missing and, if the flags change, stores them and forgets the tracked collisions.
