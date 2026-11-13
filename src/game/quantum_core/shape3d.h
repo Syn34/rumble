@@ -26,6 +26,8 @@
 
 namespace Quantum {
 
+class FrameSerializer;
+
 enum class Shape3DType : std::uint8_t {
     None = 0,
     Sphere = 1,
@@ -150,8 +152,11 @@ struct Shape3D {
     // of the overlay, whatever the type.
     std::int32_t GetHashCode() const;
 
-    // TODO(0x7d35e00, Quantum.Shape3D.Serialize): per-type serialisation including the
-    // compound heap buffer.
+    // 0x7d35e00 - type, padding, user tag and padding, then for a compound shape its
+    // CompoundShape3D data, otherwise the local transform and the four FP slots of the
+    // shape overlay. A compound shape throws std::logic_error until
+    // CompoundShape3D.Serialize (0x7d3aec0) is reimplemented.
+    static void Serialize(void* ptr, FrameSerializer* serializer);
 };
 
 static_assert(sizeof(Shape3D::CompoundShape3D) == Shape3D::CompoundShape3D::SIZE - 56);

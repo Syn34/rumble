@@ -543,3 +543,95 @@ TEST_CASE("Scene3D: broad-phase queries are resolved by the step") {
     w.Step();
     CHECK(!w.engine->TryGetQueryHits(0, hits));
 }
+
+// ---------------------------------------------------------------------------------------
+// Colliders, shape configs and component serialisation
+
+#include "quantum_core/frame_serializer.h"
+#include "quantum_core/shape3d_config.h"
+
+TEST_CASE("PhysicsCollider3D.Create, Shape3DConfig.CreateShape and the collider prototype") {
+    MeshWorld w;
+    const PhysicsCollider3D plain = PhysicsCollider3D::Create(w.frame.get(), Shape3D::CreateSphere(F(2)), nullptr, true, 40);
+    CHECK(plain.IsTrigger() && plain.Enabled() && plain.Layer() == 31);
+    CHECK(plain._material.Id == AssetGuid(PhysicsMaterial::DEFAULT_ID));
+    PhysicsMaterial material;
+    material.Guid = AssetGuid(900);
+    const PhysicsCollider3D withMaterial =
+        PhysicsCollider3D::Create(w.frame.get(), Shape3D::CreateBox(V3(1, 2, 3)), &material, false, -3);
+    CHECK(withMaterial._material.Id == AssetGuid(900) && withMaterial.Layer() == 0 && !withMaterial.IsTrigger());
+    CHECK(withMaterial.Shape.Box.Extents() == V3(1, 2, 3));
+
+    Shape3DConfig config;
+    config.ShapeType = Shape3DType::Box;
+    config.BoxExtents = V3(1, 1, 2);
+    config.PositionOffset = V3(0, 1, 0);
+    config.UserTag = 7;
+    Shape3D box = config.CreateShape(w.frame.get());
+    CHECK(box.Type() == Shape3DType::Box && box.UserTag == 7 && box.LocalTransform.Position == V3(0, 1, 0));
+    CHECK(box.LocalTransform.Rotation == FPQuaternion::Identity());
+    config.RotationOffset = V3(0, 90, 0);
+    box = config.CreateShape(w.frame.get());
+    CHECK(box.LocalTransform.Rotation == FPQuaternion::Euler(V3(0, 90, 0)));
+    config.ShapeType = Shape3DType::Sphere;
+    config.SphereRadius = F(3);
+    const Shape3D sphere = config.CreateShape(w.frame.get());
+    CHECK(sphere.Type() == Shape3DType::Sphere && sphere.Sphere.Radius == F(3) && sphere.UserTag == 7);
+
+    Prototypes::PhysicsCollider3D_Prototype prototype;
+    prototype.ShapeConfig = std::make_shared<Shape3DConfig>(config);
+    prototype.Layer = 4;
+    prototype.IsTrigger = true;
+    const EntityRef e = w.frame->Create();
+    PrototypeMaterializationContext materialization{};
+    CHECK(prototype.AddToEntity(w.frame.get(), e, materialization));
+    const PhysicsCollider3D* collider = w.frame->GetPointer<PhysicsCollider3D>(e);
+    CHECK(collider->Layer() == 4 && collider->IsTrigger() && collider->Shape.Sphere.Radius == F(3));
+    CHECK(!prototype.AddToEntity(w.frame.get(), e, materialization)); // replaced, not added
+}
+
+TEST_CASE("Physics components serialise through the frame serializer") {
+    MeshWorld w;
+    const EntityRef e = w.AddBody(V3(1, 2, 3), Shape3D::CreateBox(V3(1, 2, 3)), true);
+    w.frame->Add(e, PhysicsCallbacks3D{});
+    PhysicsCallbacks3D* cb = w.frame->GetPointer<PhysicsCallbacks3D>(e);
+    cb->Flags = CallbackFlags::OnStaticCollisionEnter;
+    cb->AddCollision(w.frame.get(), EntityRef{3, 5}, -1, false);
+    cb->AddCollision(w.frame.get(), EntityRef{4, 6}, 2, true);
+    CharacterController3D kcc{};
+    kcc.MaxSpeed = F(3);
+    kcc.Velocity = V3(1, 0, -1);
+    kcc._broadphaseQueryIndexPlusOne = 2;
+    w.frame->Add(e, kcc);
+
+    std::vector<std::uint8_t> bytes(64 * 1024);
+    {
+        FrameSerializer writer(Photon::Deterministic::DeterministicFrameSerializeMode::Serialize, w.frame.get(),
+                               std::span<std::uint8_t>(bytes));
+        writer.Reset();
+        writer.SetWriting(true);
+        PhysicsCollider3D collider = *w.frame->GetPointer<PhysicsCollider3D>(e);
+        PhysicsCollider3D::Serialize(&collider, &writer);
+        PhysicsCallbacks3D::Serialize(w.frame->GetPointer<PhysicsCallbacks3D>(e), &writer);
+        CharacterController3D::Serialize(w.frame->GetPointer<CharacterController3D>(e), &writer);
+    }
+    MeshWorld other;
+    {
+        FrameSerializer reader(Photon::Deterministic::DeterministicFrameSerializeMode::Serialize, other.frame.get(),
+                               std::span<std::uint8_t>(bytes));
+        reader.Mapping().Reset();
+        reader.SetReading(true);
+        PhysicsCollider3D collider{};
+        PhysicsCollider3D::Serialize(&collider, &reader);
+        CHECK(collider.Shape.Type() == Shape3DType::Box && collider.Shape.Box.Extents() == V3(1, 2, 3));
+        CHECK(collider._material.Id == w.frame->GetPointer<PhysicsCollider3D>(e)->_material.Id);
+        PhysicsCallbacks3D callbacks{};
+        PhysicsCallbacks3D::Serialize(&callbacks, &reader);
+        CHECK(callbacks.Flags == CallbackFlags::OnStaticCollisionEnter && callbacks._listCount == 2);
+        const PhysicsCallbacksEntry* entries = callbacks.Entries(other.frame.get());
+        CHECK(entries[1].StaticColliderIndex == 2 && entries[1].Other.Index == 4 && entries[1].Other.Version == 6);
+        CharacterController3D read{};
+        CharacterController3D::Serialize(&read, &reader);
+        CHECK(read.MaxSpeed == F(3) && read.Velocity == V3(1, 0, -1) && read._broadphaseQueryIndexPlusOne == 2);
+    }
+}

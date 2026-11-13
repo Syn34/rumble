@@ -6,6 +6,7 @@
 #include "quantum_core/assert.h"
 #include "quantum_core/frame_base.h"
 #include "quantum_core/frame_context.h"
+#include "quantum_core/shape3d_config.h"
 #include "quantum_core/physics3d/physics_engine3d.h"
 
 #include <stdexcept>
@@ -227,9 +228,21 @@ bool PhysicsCollider2D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,
     NotImplemented(*this);
 }
 
-bool PhysicsCollider3D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,
+bool PhysicsCollider3D_Prototype::AddToEntity(Core::FrameBase* f, EntityRef entity,
                                               const PrototypeMaterializationContext&) {
-    NotImplemented(*this);
+    PhysicsCollider3D collider{};
+    Materialize(f, collider);
+    return f->Set(entity, collider) == SetResult::ComponentAdded;
+}
+
+void PhysicsCollider3D_Prototype::Materialize(Core::FrameBase* f, PhysicsCollider3D& result) const {
+    if (ShapeConfig == nullptr) {
+        throw std::invalid_argument("PhysicsCollider3D_Prototype: no shape config");
+    }
+    const Shape3D shape = ShapeConfig->CreateShape(f);
+    const ::Quantum::PhysicsMaterial* material =
+        PhysicsMaterial.Id.IsValid() ? f->FindAsset<::Quantum::PhysicsMaterial>(PhysicsMaterial.Id) : nullptr;
+    result = PhysicsCollider3D::Create(f, shape, material, IsTrigger, Layer);
 }
 
 bool PhysicsCallbacks2D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,

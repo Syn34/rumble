@@ -1,7 +1,13 @@
 // shape3d.cpp - Quantum.Shape3D and its nested shape structs.
 #include "shape3d.h"
+#include "shape3d_config.h"
+
+#include "quantum_core/frame_serializer.h"
+
+#include <stdexcept>
 
 #include "photon_deterministic/fp_internal.h"
+#include "photon_deterministic/fp_math.h"
 
 namespace Quantum {
 
@@ -123,6 +129,48 @@ FPVector3 Shape3D::CalculateInertiaTensorFactor(const FPVector3& centerOfMass) c
         fz += ((ey + ex) * third) >> 16;
     }
     return {FP::FromRaw(fx), FP::FromRaw(fy), FP::FromRaw(fz)};
+}
+
+// 0x7d35e00
+void Shape3D::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* shape = static_cast<Shape3D*>(ptr);
+    Photon::Deterministic::IBitStream& stream = serializer->Stream();
+    stream.Serialize(reinterpret_cast<std::uint8_t*>(&shape->_type));
+    stream.Serialize(&shape->_padding1);
+    stream.Serialize(&shape->UserTag);
+    stream.Serialize(&shape->_padding2);
+    if (shape->_type == Shape3DType::Compound) {
+        // TODO(0x7d3aec0, Quantum.Shape3D.CompoundShape3D.Serialize) is not reimplemented.
+        throw std::logic_error("Shape3D.Serialize: compound shapes are not supported yet");
+    }
+    Transform3D::Serialize(&shape->LocalTransform, serializer);
+    // The overlay as four FPs (the box view covers all of it).
+    FP::Serialize(&shape->Box._broadRadius, *serializer);
+    FP::Serialize(&shape->Box._extents.X, *serializer);
+    FP::Serialize(&shape->Box._extents.Y, *serializer);
+    FP::Serialize(&shape->Box._extents.Z, *serializer);
+}
+
+// 0x7d3ba74
+Shape3D Shape3DConfig::CreateShape(Core::FrameBase* /*frame*/) const {
+    Shape3D shape;
+    switch (ShapeType) {
+    case Shape3DType::Sphere: shape = Shape3D::CreateSphere(SphereRadius, PositionOffset); break;
+    case Shape3DType::Box: {
+        const FP::Raw x = RotationOffset.X.RawValue();
+        const FP::Raw y = RotationOffset.Y.RawValue();
+        const FP::Raw z = RotationOffset.Z.RawValue();
+        const FP::Raw length = Photon::Deterministic::FPMath::SqrtRaw(((y * y) >> 16) + ((x * x) >> 16) + ((z * z) >> 16));
+        const FPQuaternion rotation = length == 0 ? FPQuaternion::Identity() : FPQuaternion::Euler(RotationOffset);
+        shape = Shape3D::CreateBox(BoxExtents, PositionOffset, rotation);
+        break;
+    }
+    case Shape3DType::Compound:
+        throw std::logic_error("Shape3DConfig.CreateShape: compound shapes are not supported yet");
+    default: break;
+    }
+    shape.UserTag = UserTag;
+    return shape;
 }
 
 } // namespace Quantum

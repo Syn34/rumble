@@ -346,15 +346,19 @@ void Scene3D::UpdateMap(FrameBase* frame, AssetGuid mapGuid) {
         StaticComponents3D& components = _staticComponents.emplace_back();
         components.Transform3D.Position = source.Position;
         components.Transform3D.Rotation = source.Rotation;
+        Shape3D shape;
         switch (source.ShapeType) {
-        case Shape3DType::Sphere: components.Collider3D.Shape = Shape3D::CreateSphere(source.SphereRadius); break;
-        case Shape3DType::Box: components.Collider3D.Shape = Shape3D::CreateBox(source.BoxExtents); break;
-        case Shape3DType::Mesh: components.Collider3D.Shape = Shape3D::CreateMesh(_meshEntriesCount++); break;
-        default: break; // the original logs an error for any other shape
+        case Shape3DType::Sphere: shape = Shape3D::CreateSphere(source.SphereRadius); break;
+        case Shape3DType::Box: shape = Shape3D::CreateBox(source.BoxExtents); break;
+        case Shape3DType::Mesh: shape = Shape3D::CreateMesh(_meshEntriesCount++); break;
+        default: break; // the original logs an error for any other shape (the entry stays)
         }
-        components.Collider3D.SetLayer(source.StaticData.Layer);
-        components.Collider3D.SetIsTrigger(source.StaticData.IsTrigger);
-        components.Collider3D._material.Id = source.PhysicsMaterial.Id;
+        PhysicsMaterial* material = nullptr;
+        if (source.PhysicsMaterial.Id.IsValid()) {
+            material = frame->FindAsset<PhysicsMaterial>(source.PhysicsMaterial.Id);
+        }
+        components.Collider3D =
+            PhysicsCollider3D::Create(frame, shape, material, source.StaticData.IsTrigger, source.StaticData.Layer);
     }
     _staticComponentsCount = staticCount;
     for (std::int32_t staticIndex = 0; staticIndex < staticCount; ++staticIndex) {

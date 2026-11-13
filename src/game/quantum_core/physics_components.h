@@ -309,13 +309,21 @@ struct PhysicsCollider3D {
     // 0x7d35810
     void SetEnabled(bool value) { _disabled = value ? 0 : 1; }
 
-    // TODO(0x7d3581c, Quantum.PhysicsCollider3D.Create): builds a collider from a shape
-    // (copying compound children through the frame heap), layer and material.
-    // TODO(0x7d35bf0, Quantum.PhysicsCollider3D.Serialize): needs Shape3D.Serialize.
+    // 0x7d3581c - an enabled collider with the shape, the layer clamped to 0..31 and the
+    // material's guid (the default material, guid 1, without one). A compound shape would
+    // get its own persistent copy of the children (CompoundShape3D.CopyFrom, not
+    // reimplemented yet: throws std::logic_error).
+    static PhysicsCollider3D Create(Core::FrameBase* f, const Shape3D& shape,
+                                    const ::Quantum::PhysicsMaterial* material = nullptr, bool isTrigger = false,
+                                    std::int32_t layer = 0);
+    // 0x7d35bf0 - the flag bytes, padding, layer, material and shape.
+    static void Serialize(void* ptr, FrameSerializer* serializer);
     // 0x7d36068
     static void OnAdded(Core::FrameBase* /*f*/, EntityRef /*entity*/, void* /*component*/) {}
-    // TODO(0x7d3606c, Quantum.PhysicsCollider3D.OnRemoved): frees a persistent compound
-    // shape (Shape3D.CompoundShape3D.FreePersistent).
+    // 0x7d3606c - a persistent compound shape gives its children back
+    // (TODO(0x7d36098, Quantum.Shape3D.CompoundShape3D.FreePersistent)); nothing for other
+    // shapes.
+    static void OnRemoved(Core::FrameBase* f, EntityRef entity, void* component);
 };
 static_assert(sizeof(PhysicsCollider3D) == PhysicsCollider3D::SIZE);
 
@@ -360,6 +368,10 @@ struct PhysicsCallbacksEntry {
     std::int32_t _flags = 0;
     std::int32_t StaticColliderIndex = 0;
     EntityRef Other;
+
+    // 0x7d302cc (Quantum.CollisionCallbackInfo.Serialize) - flags, static index, then the
+    // other side as one 64-bit value (an entity, or the map's guid for static colliders).
+    static void Serialize(void* ptr, FrameSerializer* serializer);
 };
 static_assert(sizeof(PhysicsCallbacksEntry) == 16);
 
@@ -400,7 +412,9 @@ struct PhysicsCallbacks3D : PhysicsCallbacksData {
     static void OnAdded(Core::FrameBase* f, EntityRef entity, void* component);
     // 0x7d35730 - frees the list.
     static void OnRemoved(Core::FrameBase* f, EntityRef entity, void* component);
-    // TODO(0x7d35530, Quantum.PhysicsCallbacks3D.Serialize)
+    // 0x7d35530 - flags, count and capacity, then the list buffer (by pointer key; its
+    // entries are written the first time the buffer is met).
+    static void Serialize(void* ptr, FrameSerializer* serializer);
 };
 static_assert(sizeof(PhysicsCallbacks3D) == PhysicsCallbacksData::SIZE);
 
@@ -493,7 +507,8 @@ struct CharacterController3D {
                                                             std::optional<bool> useManifoldNormal);
     // 0x7d2d56c - velocity from the movement type (gravity, acceleration, braking, limits).
     void ComputeRawSteer(Core::FrameBase* frame, const CharacterController3DMovement& movement, FP dt);
-    // TODO(0x7d2da44, Quantum.CharacterController3D.Serialize)
+    // 0x7d2da44 - flag bytes, padding, query index, config, speed and velocity.
+    static void Serialize(void* ptr, FrameSerializer* serializer);
 };
 static_assert(sizeof(CharacterController3D) == CharacterController3D::SIZE);
 
