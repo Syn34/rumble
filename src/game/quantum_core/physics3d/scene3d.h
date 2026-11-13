@@ -9,18 +9,21 @@
 // colliders. Every per-bucket manifold array reserves index 0, as in the original.
 //
 // Not reimplemented yet (TODOs in scene3d.cpp): static meshes (TriangleMesh), broad-phase
-// queries resolved during the step, compound shapes, joints, CCD time-of-impact
-// integration and the hybrid Jacobi/Gauss-Seidel solver.
+// queries resolved during the step, compound shapes, joints (and the joint position
+// solver) and the static colliders' mutable state.
 #pragma once
 
+#include "quantum_core/physics3d/collision_info3d.h"
 #include "quantum_core/physics3d/collision_manifold3d.h"
 #include "quantum_core/physics3d/gjk3d.h"
 #include "quantum_core/physics3d/hit3d.h"
+#include "quantum_core/component_set.h"
 #include "quantum_core/physics_components.h"
 #include "quantum_core/physics_scene_settings.h"
 #include "quantum_core/asset_guid.h"
 
 #include <cstdint>
+#include <deque>
 #include <vector>
 
 namespace Quantum {
@@ -157,6 +160,10 @@ struct Tls {
     ActiveEntryList KinematicTrigger;
     ActiveEntryList Static;
     ActiveEntryList StaticTrigger;
+    Entry3D Entry;                 // the entry of an immediate query
+    CollisionManifold3D Manifold;  // scratch manifold of query narrow checks
+    PhysicsCollider3D Collider3D;  // the query entry's collider
+    ::Quantum::Transform3D Transform3D;
     NarrowTls3D Narrow;
     std::uint64_t OverlapSequence = 0;
     // TODO(0x7d7d5e8, Quantum.Physics3D.Tls.Free), TODO(0x7d7d624,
@@ -177,41 +184,8 @@ struct Island3D {
     void Reset();
     // 0x7d7b204
     void AddManifold(CollisionManifold3D* manifold) { CollisionManifolds.push_back(manifold); }
-    // 0x7d7b294 - also links the entry to the island.
-    void AddEntry(Entry3D* entry);
-};
-
-// The collision/trigger callbacks the scene raises (Quantum.Core.ICollisionCallbacks3D).
-// Info structs reduced to what callers use.
-struct CollisionInfo3D {
-    EntityRef Entity;
-    EntityRef Other; // invalid for static colliders
-    bool IsStatic = false;
-    std::int32_t StaticColliderIndex = -1;
-    FPVector3 ContactNormal;
-    const CollisionManifold3D* Manifold = nullptr;
-};
-struct TriggerInfo3D {
-    EntityRef Entity;
-    EntityRef Other;
-    bool IsStatic = false;
-    std::int32_t StaticColliderIndex = -1;
-};
-struct ExitInfo3D {
-    EntityRef Entity;
-    EntityRef Other;
-    bool IsStatic = false;
-    std::int32_t StaticColliderIndex = -1;
-};
-class ICollisionCallbacks3D {
-  public:
-    virtual ~ICollisionCallbacks3D() = default;
-    virtual void OnCollision3D(Core::FrameBase* f, const CollisionInfo3D& info) = 0;
-    virtual void OnCollisionEnter3D(Core::FrameBase* f, const CollisionInfo3D& info) = 0;
-    virtual void OnCollisionExit3D(Core::FrameBase* f, const ExitInfo3D& info) = 0;
-    virtual void OnTrigger3D(Core::FrameBase* f, const TriggerInfo3D& info) = 0;
-    virtual void OnTriggerEnter3D(Core::FrameBase* f, const TriggerInfo3D& info) = 0;
-    virtual void OnTriggerExit3D(Core::FrameBase* f, const ExitInfo3D& info) = 0;
+    // 0x7d7b294 - the caller links the entry to the island (Entry3D.Island).
+    void AddEntry(Entry3D* entry) { Entries.push_back(entry); }
 };
 
 // Quantum.QueryOptions
@@ -224,10 +198,95 @@ enum QueryOptions : std::int32_t {
     ComputeDetailedInfo = 32768,
 };
 
+// Quantum.Physics3D.Query3D.QueryType
+enum class QueryType : std::int32_t {
+    ShapeOverlap = 0,
+    ShapeCast = 1,
+    Linecast = 2,
+};
+
+// Quantum.Physics3D.Query3D with its QueryParameters3D union flattened: the transform's
+// position is the overlap position or the cast/linecast start; End is the linecast end or
+// the shape cast translation.
+struct Query3D {
+    QueryType Type = QueryType::ShapeOverlap;
+    bool FirstHitOnly = false;
+    ::Quantum::Transform3D Transform;
+    FPVector3 End;
+    Shape3D Shape;
+    std::int32_t Options = 0;
+    std::int32_t LayerMask = 0;
+};
+
 // Quantum.Physics3D.StaticComponents3D: the transform and collider of a static entry.
 struct StaticComponents3D {
     ::Quantum::Transform3D Transform3D;
     PhysicsCollider3D Collider3D;
+};
+
+// Quantum.Physics3D.EntrySolverImpulses: the impulses one constraint gives one body in a
+// hybrid solver iteration, chained per body (Entry3D.SolverImpulsesAdr).
+struct EntrySolverImpulses {
+    EntrySolverImpulses* NextAdr = nullptr;
+    FPVector3 Angular; // r x impulse
+    FPVector3 Linear;
+};
+
+// Quantum.Physics3D.ConstraintFlags
+enum ConstraintFlags : std::int32_t {
+    IgnoreVelocitySolver = 1,
+    IgnorePositionSolver = 2,
+    WasSolved = 4,
+    HasDynamicBodyA = 8,
+    HasDynamicBodyB = 16,
+};
+
+// Quantum.Physics3D.ConstraintData with its CollisionConstraintData: one contact point of a
+// manifold for the solvers (one 0x228-byte slot each in the original).
+struct ContactConstraint {
+    std::int32_t Flags = 0; // ConstraintFlags
+    EntrySolverImpulses ImpulsesA;
+    EntrySolverImpulses ImpulsesB;
+    CollisionManifold3D* Manifold = nullptr; // ManifoldAdr
+    FP NormalMass;                           // perceived mass along the normal
+    FPVector3 Ra;                            // contact offset from A's centre of mass
+    FPVector3 Rb;
+};
+
+// Scene3D.AccumulatedImpulseFlags
+enum AccumulatedImpulseFlags : std::int32_t {
+    ImpulseLinear = 1,
+    ImpulseAngular = 2,
+    ImpulseAdd = 4,        // plain sum
+    ImpulseAccumulate = 8, // sum without re-adding what already points the same way
+    ImpulseAll = 3,
+};
+
+// Scene3D.AccumulatedImpulse: velocity changes collected for one body before they are applied.
+struct AccumulatedImpulse {
+    FPVector3 Velocity;
+    FPVector3 AngularVelocity;
+
+    // 0x7d6e2e0 - per selected part (linear/angular): Add sums; otherwise an impulse that
+    // points along the accumulated one only adds the share beyond its projection.
+    void Accumulate(const AccumulatedImpulse& impulse, std::int32_t flags);
+    // 0x7d6e494 - impulse * massInverse, and with rotation (r x impulse) * inverse inertia
+    // (the local tensor's X entry, as the original's isotropic approximation).
+    void Integrate(const PhysicsBody3D* body, const FPVector3& impulse, const FPVector3& r,
+                   bool useRotation);
+    // 0x7d6e564 - adds the changes to the entry's body (waking it; rotation freeze respected).
+    void Apply(Entry3D* entry) const;
+};
+
+// Scene3D.AccumulatedImpulseCollection
+struct AccumulatedImpulseCollection {
+    AccumulatedImpulse A;
+    AccumulatedImpulse B;
+    // 0x7d6e66c
+    void Accumulate(const AccumulatedImpulseCollection& impulses, std::int32_t flags) {
+        A.Accumulate(impulses.A, flags);
+        B.Accumulate(impulses.B, flags);
+    }
 };
 
 class Scene3D {
@@ -282,10 +341,36 @@ class Scene3D {
                       const FPQuaternion& rot, const Shape3D& shape, std::int32_t layerMask,
                       std::int32_t options);
 
+    void ShapeCast(Core::FrameBase* frame, HitCollection3D* hits, const FPVector3& start,
+                   const FPQuaternion& rot, const Shape3D& shape, const FPVector3& translation,
+                   bool firstHitOnly, std::int32_t layerMask, std::int32_t options);
+
   private:
+    // The query box on the sweep axes while ResolveQuery walks the buckets.
+    struct QueryBox {
+        std::int32_t SortMin = 0;
+        std::int32_t SortMax = 0;
+        std::int32_t SecondaryMin = 0;
+        std::int32_t SecondaryMax = 0;
+        std::int32_t StabPoint = 0;
+        std::int32_t Bucket = 0;
+        bool FirstBucket = false;
+    };
+    void ResolveQuery(Core::FrameBase* frame, HitCollection3D* hits, const Query3D& query, Entry3D* qEntry);
+    void ScanQueryCandidates(Core::FrameBase* frame, HitCollection3D* hits, const Query3D& query,
+                             Entry3D* qEntry, const StabbingList& stabbing, const QueryBox& q, bool statics,
+                             bool detailed);
+    void ResolveQueryNarrow(Core::FrameBase* frame, HitCollection3D* hits, const Query3D& query,
+                            Entry3D* qEntry, Entry3D* entry, bool detailed);
+    void InitLinecastEntry(const Query3D& query, Entry3D* qEntry) const;
+    void InitShapeOverlapEntry(const Query3D& query, Entry3D* qEntry);
+    void InitShapeCastEntry(const Query3D& query, Entry3D* qEntry);
+    void SetHitCollider(Hit3D& hit, const Entry3D* entry) const;
+
     // Step stages (the original's Task_* functions).
     void CreateEntries(Core::FrameBase* frame);
     void UpdateMap(Core::FrameBase* frame, AssetGuid mapGuid);
+    void SetDefaultWorld();
     void ResetBucketsAndTls();
     void TaskIntegrateForcesFirstHalf();
     void TaskBroadPhaseEntryPreStep();
@@ -295,21 +380,48 @@ class Scene3D {
                              bool isStatic);
     void TaskNarrowPhase();
     void TaskCallbacks(Core::FrameBase* frame, ICollisionCallbacks3D* callbacks);
+    bool CheckIgnoreTriggerManifold(Core::FrameBase* frame, ManifoldData3D* m, Entry3D* entryA,
+                                    Entry3D* entryB);
+    bool CheckIgnoreCollisionManifold(Core::FrameBase* frame, ManifoldData3D* m, Entry3D* entryA,
+                                      Entry3D* entryB);
     void HandleDynamicTrigger(Core::FrameBase* f, ICollisionCallbacks3D* callbacks,
                               ManifoldData3D* manifold, Entry3D* entryA, Entry3D* entryB);
-    void HandleStaticTrigger(Core::FrameBase* f, ICollisionCallbacks3D* callbacks,
+    void HandleStaticTrigger(Core::FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
                              ManifoldData3D* manifold, Entry3D* entryA, Entry3D* entryB);
     void HandleDynamicCollision(Core::FrameBase* f, ICollisionCallbacks3D* callbacks,
                                 CollisionManifold3D* manifold, Entry3D* entryA, Entry3D* entryB);
-    void HandleStaticCollision(Core::FrameBase* f, ICollisionCallbacks3D* callbacks,
+    void HandleStaticCollision(Core::FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
                                CollisionManifold3D* manifold, Entry3D* entryA, Entry3D* entryB);
-    void HandleExits(Core::FrameBase* f, ICollisionCallbacks3D* callbacks);
+    void HandleExits(Core::FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map);
+    bool RaiseExit(Core::FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
+                   const Entry3D& entry, const PhysicsCallbacksEntry& item);
+    void TaskSortCcdManifolds();
+    void QuickSortManifoldsByTimeOfImpact(std::int32_t lo, std::int32_t hi);
+    void TaskCcdCallbacks(Core::FrameBase* frame, ICollisionCallbacks3D* callbacks);
+    void TaskIntegrateFirstTOI();
+    void TaskPostCallbacksUpdateEntries(Core::FrameBase* frame);
+    void TaskPostCallbacksUpdateManifolds();
+    Island3D* GetNextIsland();
     void TaskBuildIslands();
+    void TaskCollisionSolverCacheManifolds();
     void TaskCollisionSolverInitLegacyGS(Core::FrameBase* frame);
+    void TaskCollisionSolverInit(Core::FrameBase* frame);
+    void TaskCollisionSolverCompute();
+    void TaskCollisionSolverAggregateContacts();
+    void TaskVelocitySolverAggregate();
+    void TaskVelocitySolverApply();
     void TaskVelocitySolverLegacyGS();
+    void AccumulateImpulses(const ContactConstraint* cst, CollisionManifold3D* m, Entry3D* entryA,
+                            Entry3D* entryB, bool useRotation,
+                            AccumulatedImpulseCollection& accumulated, bool& solved,
+                            std::int32_t flags);
+    AccumulatedImpulseCollection ComputeImpulse(const ContactConstraint* cst,
+                                                const CollisionManifold3D* m, Entry3D* entryA,
+                                                Entry3D* entryB, bool useRotation, bool& solved);
     void TaskPenetrationCorrection();
     void TaskIntegrateVelocity();
-    void TaskSleepDetection();
+    void TaskSleepDetectionEntries();
+    void TaskSleepDetectionIslands();
 
     Entry3D* GetNextEntry(std::int32_t& index);
     void UpdateManifoldCachedState(ManifoldData3D& m) const;
@@ -328,24 +440,22 @@ class Scene3D {
     FP::Raw _worldSizeRaw = 0;
     FP::Raw _worldOffsetRaw = 0;
     bool _mapInitialized = false;
-    std::vector<Island3D> _islands;
+    std::deque<Island3D> _islands; // a deque keeps Entry3D.Island pointers valid
+    std::vector<Entry3D*> _solverEntries; // the dynamic entries that joined an island
     std::vector<Entry3D> _entries;
     std::int32_t _queriesCount = 1;
     std::vector<StaticComponents3D> _staticComponents;
     std::int32_t _staticComponentsCount = 0;
     FP _deltaTime;
     PhysicsSceneSettings CachedSettings;
-    // Collision constraints of the legacy solver, one per contact point (plus the average
-    // point for multi-point manifolds).
-    struct ContactConstraint {
-        CollisionManifold3D* Manifold = nullptr;
-        bool DynamicA = false;
-        bool DynamicB = false;
-        FP PerceivedMass;
-        FPVector3 RA; // contact offset from A's centre of mass
-        FPVector3 RB;
-    };
+    ComponentSet _minComponentSet; // Transform3D + PhysicsCollider3D
     std::vector<ContactConstraint> _collisionSolverData;
+    // A CCD pair: its manifold data and, for collisions, the whole manifold.
+    struct CcdManifold {
+        ManifoldData3D* Data = nullptr;
+        CollisionManifold3D* Collision = nullptr;
+    };
+    std::vector<CcdManifold> _ccdManifolds;
     std::vector<CollisionManifold3D*> _collisionSolverManifolds;
 };
 
