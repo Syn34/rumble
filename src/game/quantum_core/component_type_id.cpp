@@ -1,6 +1,10 @@
 #include "component_type_id.h"
 
 #include "quantum_core/transform.h"
+#include "quantum_core/frame_serializer.h"
+#include "quantum_core/map_entity_id.h"
+#include "quantum_core/navigation/navmesh_components.h"
+#include "quantum_core/view.h"
 
 #include <stdexcept>
 #include <thread>
@@ -24,6 +28,18 @@ namespace {
 // 0x7ced6a8 (<>c.<Setup>b__18_0) - Serializer of the reserved index 0; never meant to run.
 void SerializeReservedSlot(void* /*component*/, FrameSerializer* /*serializer*/) {
     throw std::logic_error("ComponentTypeId: component index 0 is reserved");
+}
+
+// The navigation components serialise through the interface type; component callbacks
+// receive the frame serializer.
+void SerializeNavMeshSteeringAgent(void* component, FrameSerializer* serializer) {
+    NavMeshSteeringAgent::Serialize(component, serializer);
+}
+void SerializeNavMeshAvoidanceAgent(void* component, FrameSerializer* serializer) {
+    NavMeshAvoidanceAgent::Serialize(component, serializer);
+}
+void SerializeNavMeshAvoidanceObstacle(void* component, FrameSerializer* serializer) {
+    NavMeshAvoidanceObstacle::Serialize(component, serializer);
 }
 
 void WaitUntilFinished(const std::atomic<bool>& finished) {
@@ -76,11 +92,12 @@ void ComponentTypeId<void>::RegisterFrameworkComponents() {
     AddEntry(nullptr, "CharacterController2D", 40, {}, none);
     AddEntry(nullptr, "CharacterController3D", 48, {}, none);
     AddEntry(nullptr, "NavMeshPathfinder", 96, {}, none);
-    AddEntry(nullptr, "NavMeshSteeringAgent", 40, {}, none);
-    AddEntry(nullptr, "NavMeshAvoidanceAgent", 40, {}, none);
-    AddEntry(nullptr, "NavMeshAvoidanceObstacle", 32, {}, none);
-    AddEntry(nullptr, "View", 8, {}, none);
-    AddEntry(nullptr, "MapEntityLink", 4, {}, none);
+    // The navigation agents' OnAdded/OnRemoved callbacks are still TODO (null here).
+    Add<NavMeshSteeringAgent>(ComponentCallbacks(&SerializeNavMeshSteeringAgent), none);
+    Add<NavMeshAvoidanceAgent>(ComponentCallbacks(&SerializeNavMeshAvoidanceAgent), none);
+    Add<NavMeshAvoidanceObstacle>(ComponentCallbacks(&SerializeNavMeshAvoidanceObstacle), none);
+    Add<View>(ComponentCallbacks(&View::Serialize), none);
+    Add<MapEntityLink>(ComponentCallbacks(&MapEntityLink::Serialize), none);
 }
 
 void ComponentTypeId<void>::Setup(const std::function<void()>& action) {

@@ -24,6 +24,7 @@ using Photon::Deterministic::FP;
 using Photon::Deterministic::FPVector2;
 using Photon::Deterministic::FPVector3;
 
+class EntityPrototypeContainer;
 struct TriangleCCW;
 
 // A ByteStream together with the bytes it reads (BinaryData::CreateByteStream).
@@ -169,12 +170,14 @@ class EntityView final : public AssetObject, public IBuiltInAssetObject {
     void Dispatch(IAssetObjectVisitor& visitor) override { visitor.Visit(*this); }
 };
 
-// A baked entity (its component prototypes) that frames instantiate.
-// TODO(0x7ce1424, Quantum.EntityPrototype..ctor): the Container field
-// (Quantum.EntityPrototypeContainer, the component prototypes) is missing until the
-// prototype system exists; the class is a placeholder so references can be resolved.
+// A baked entity that frames instantiate (FrameBase::Create): its component prototypes
+// (component_prototype.h).
 class EntityPrototype final : public AssetObject, public IBuiltInAssetObject {
   public:
+    // Null until filled in by whoever builds the asset (the constructor leaves it unset).
+    std::shared_ptr<EntityPrototypeContainer> Container;
+
+    // 0x7ce1424
     EntityPrototype() = default;
     // 0x7ce137c
     void Dispatch(IAssetObjectVisitor& visitor) override { visitor.Visit(*this); }

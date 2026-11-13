@@ -13,6 +13,8 @@ class IDeterministicFrameSerializer;
 
 namespace Quantum {
 
+class EntityPrototype;
+
 struct AssetRefEntityPrototype {
     static constexpr int SIZE = 8;
 
@@ -36,8 +38,8 @@ struct AssetRefEntityPrototype {
         AssetGuid::Serialize(&static_cast<AssetRefEntityPrototype*>(ptr)->Id, serializer);
     }
 
-    // TODO(0x7ce12b0, Quantum.AssetRefEntityPrototype.op_Implicit): EntityPrototype asset ->
-    // reference (its GUID, or empty for null); needs the asset classes.
+    // 0x7ce12b0 op_Implicit(EntityPrototype) - the asset's GUID; empty for null.
+    static AssetRefEntityPrototype FromAsset(const EntityPrototype* asset);
 };
 
 static_assert(sizeof(AssetRefEntityPrototype) == AssetRefEntityPrototype::SIZE);

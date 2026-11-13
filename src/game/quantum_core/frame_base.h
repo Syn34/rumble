@@ -27,10 +27,13 @@
 #include "photon_deterministic/fp.h"
 #include "quantum_core/asset_guid.h"
 #include "quantum_core/asset_object.h"
+#include "quantum_core/asset_ref_entity_prototype.h"
 #include "quantum_core/component_data_buffer.h"
+#include "quantum_core/component_prototype_ref.h"
 #include "quantum_core/component_set.h"
 #include "quantum_core/component_type_id.h"
 #include "quantum_core/entities_config.h"
+#include "quantum_core/entity_prototype_ref.h"
 #include "quantum_core/entity_ref.h"
 #include "quantum_core/frame_context.h"
 #include "quantum_core/frame_heap.h"
@@ -52,7 +55,10 @@
 namespace Quantum {
 
 class AssetObject;
+class ComponentPrototype;
 class DynamicAssetDB;
+class EntityPrototype;
+class EntityPrototypeContainer;
 class FrameSerializer;
 class Map;
 
@@ -220,13 +226,43 @@ class FrameBase : public Photon::Deterministic::DeterministicFrame {
     // 0x7d1bee4 - The entity's component mask; throws for a missing entity.
     ComponentSet GetComponentSet(EntityRef entityRef) const;
 
-    // TODO(0x7d1c42c, Quantum.Core.FrameBase.Create(AssetRefEntityPrototype)): needs
-    // entity prototypes and the asset database.
-    // TODO(0x7d1c4ac, Quantum.Core.FrameBase.Create(EntityPrototype)): same.
-    // TODO(0x7d1c8e0, Quantum.Core.FrameBase.Create(prototypes, Map)): same, plus Map.
-    // TODO(0x7d1c5e8, Quantum.Core.FrameBase.MaterializePrototypeInternal): same.
-    // TODO(0x7d1c7b8, Quantum.Core.FrameBase.InvokeEntityPrototypeMaterializedListeners):
-    // same.
+    // --- entity prototypes ---------------------------------------------------------------
+
+    // Raised after an entity prototype was materialised: (entity, prototype).
+    // 0x7d1e444 (.ctor) / 0x7d1e4e4 (Invoke) in the original, a delegate type.
+    using EntityPrototypeMaterializedCallbackInvoker =
+        std::function<void(EntityRef, EntityPrototypeRef)>;
+
+    // 0x7d1c42c - Create(EntityPrototype) with the asset looked up (FindAsset: a warning
+    // when missing, which then throws as below).
+    EntityRef Create(AssetRefEntityPrototype prototype);
+    // 0x7d1c4ac - A new entity with the prototype's components (an existing component
+    // being overwritten is reported as an error), then the prototype's listeners and the
+    // materialised signal. A null prototype or container throws std::invalid_argument
+    // after the entity was created (the original fails the same way, with a null
+    // reference).
+    EntityRef Create(EntityPrototype* prototype);
+    // 0x7d1c8e0 - Creates the entities of a map together: all entities first (so map
+    // entities can refer to each other), then each one's components plus a MapEntityLink
+    // with its index, then the listeners of every container that has any, then the
+    // materialised signal per entity. The prototypes are referenced as entries of
+    // `parentAsset`.
+    void Create(const std::vector<std::shared_ptr<EntityPrototypeContainer>>& prototypes,
+                Map* parentAsset);
+    // 0x7d1c5e8 - Lets every component prototype of `container` add its component to
+    // `entity`, in component-index order. A component the entity already had is recorded
+    // in `overridenComponents` if given, otherwise reported (PrototypeValidator). True if
+    // any component already existed. `mapEntities` resolves MapEntityIds (null for a
+    // single prototype).
+    bool MaterializePrototypeInternal(EntityRef entity, EntityPrototypeContainer* container,
+                                      EntityPrototypeRef prototypeRef,
+                                      const std::vector<EntityRef>* mapEntities,
+                                      ComponentSet* overridenComponents);
+    // 0x7d1c7b8 - Calls every IEntityPrototypeMaterializedListener among the container's
+    // component prototypes.
+    void InvokeEntityPrototypeMaterializedListeners(EntityRef entity,
+                                                    EntityPrototypeContainer* container,
+                                                    EntityPrototypeRef prototypeRef);
 
     // --- culling -------------------------------------------------------------------------
 
@@ -534,9 +570,18 @@ class FrameBase : public Photon::Deterministic::DeterministicFrame {
     // Quantum.Core.FrameBase._dynamicAssetDB.
     DynamicAssetDB* get_DynamicAssetDB() const { return _dynamicAssetDB.get(); }
 
-    // TODO(0x7d1d218, Quantum.Core.FrameBase.FindPrototype(EntityPrototypeRef)): needs
-    // entity prototypes.
-    // TODO(0x7d1d594, Quantum.Core.FrameBase.FindPrototype(ComponentPrototypeRef)): same.
+    // 0x7d1d218 - The container a prototype reference names: the EntityPrototype asset's
+    // (inner id negative) or entry `InnerAssetId` of the Map asset's MapEntities. Null if
+    // the asset is missing (FindAsset warns); std::logic_error if the asset has the wrong
+    // type or the index is out of range (InvalidOperationException in the original).
+    EntityPrototypeContainer* FindPrototype(EntityPrototypeRef prototypeRef);
+    // 0x7d1d594 - The component prototype a reference names; null if the entity prototype
+    // or the component is missing.
+    ComponentPrototype* FindPrototype(ComponentPrototypeRef prototypeRef);
+    // (shared generic code) - The same, cast to a prototype type; null on a mismatch.
+    template <class T> T* FindPrototype(ComponentPrototypeRef prototypeRef) {
+        return dynamic_cast<T*>(FindPrototype(prototypeRef));
+    }
     // TODO(0x7d1d60c, Quantum.Core.FrameBase.ClearAllNavMeshRegions): needs navigation.
     // TODO(0x7d1cc28, Quantum.Core.FrameBase.get__physicsStateInternal2D) and
     // TODO(0x7d1cc38, Quantum.Core.FrameBase.get__physicsStateInternal3D): need the physics
@@ -567,6 +612,8 @@ class FrameBase : public Photon::Deterministic::DeterministicFrame {
     // Component signals by type index, installed by the game's frame (null = none).
     std::vector<ComponentReactiveCallbackInvoker> _ComponentSignalsOnAdded;
     std::vector<ComponentReactiveCallbackInvoker> _ComponentSignalsOnRemoved;
+    // Installed by the game's frame (null = none).
+    EntityPrototypeMaterializedCallbackInvoker _SignalOnEntityPrototypeMaterialized;
 
     FrameBaseUnsafe Unsafe;
 
@@ -595,8 +642,7 @@ class FrameBase : public Photon::Deterministic::DeterministicFrame {
     Quantum::Allocator::Heap* _heap = nullptr;
     std::unique_ptr<Quantum::Allocator::FrameHeap> _trackedHeap;
     std::unique_ptr<DynamicAssetDB> _dynamicAssetDB;
-    // Not present yet (their subsystems are missing): the prototype-materialized signal
-    // and the Physics2D/Physics3D API objects.
+    // Not present yet (their subsystem is missing): the Physics2D/Physics3D API objects.
 };
 
 // ---------------------------------------------------------------------------------------
