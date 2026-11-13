@@ -93,3 +93,36 @@ build/tools/meshview --demo                                     # generated mesh
 natively (ASTC on Mesa's OpenGL driver, for example), compares the GPU's decode with ours.
 `--frames N --screenshot out.ppm` saves the last frame. Everything it shows or saves comes from
 your game files: keep it local.
+
+## sceneview
+
+Instantiates prefabs or scenes from the bundles into an engine scene and draws them with the
+scene renderer (OpenGL or Vulkan): materials mapped to the PC shader programs, GPU skinning, LOD
+groups, frustum culling. Left drag orbits, right/middle drag pans, wheel zooms; F switches to a
+fly camera (W/A/S/D/Q/E, Shift); R reframes; L cycles forced LOD levels; C toggles culling; P
+prints frame statistics.
+
+```sh
+build/tools/sceneview <bundle-dir> --engine-lib <libunity.so> --list [--bundle hero_]
+build/tools/sceneview <bundle-dir> --engine-lib <libunity.so> --prefab <name|path id> [--bundle hero_]
+build/tools/sceneview <bundle-dir> --engine-lib <libunity.so> --all --bundle scene_q_ [--grid]
+build/tools/sceneview <bundle-dir> --engine-lib <libunity.so> --stats [--bundle biome_] [--gpu]
+build/tools/sceneview --demo                         # synthetic scene, no game files
+```
+
+`--stats` prints numbers only: renderers and instances, meshes/materials/textures resolved, how
+each material's shader was mapped, pointers into bundles that aren't available, draw-list counts,
+a CPU skinning check against the stored bounds, and with `--gpu` the draw calls and GPU resources
+after drawing a few frames. What the viewer shows comes from your game files: keep it local.
+
+## compare_renderers.py
+
+Renders the same frames with every backend and compares the captures. Works with any program
+that takes `--list-renderers`, `--renderer`, `--frames` and `--screenshot`; `--args` passes extra
+arguments (synthetic content only):
+
+```sh
+python3 tools/compare_renderers.py build/src/app/RangerRumble
+python3 tools/compare_renderers.py build/src/app/RangerRumble --args=--scene-demo
+python3 tools/compare_renderers.py build/tools/sceneview --args=--demo
+```
