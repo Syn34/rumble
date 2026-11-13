@@ -3,11 +3,18 @@
 #   - the Vulkan SPIR-V (compiled with glslangValidator), if Vulkan is enabled
 #
 # Invoked as: cmake -DINPUT=... -DCOMMON=... -DOUTPUT=... -DSYMBOL=... -DSTAGE=vert|frag
-#                   [-DGLSLANG=path] -DWORKDIR=... -P EmbedShader.cmake
+#                   [-DGLSLANG=path] [-DDEFINES=A,B] -DWORKDIR=... -P EmbedShader.cmake
 
 file(READ "${COMMON}" common_text)
 file(READ "${INPUT}" body_text)
-set(gl_text "${common_text}\n${body_text}")
+set(define_text "")
+if(DEFINES)
+    string(REPLACE "," ";" define_list "${DEFINES}")
+    foreach(d IN LISTS define_list)
+        string(APPEND define_text "#define ${d} 1\n")
+    endforeach()
+endif()
+set(gl_text "${define_text}${common_text}\n${body_text}")
 
 function(to_byte_list text_or_file is_file out_var)
     if(is_file)

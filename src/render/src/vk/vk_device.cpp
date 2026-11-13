@@ -9,6 +9,10 @@
 // samplers in descriptor set 0 (bindings 0..3); a descriptor set is written from
 // the currently bound textures whenever they change, from per-frame pools that
 // are reset once the frame's fence has signalled.
+//
+// The DrawUniforms block (binding 4) is a dynamic uniform buffer: each frame in
+// flight owns host-visible chunks that SetDrawUniforms fills front to back, and
+// draws select their slice with a dynamic offset.
 #include "../shader_blob.h"
 #include "rr/render/render_device.h"
 
@@ -95,8 +99,20 @@ struct VkPipelineResource {
     PipelineDesc desc; // kept so the pipeline can be rebuilt if the render pass changes
 };
 
+// Host-visible memory for DrawUniforms contents, filled front to back.
+struct UniformChunk {
+    VkBufferResource buffer;
+    std::uint8_t* mapped = nullptr;
+};
+
+constexpr std::size_t kUniformChunkSize = 1u << 20;
+constexpr std::uint32_t kDrawUniformsBinding = kMaxTextureSlots;
+
 struct FrameResources {
     VkCommandBuffer commands = VK_NULL_HANDLE;
+    std::vector<UniformChunk> uniformChunks; // grown on demand, rewound per frame
+    std::size_t activeChunk = 0;
+    std::size_t chunkOffset = 0;
     VkSemaphore imageAvailable = VK_NULL_HANDLE;
     VkFence inFlight = VK_NULL_HANDLE;
     std::vector<VkDescriptorPool> descriptorPools; // grown on demand, reset per frame
@@ -121,6 +137,10 @@ public:
         if (pipelineLayout_) vkDestroyPipelineLayout(device_, pipelineLayout_, nullptr);
         if (textureSetLayout_) vkDestroyDescriptorSetLayout(device_, textureSetLayout_, nullptr);
         for (auto& f : frames_) {
+            for (UniformChunk& chunk : f.uniformChunks) {
+                if (chunk.mapped) vkUnmapMemory(device_, chunk.buffer.memory);
+                DestroyBufferResource(chunk.buffer);
+            }
             for (VkDescriptorPool pool : f.descriptorPools) vkDestroyDescriptorPool(device_, pool, nullptr);
             if (f.imageAvailable) vkDestroySemaphore(device_, f.imageAvailable, nullptr);
             if (f.inFlight) vkDestroyFence(device_, f.inFlight, nullptr);
@@ -269,6 +289,9 @@ public:
         vkResetFences(device_, 1, &frame.inFlight);
         for (VkDescriptorPool pool : frame.descriptorPools) vkResetDescriptorPool(device_, pool, 0);
         frame.activePool = 0;
+        frame.activeChunk = 0;
+        frame.chunkOffset = 0;
+        uniformOffset_ = 0;
         descriptorsDirty_ = true; // a new command buffer has no descriptor sets bound
         vkResetCommandBuffer(frame.commands, 0);
         VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -322,6 +345,24 @@ public:
         size = std::min(size, kMaxDrawConstantsSize);
         vkCmdPushConstants(cmd_, pipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, static_cast<std::uint32_t>(size), data);
+    }
+
+    void SetDrawUniforms(const void* data, std::size_t size) override {
+        size = std::min(size, kMaxDrawUniformsSize);
+        FrameResources& frame = frames_[frameIndex_];
+        const std::size_t alignment = std::max<std::size_t>(uniformAlignment_, 16);
+        std::size_t offset = (frame.chunkOffset + alignment - 1) / alignment * alignment;
+        // The descriptor always covers kMaxDrawUniformsSize bytes from the offset.
+        if (offset + kMaxDrawUniformsSize > kUniformChunkSize) {
+            ++frame.activeChunk;
+            offset = 0;
+            descriptorsDirty_ = true; // the set must point at the new chunk
+        }
+        if (!EnsureUniformChunk(frame)) return;
+        std::memcpy(frame.uniformChunks[frame.activeChunk].mapped + offset, data, size);
+        frame.chunkOffset = offset + size;
+        uniformOffset_ = static_cast<std::uint32_t>(offset);
+        uniformsDirty_ = true;
     }
 
     void BindTexture(std::uint32_t slot, TextureHandle handle, const SamplerDesc& sampler) override {
@@ -515,6 +556,7 @@ private:
                                                                                                : 1;
                 if (score > bestScore) {
                     bestScore = score;
+                    uniformAlignment_ = static_cast<std::size_t>(props.limits.minUniformBufferOffsetAlignment);
                     physicalDevice_ = candidate;
                     queueFamily_ = i;
                     deviceName_ = std::string(props.deviceName) + " (Vulkan " +
@@ -586,15 +628,19 @@ private:
     }
 
     bool CreatePipelineLayout() {
-        std::array<VkDescriptorSetLayoutBinding, kMaxTextureSlots> bindings{};
+        std::array<VkDescriptorSetLayoutBinding, kMaxTextureSlots + 1> bindings{};
         for (std::uint32_t i = 0; i < kMaxTextureSlots; ++i) {
             bindings[i].binding = i;
             bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             bindings[i].descriptorCount = 1;
             bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         }
+        bindings[kDrawUniformsBinding].binding = kDrawUniformsBinding;
+        bindings[kDrawUniformsBinding].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        bindings[kDrawUniformsBinding].descriptorCount = 1;
+        bindings[kDrawUniformsBinding].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
         VkDescriptorSetLayoutCreateInfo setInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        setInfo.bindingCount = kMaxTextureSlots;
+        setInfo.bindingCount = static_cast<std::uint32_t>(bindings.size());
         setInfo.pBindings = bindings.data();
         if (!Check(vkCreateDescriptorSetLayout(device_, &setInfo, nullptr, &textureSetLayout_),
                    "vkCreateDescriptorSetLayout")) {
@@ -906,13 +952,18 @@ private:
         VkPipelineColorBlendAttachmentState blendAttachment{};
         blendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        if (desc.blend == BlendMode::AlphaBlend) {
+        if (desc.blend != BlendMode::Opaque) {
+            // Same factors for colour and alpha, as glBlendFunc sets them.
+            VkBlendFactor src = VK_BLEND_FACTOR_SRC_ALPHA;
+            VkBlendFactor dst = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            if (desc.blend == BlendMode::Additive) dst = VK_BLEND_FACTOR_ONE;
+            if (desc.blend == BlendMode::Premultiplied) src = VK_BLEND_FACTOR_ONE;
             blendAttachment.blendEnable = VK_TRUE;
-            blendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-            blendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            blendAttachment.srcColorBlendFactor = src;
+            blendAttachment.dstColorBlendFactor = dst;
             blendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-            blendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-            blendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            blendAttachment.srcAlphaBlendFactor = src;
+            blendAttachment.dstAlphaBlendFactor = dst;
             blendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
         }
         VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
@@ -1159,11 +1210,14 @@ private:
         for (;;) {
             const bool freshPool = frame.activePool == frame.descriptorPools.size();
             if (freshPool) {
-                VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kSetsPerPool * kMaxTextureSlots};
+                const VkDescriptorPoolSize sizes[] = {
+                    {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kSetsPerPool * kMaxTextureSlots},
+                    {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, kSetsPerPool},
+                };
                 VkDescriptorPoolCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
                 info.maxSets = kSetsPerPool;
-                info.poolSizeCount = 1;
-                info.pPoolSizes = &size;
+                info.poolSizeCount = 2;
+                info.pPoolSizes = sizes;
                 VkDescriptorPool pool = VK_NULL_HANDLE;
                 if (!Check(vkCreateDescriptorPool(device_, &info, nullptr, &pool), "vkCreateDescriptorPool")) {
                     return VK_NULL_HANDLE;
@@ -1186,25 +1240,58 @@ private:
         }
     }
 
-    // Writes and binds a descriptor set for the bound textures if they changed.
-    bool FlushDescriptors() {
-        if (!descriptorsDirty_) return true;
-        const VkDescriptorSet set = AllocateTextureSet();
-        if (!set) return false;
-        std::array<VkDescriptorImageInfo, kMaxTextureSlots> images{};
-        std::array<VkWriteDescriptorSet, kMaxTextureSlots> writes{};
-        for (std::uint32_t i = 0; i < kMaxTextureSlots; ++i) {
-            images[i] = {boundSamplers_[i], boundViews_[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-            writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            writes[i].dstSet = set;
-            writes[i].dstBinding = i;
-            writes[i].descriptorCount = 1;
-            writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writes[i].pImageInfo = &images[i];
+    // Makes sure frame.uniformChunks[frame.activeChunk] exists and is mapped.
+    bool EnsureUniformChunk(FrameResources& frame) {
+        while (frame.uniformChunks.size() <= frame.activeChunk) {
+            UniformChunk chunk;
+            if (!CreateHostBuffer(kUniformChunkSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, chunk.buffer)) return false;
+            void* mapped = nullptr;
+            if (!Check(vkMapMemory(device_, chunk.buffer.memory, 0, kUniformChunkSize, 0, &mapped), "vkMapMemory")) {
+                DestroyBufferResource(chunk.buffer);
+                return false;
+            }
+            chunk.mapped = static_cast<std::uint8_t*>(mapped);
+            frame.uniformChunks.push_back(chunk);
         }
-        vkUpdateDescriptorSets(device_, kMaxTextureSlots, writes.data(), 0, nullptr);
-        vkCmdBindDescriptorSets(cmd_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 0, 1, &set, 0, nullptr);
+        return true;
+    }
+
+    // Writes a descriptor set for the bound textures and the current uniform chunk
+    // if they changed, and (re)binds it with the current DrawUniforms offset.
+    bool FlushDescriptors() {
+        if (!descriptorsDirty_ && !uniformsDirty_) return true;
+        FrameResources& frame = frames_[frameIndex_];
+        if (descriptorsDirty_) {
+            if (!EnsureUniformChunk(frame)) return false;
+            const VkDescriptorSet set = AllocateTextureSet();
+            if (!set) return false;
+            std::array<VkDescriptorImageInfo, kMaxTextureSlots> images{};
+            std::array<VkWriteDescriptorSet, kMaxTextureSlots + 1> writes{};
+            for (std::uint32_t i = 0; i < kMaxTextureSlots; ++i) {
+                images[i] = {boundSamplers_[i], boundViews_[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+                writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+                writes[i].dstSet = set;
+                writes[i].dstBinding = i;
+                writes[i].descriptorCount = 1;
+                writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                writes[i].pImageInfo = &images[i];
+            }
+            const VkDescriptorBufferInfo uniforms{frame.uniformChunks[frame.activeChunk].buffer.buffer, 0,
+                                                  kMaxDrawUniformsSize};
+            VkWriteDescriptorSet& w = writes[kDrawUniformsBinding];
+            w = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            w.dstSet = set;
+            w.dstBinding = kDrawUniformsBinding;
+            w.descriptorCount = 1;
+            w.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+            w.pBufferInfo = &uniforms;
+            vkUpdateDescriptorSets(device_, static_cast<std::uint32_t>(writes.size()), writes.data(), 0, nullptr);
+            currentSet_ = set;
+        }
+        vkCmdBindDescriptorSets(cmd_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 0, 1, &currentSet_, 1,
+                                &uniformOffset_);
         descriptorsDirty_ = false;
+        uniformsDirty_ = false;
         return true;
     }
 
@@ -1412,6 +1499,10 @@ private:
     std::array<VkImageView, kMaxTextureSlots> boundViews_{};
     std::array<VkSampler, kMaxTextureSlots> boundSamplers_{};
     bool descriptorsDirty_ = true;
+    VkDescriptorSet currentSet_ = VK_NULL_HANDLE;
+    std::size_t uniformAlignment_ = 256;
+    std::uint32_t uniformOffset_ = 0;
+    bool uniformsDirty_ = true;
     std::uint32_t nextId_ = 1;
 
     bool captureRequested_ = false;
