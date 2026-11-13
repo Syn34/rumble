@@ -5138,6 +5138,9 @@ struct alignas(4) Team {
     // 0x7c6454c - -1 without a Team.
     static std::int32_t GetTeamID(Frame* f, EntityRef teamMember);
 
+    // 0x7c6478c - teamId is -1 without a Team (implemented in systems/team.cpp).
+    static bool TryGetTeamID(Frame* f, EntityRef teamMember, std::int32_t& teamId);
+
     // 0x7c6404c
     std::int32_t GetHashCode() const;
     // 0x7c6409c

@@ -95,6 +95,11 @@ class LifetimeSpec : public AssetObject {
     std::vector<AssetRefEntityPrototype> EntitiesToSpawnOnDeath;
 };
 
+class EntityGroupSpec : public AssetObject {
+  public:
+    std::int32_t GroupMaxMembers = 0;
+};
+
 // Something to run on an entity (subclasses implement it).
 class CallbackAction : public AssetObject {
   public:

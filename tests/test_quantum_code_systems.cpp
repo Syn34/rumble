@@ -12,6 +12,7 @@
 #include "quantum_code/systems/health_systems.h"
 #include "quantum_code/systems/killable_systems.h"
 #include "quantum_code/systems/libs.h"
+#include "quantum_code/systems/transform_systems.h"
 #include "quantum_core/frame_context.h"
 #include "quantum_core/resource_manager.h"
 
@@ -282,4 +283,60 @@ TEST_CASE("quantum.code systems: teams, entity info and status events") {
     f.Add<ActorIced>(actor);
     f.Remove<ActorIced>(actor);
     CHECK(f.get_Context()->get_Events()->get_Count() == eventsBefore + 2);
+}
+
+TEST_CASE("quantum.code systems: kill history, combat activity and hierarchy") {
+    SystemsSimulation sim(MakeSystems<ActorKillsHistorySystem, ActorCombatActivitySystem, HierarchySystem,
+                                      ActorInitialisedSystem>());
+    Frame& f = *sim.frame;
+    StartSystems(&f);
+    f.Number = 5;
+    const EntityRef killer = f.Create();
+    const EntityRef victim = f.Create();
+    f.Add<PlayerActor>(killer);
+    f.Add<PlayerActor>(victim);
+    Team::JoinTeam(&f, killer, 1);
+    Team::JoinTeam(&f, victim, 2);
+    KilledByData killedBy{};
+    killedBy.owner = killer;
+    f.GetPointer<PlayerActor>(victim)->killStreak = 4;
+    f.Signals.Killable_OnKill(victim, killedBy);
+    CHECK(f.GetPointer<PlayerActor>(victim)->killStreak == 0);
+    CHECK(f.GetPointer<PlayerActor>(killer)->killStreak == 1);
+    CHECK(f.GetPointer<PlayerActor>(killer)->killCount == 1);
+    CHECK(f.GetPointer<PlayerActor>(killer)->lastKillFrame == 5);
+    // Team kills are not counted.
+    Team::JoinTeam(&f, victim, 1);
+    f.Signals.Killable_OnKill(victim, killedBy);
+    CHECK(f.GetPointer<PlayerActor>(killer)->killCount == 1);
+
+    // Hitting a player starts a combat; it ends after the reset duration.
+    HitData hit{};
+    hit.owner = killer;
+    f.GetPointer<PlayerActor>(killer)->durationBeforeCombatReset = FP::One();
+    f.Signals.Damageable_HitReceived(victim, hit, HitResult{});
+    CHECK(f.GetPointer<PlayerActor>(killer)->inCombatWith == victim);
+    RunFrames(sim, 30);
+    CHECK(f.GetPointer<PlayerActor>(killer)->inCombatWith == victim);
+    RunFrames(sim, 40);
+    CHECK(f.GetPointer<PlayerActor>(killer)->inCombatWith == EntityRef{});
+    CHECK(f.GetPointer<PlayerActor>(victim)->timeWithoutCombatActivity > FP::One());
+    // The new players were initialised once.
+    CHECK(f.Has<PlayerActorInitialized>(killer));
+
+    // A child follows its parent at its offset.
+    const EntityRef parent = f.Create();
+    Transform3D parentTransform{};
+    parentTransform.Position = FPVector3(FP::FromInt(10), FP{}, FP{});
+    parentTransform.Rotation = FPQuaternion::Identity();
+    f.Add<Transform3D>(parent, parentTransform);
+    const EntityRef child = f.Create();
+    f.Add<Transform3D>(child);
+    Hierarchy hierarchy{};
+    hierarchy.Parent = parent;
+    hierarchy.Offset = FPVector3(FP{}, FP::FromInt(2), FP{});
+    f.Add<Hierarchy>(child, hierarchy);
+    CHECK(f.GetPointer<Hierarchy>(child)->LocalRotation == FPQuaternion::Identity());
+    RunFrames(sim, 1);
+    CHECK(f.GetPointer<Transform3D>(child)->Position == FPVector3(FP::FromInt(10), FP::FromInt(2), FP{}));
 }

@@ -150,26 +150,6 @@ class AISpawnerSystem : public SystemMainThread {
     void Update(Frame* f) override { (void)f; }
 };
 
-// Quantum.ActorCombatActivitySystem (original base: Quantum.SystemMainThreadFilter<Filter>)
-class ActorCombatActivitySystem : public SystemMainThread {
-  public:
-    // TODO(0x7cb1a88, Quantum.ActorCombatActivitySystem.Killable_OnRevive): Killable_OnRevive(f, entity, position, rotation); not reimplemented yet.
-    // TODO(0x7cb1b20, Quantum.ActorCombatActivitySystem.Pushable_OnPushed): Pushable_OnPushed(f, pushData, onPushedData); not reimplemented yet.
-    // TODO(0x7cb1c58, Quantum.ActorCombatActivitySystem.Update): Update(f, filter); not reimplemented yet.
-    // TODO(0x7cb1d08, Quantum.ActorCombatActivitySystem.Damageable_HitReceived): Damageable_HitReceived(f, entity, hitData, hitResult); not reimplemented yet.
-    // TODO(0x7cb1dd8, Quantum.ActorCombatActivitySystem..ctor): .ctor(); not reimplemented yet.
-    void Update(Frame* f) override { (void)f; }
-};
-
-// Quantum.ActorInitialisedSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
-class ActorInitialisedSystem : public SystemMainThread {
-  public:
-    // TODO(0x7cb1e20, Quantum.ActorInitialisedSystem.get_Without): get_Without(); not reimplemented yet.
-    // TODO(0x7cb1ea8, Quantum.ActorInitialisedSystem.Update): Update(f, filter); not reimplemented yet.
-    // TODO(0x7cb1f20, Quantum.ActorInitialisedSystem..ctor): .ctor(); not reimplemented yet.
-    void Update(Frame* f) override { (void)f; }
-};
-
 // Quantum.ActorInputConverterSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
 class ActorInputConverterSystem : public SystemMainThread {
   public:
@@ -185,13 +165,6 @@ class ActorInputUpdateSystem : public SystemMainThread {
     // TODO(0x7cb263c, Quantum.ActorInputUpdateSystem.HandlePlayerCommands): HandlePlayerCommands(frame, entity); not reimplemented yet.
     // TODO(0x7cb27c4, Quantum.ActorInputUpdateSystem..ctor): .ctor(); not reimplemented yet.
     void Update(Frame* f) override { (void)f; }
-};
-
-// Quantum.ActorKillsHistorySystem (original base: Quantum.SystemSignalsOnly)
-class ActorKillsHistorySystem : public SystemSignalsOnly {
-  public:
-    // TODO(0x7bb0f9c, Quantum.ActorKillsHistorySystem.Killable_OnKill): Killable_OnKill(frame, entity, killedBy); not reimplemented yet.
-    // TODO(0x7bb1120, Quantum.ActorKillsHistorySystem..ctor): .ctor(); not reimplemented yet.
 };
 
 // Quantum.ActorManagerRespawnTesterSystem (original base: Quantum.SystemSignalsOnly)
@@ -420,13 +393,6 @@ class ArenaCannonSystem : public SystemMainThread {
     // TODO(0x7bd7acc, Quantum.ArenaCannonSystem.Update): Update(f, filter); not reimplemented yet.
     // TODO(0x7bd7cc8, Quantum.ArenaCannonSystem..ctor): .ctor(); not reimplemented yet.
     void Update(Frame* f) override { (void)f; }
-};
-
-// Quantum.AutoDestroyOnMapChangedSystem (original base: Quantum.SystemSignalsOnly)
-class AutoDestroyOnMapChangedSystem : public SystemSignalsOnly {
-  public:
-    // TODO(0x7be1b40, Quantum.AutoDestroyOnMapChangedSystem.Quantum.ISignalOnMapChanged.OnMapChanged): Quantum.ISignalOnMapChanged.OnMapChanged(f, previousMap); not reimplemented yet.
-    // TODO(0x7be1c50, Quantum.AutoDestroyOnMapChangedSystem..ctor): .ctor(); not reimplemented yet.
 };
 
 // Quantum.AutoJumperActorSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
@@ -898,13 +864,6 @@ class EntityDropperSpawnSystem : public SystemSignalsOnly {
     // TODO(0x7bc0cd0, Quantum.EntityDropperSpawnSystem..ctor): .ctor(); not reimplemented yet.
 };
 
-// Quantum.EntityGroupSystem (original base: Quantum.SystemSignalsOnly)
-class EntityGroupSystem : public SystemSignalsOnly {
-  public:
-    // TODO(0x7bc0cd8, Quantum.EntityGroupSystem.OnAdded): OnAdded(f, entity, entityGroup); not reimplemented yet.
-    // TODO(0x7bc0dfc, Quantum.EntityGroupSystem..ctor): .ctor(); not reimplemented yet.
-};
-
 // Quantum.FireDamageSystem (original base: Quantum.SystemSignalsOnly)
 class FireDamageSystem : public SystemSignalsOnly {
   public:
@@ -1077,15 +1036,6 @@ class HelipackActorSystem : public SystemMainThread {
     // TODO(0x7cb63d4, Quantum.HelipackActorSystem.OnAdded): OnAdded(f, entity, component); not reimplemented yet.
     // TODO(0x7cb6554, Quantum.HelipackActorSystem.Update): Update(f, filter); not reimplemented yet.
     // TODO(0x7cb6964, Quantum.HelipackActorSystem..ctor): .ctor(); not reimplemented yet.
-    void Update(Frame* f) override { (void)f; }
-};
-
-// Quantum.HierarchySystem (original base: Quantum.SystemMainThreadFilter<Filter>)
-class HierarchySystem : public SystemMainThread {
-  public:
-    // TODO(0x7be35b4, Quantum.HierarchySystem.OnAdded): OnAdded(f, entity, component); not reimplemented yet.
-    // TODO(0x7be3648, Quantum.HierarchySystem.Update): Update(f, filter); not reimplemented yet.
-    // TODO(0x7be3658, Quantum.HierarchySystem..ctor): .ctor(); not reimplemented yet.
     void Update(Frame* f) override { (void)f; }
 };
 

@@ -39,4 +39,11 @@ bool Team::TryGetPlayerTeamLeader(Frame* f, std::int32_t teamId, EntityRef& lead
     return false;
 }
 
+bool Team::TryGetTeamID(Frame* f, EntityRef teamMember, std::int32_t& teamId) {
+    Team* team = nullptr;
+    const bool found = f->TryGetPointer<Team>(teamMember, team);
+    teamId = found ? team->TeamID : -1;
+    return found;
+}
+
 } // namespace Quantum

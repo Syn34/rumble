@@ -46,4 +46,5 @@ target_sources(rr_game PRIVATE
     quantum_code/systems/combat_libs.cpp
     quantum_code/systems/health_systems.cpp
     quantum_code/systems/killable_systems.cpp
+    quantum_code/systems/transform_systems.cpp
 )
