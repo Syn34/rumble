@@ -13,6 +13,13 @@ rr_add_shader_programs(rr_render
     PROGRAMS
         unlit_color
         lit_textured
+        # Scene renderer variants (src/engine/scene): <name>=<vert>:<frag>:<defines>
+        scene_unlit=scene:scene
+        scene_lit=scene:scene:RR_LIT
+        scene_lit_normal=scene:scene:RR_LIT,RR_NORMAL_MAP
+        scene_unlit_skinned=scene:scene:RR_SKINNED
+        scene_lit_skinned=scene:scene:RR_LIT,RR_SKINNED
+        scene_lit_normal_skinned=scene:scene:RR_LIT,RR_NORMAL_MAP,RR_SKINNED
 )
 
 if(RR_ENABLE_OPENGL)

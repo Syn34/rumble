@@ -14,10 +14,13 @@
 #include "photon_deterministic/system_allocator.h"
 #include "rr/platform/platform.h"
 #include "rr/render/render_device.h"
+#include "rr/scene/demo_scene.h"
+#include "rr/scene/scene_renderer.h"
 
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
 
 namespace {
@@ -31,6 +34,7 @@ struct Options {
     std::string screenshotPath;  // capture the last frame to this PPM file
     bool saveRenderer = false;   // remember --renderer in settings.ini
     bool listRenderers = false;
+    bool sceneDemo = false;      // draw the synthetic scene through the engine's scene renderer
 };
 
 void PrintUsage() {
@@ -41,7 +45,8 @@ void PrintUsage() {
         "  --list-renderers            print the renderers in this build and exit\n"
         "  --frames <n>                exit after n frames\n"
         "  --screenshot <file.ppm>     save the final frame (use with --frames)\n"
-        "  --headless                  no window or rendering\n");
+        "  --headless                  no window or rendering\n"
+        "  --scene-demo                draw the synthetic scene-renderer demo instead of the placeholder\n");
 }
 
 bool ParseOptions(int argc, char** argv, Options& options) {
@@ -67,6 +72,8 @@ bool ParseOptions(int argc, char** argv, Options& options) {
             options.headless = true;
         } else if (arg == "--save-renderer") {
             options.saveRenderer = true;
+        } else if (arg == "--scene-demo") {
+            options.sceneDemo = true;
         } else if (arg == "--list-renderers") {
             options.listRenderers = true;
         } else {
@@ -165,8 +172,17 @@ int main(int argc, char** argv) {
     std::printf("renderer: %s - %s\n", rr::platform::ToString(device->Api()),
                 device->DeviceName().c_str());
 
+    // The engine's scene renderer on a scene built in code (the game's own scenes
+    // come later; tools/sceneview shows them).
+    std::unique_ptr<rr::scene::DemoScene> demo;
+    std::unique_ptr<rr::scene::SceneRenderer> sceneRenderer;
+    if (options.sceneDemo) {
+        demo = rr::scene::BuildDemoScene();
+        sceneRenderer = std::make_unique<rr::scene::SceneRenderer>(*device);
+    }
+
     rr::app::TestScene scene;
-    if (!scene.Create(*device)) {
+    if (!options.sceneDemo && !scene.Create(*device)) {
         std::fprintf(stderr, "failed to create the placeholder scene\n");
         return 1;
     }
@@ -191,7 +207,18 @@ int main(int argc, char** argv) {
         // Automated runs animate by frame number so output is reproducible.
         const float time = options.frames ? static_cast<float>(frame) * 0.05f
                                           : static_cast<float>(now);
-        scene.Draw(*device, time);
+        if (demo) {
+            demo->Animate(time);
+            rr::render::ClearValues clear;
+            clear.color[0] = 0.10f;
+            clear.color[1] = 0.11f;
+            clear.color[2] = 0.13f;
+            device->BeginRenderPass(clear);
+            sceneRenderer->Draw(demo->scene, demo->resources, demo->camera);
+            device->EndRenderPass();
+        } else {
+            scene.Draw(*device, time);
+        }
         const bool lastFrame = options.frames && frame + 1 == options.frames;
         if (lastFrame && !options.screenshotPath.empty()) device->RequestCapture();
         device->EndFrame();

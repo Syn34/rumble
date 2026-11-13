@@ -43,3 +43,7 @@ target_link_libraries(rr_tests PRIVATE rr::content)
 target_sources(rr_tests PRIVATE test_quantum_code_prototypes.cpp)
 # Engine asset readers: meshes, textures and texture decoders.
 target_sources(rr_tests PRIVATE test_mesh_reader.cpp test_texture_decoders.cpp)
+
+# Engine scene layer (maths, conversion, instancing, materials, draw lists).
+target_sources(rr_tests PRIVATE test_scene.cpp)
+target_link_libraries(rr_tests PRIVATE rr::scene)

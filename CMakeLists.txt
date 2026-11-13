@@ -39,3 +39,6 @@ if(RR_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+# Engine-side scenes and the scene renderer.
+add_subdirectory(src/engine/scene)

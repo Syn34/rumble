@@ -48,10 +48,42 @@ struct ShaderProperty {
     int type = 0; // 0 colour, 1 vector, 2 float, 3 range, 4 texture, 5 int
 };
 
+// A fixed-function render state value: either a constant or the name of a
+// material property that supplies it (e.g. "_SrcBlend").
+struct ShaderStateValue {
+    float value = 0.0f;
+    std::string property; // empty: `value` is fixed
+
+    // The value with `material`'s property applied, if it sets it.
+    float Resolve(const MaterialAsset& material) const;
+};
+
+// Render state of one pass (the engine's numbering: blend factors 0 zero,
+// 1 one, 5 src alpha, 10 one minus src alpha...; culling 0 off, 1 front,
+// 2 back; zTest 4 less-equal, 8 always...).
+struct ShaderPassState {
+    std::string name; // e.g. "Universal Forward"
+    std::map<std::string, std::string> tags; // e.g. LightMode
+    ShaderStateValue srcBlend{1.0f, {}};
+    ShaderStateValue destBlend{0.0f, {}};
+    ShaderStateValue zWrite{1.0f, {}};
+    ShaderStateValue zTest{4.0f, {}};
+    ShaderStateValue culling{2.0f, {}};
+};
+
 struct ShaderInfo {
     std::string name; // e.g. "Universal Render Pipeline/Lit"
     std::vector<ShaderProperty> properties;
     int subShaderCount = 0;
+    // Tags of the first sub-shader (Queue, RenderType, UniversalMaterialType...),
+    // with upper-cased keys as the engine stores some ("QUEUE") normalised to the
+    // usual spelling ("Queue").
+    std::map<std::string, std::string> tags;
+    std::vector<ShaderPassState> passes; // of the first sub-shader
+    std::vector<std::string> keywordNames;
+
+    const ShaderPassState* FindPass(const std::string& name) const;
+    std::string Tag(const std::string& key) const;
 };
 
 ShaderInfo ReadShaderInfo(const Value& shader);

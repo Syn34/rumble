@@ -86,8 +86,10 @@ AttributeFormat ToGl(VertexFormat format) {
     return {4, GL_FLOAT, GL_FALSE};
 }
 
-// The draw-constant block is always bound at this uniform buffer slot.
+// The draw-constant block is always bound at this uniform buffer slot, the
+// larger DrawUniforms block at the next one.
 constexpr GLuint kDrawConstantsBinding = 0;
+constexpr GLuint kDrawUniformsBinding = 1;
 
 class OpenGLDevice final : public RenderDevice {
 public:
@@ -101,6 +103,7 @@ public:
         for (auto& [id, b] : buffers_) gl_.glDeleteBuffers(1, &b.name);
         for (auto& [id, p] : pipelines_) gl_.glDeleteProgram(p.program);
         if (constantsBuffer_) gl_.glDeleteBuffers(1, &constantsBuffer_);
+        if (uniformsBuffer_) gl_.glDeleteBuffers(1, &uniformsBuffer_);
         if (vertexArray_) gl_.glDeleteVertexArrays(1, &vertexArray_);
     }
 
@@ -122,6 +125,11 @@ public:
         gl_.glBindBuffer(GL_UNIFORM_BUFFER, constantsBuffer_);
         gl_.glBufferData(GL_UNIFORM_BUFFER, kMaxDrawConstantsSize, nullptr, GL_DYNAMIC_DRAW);
         gl_.glBindBufferBase(GL_UNIFORM_BUFFER, kDrawConstantsBinding, constantsBuffer_);
+
+        gl_.glGenBuffers(1, &uniformsBuffer_);
+        gl_.glBindBuffer(GL_UNIFORM_BUFFER, uniformsBuffer_);
+        gl_.glBufferData(GL_UNIFORM_BUFFER, kMaxDrawUniformsSize, nullptr, GL_DYNAMIC_DRAW);
+        gl_.glBindBufferBase(GL_UNIFORM_BUFFER, kDrawUniformsBinding, uniformsBuffer_);
 
         gl_.glFrontFace(GL_CCW);
 
@@ -206,6 +214,10 @@ public:
         const GLuint block = gl_.glGetUniformBlockIndex(pipeline.program, "DrawConstants");
         if (block != GL_INVALID_INDEX) {
             gl_.glUniformBlockBinding(pipeline.program, block, kDrawConstantsBinding);
+        }
+        const GLuint uniforms = gl_.glGetUniformBlockIndex(pipeline.program, "DrawUniforms");
+        if (uniforms != GL_INVALID_INDEX) {
+            gl_.glUniformBlockBinding(pipeline.program, uniforms, kDrawUniformsBinding);
         }
         // Texture slot N is texture unit N (uTextureN in the shader).
         gl_.glUseProgram(pipeline.program);
@@ -349,11 +361,20 @@ public:
             gl_.glCullFace(d.cull == CullMode::Back ? GL_BACK : GL_FRONT);
         }
 
-        if (d.blend == BlendMode::AlphaBlend) {
+        switch (d.blend) {
+        case BlendMode::Opaque: gl_.glDisable(GL_BLEND); break;
+        case BlendMode::AlphaBlend:
             gl_.glEnable(GL_BLEND);
             gl_.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        } else {
-            gl_.glDisable(GL_BLEND);
+            break;
+        case BlendMode::Additive:
+            gl_.glEnable(GL_BLEND);
+            gl_.glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            break;
+        case BlendMode::Premultiplied:
+            gl_.glEnable(GL_BLEND);
+            gl_.glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+            break;
         }
         attributesDirty_ = true;
     }
@@ -373,6 +394,13 @@ public:
     void SetDrawConstants(const void* data, std::size_t size) override {
         if (size > kMaxDrawConstantsSize) size = kMaxDrawConstantsSize;
         gl_.glBindBuffer(GL_UNIFORM_BUFFER, constantsBuffer_);
+        gl_.glBufferSubData(GL_UNIFORM_BUFFER, 0, static_cast<GLsizeiptr>(size), data);
+    }
+
+    void SetDrawUniforms(const void* data, std::size_t size) override {
+        if (size > kMaxDrawUniformsSize) size = kMaxDrawUniformsSize;
+        // The driver keeps the old contents for draws already issued.
+        gl_.glBindBuffer(GL_UNIFORM_BUFFER, uniformsBuffer_);
         gl_.glBufferSubData(GL_UNIFORM_BUFFER, 0, static_cast<GLsizeiptr>(size), data);
     }
 
@@ -532,6 +560,7 @@ private:
 
     GLuint vertexArray_ = 0;
     GLuint constantsBuffer_ = 0;
+    GLuint uniformsBuffer_ = 0;
 
     int width_ = 0;
     int height_ = 0;

@@ -113,7 +113,8 @@ that Vulkan, then OpenGL. If the chosen renderer can't start (old driver, missin
 runtime) the other one is tried automatically.
 
 Other options: `--frames N` (quit after N frames), `--screenshot out.ppm` (save the last
-frame), `--headless` (no window). Set `RR_VULKAN_VALIDATION=1` to enable the Vulkan
+frame), `--headless` (no window), `--scene-demo` (draw a synthetic scene through the engine's
+scene renderer). Set `RR_VULKAN_VALIDATION=1` to enable the Vulkan
 validation layer if it is installed.
 
 ## Layout
@@ -122,6 +123,7 @@ validation layer if it is installed.
 |---|---|
 | `src/platform/` | OS abstraction (window, input, time, files): headless and SDL2 desktop backends. |
 | `src/render/` | Graphics-API-neutral renderer interface with OpenGL and Vulkan backends; shaders. |
+| `src/engine/` | Engine layer on top: readers for the game's content files (`assets/`) and scenes with the scene renderer (`scene/`). |
 | `src/game/` | The reimplemented game, grouped by the original assembly it replaces. |
 | `src/app/` | The PC executable's entry point and main loop. |
 | `tests/` | Unit tests (no external dependencies). |

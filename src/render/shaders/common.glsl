@@ -9,13 +9,18 @@
 //   * textures are declared with RR_TEXTURE(slot, uTexture<slot>), slot 0..3: a
 //     combined image sampler at set 0 / binding <slot> on Vulkan, texture unit
 //     <slot> on OpenGL (the backend finds the uniform by its uTexture<slot> name)
+//   * a larger per-draw block (at most 16 KiB, std140) is declared as
+//     `RR_DRAW_UNIFORMS DrawUniforms { ... } name;`: a dynamic uniform buffer at
+//     set 0 / binding 4 on Vulkan, uniform block binding 1 on OpenGL
 
 #ifdef RR_VULKAN
 #define RR_DRAW_CONSTANTS layout(push_constant, std140) uniform
 #define RR_TEXTURE(slot, name) layout(set = 0, binding = slot) uniform sampler2D name
+#define RR_DRAW_UNIFORMS layout(set = 0, binding = 4, std140) uniform
 #else
 #define RR_DRAW_CONSTANTS layout(std140) uniform
 #define RR_TEXTURE(slot, name) uniform sampler2D name
+#define RR_DRAW_UNIFORMS layout(std140) uniform
 #endif
 
 vec4 rr_ToClip(vec4 p) {

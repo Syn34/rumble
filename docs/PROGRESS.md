@@ -50,14 +50,14 @@ local no-ops with documented behaviour.
 | Renderer interface + OpenGL 4.1 backend | done (first version) |
 | Renderer interface + Vulkan 1.0 backend | done (first version) |
 | Shader pipeline (one GLSL source → GL text + SPIR-V, embedded) | done |
-| Textures, materials, render targets, text | not started |
-| Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); prefab hierarchies (`rr/assets/prefab.h`) with entity prototype components from prefabs and baked map entities; scenes, textures, meshes not started |
 | Textures (2D, mips, samplers, ASTC upload where supported) and a lit textured shader, both backends | done (first version) |
-| Materials (shader variants), render targets, text | not started |
-| Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); meshes, textures, materials, shader identification: readers done (`src/engine/assets`); prefabs/scenes not started |
+| Materials: the game's shaders mapped onto our scene programs (unlit / lit / lit + normal map; opaque, alpha-tested, alpha-blended, additive, premultiplied; cull/depth state from the shader's forward pass), both backends | done (first version) |
+| Scenes: prefab/scene hierarchies instantiated into engine scenes (mesh + skinned renderers, LOD groups, static batching data), GPU skinning, frustum culling, queue/depth sorting, orbit/fly camera (`src/engine/scene`, `tools/sceneview`) | done (first version) |
+| Render targets, shadows, fog, post effects, particles, text | not started |
+| Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); meshes, textures, materials, shader identification: readers done (`src/engine/assets`); prefab and scene hierarchies instantiate into engine scenes (`src/engine/scene`) |
 | Texture decoders | ASTC LDR 4x4..12x12 (linear and sRGB; the only compressed format the game uses) and the uncompressed formats, to RGBA8 |
 | Audio | not started |
-| Physics / animation | not started |
+| Physics / animation | not started (skinning follows node transforms; no animation clips or blend shapes yet) |
 
 ## Done
 
@@ -229,6 +229,32 @@ local no-ops with documented behaviour.
   0.06% edge-pixel difference)
 - `tools/meshview`: viewer (orbit camera, either renderer) for a mesh with its material's main
   texture, plus `--list`, `--check-meshes`, `--check-textures`, `--astc-selftest`, `--demo`
+- Engine scene layer (`src/engine/scene`): scene graph of nodes and render instances; prefab and
+  scene hierarchies instantiate into it (MeshFilter + MeshRenderer, SkinnedMeshRenderer with bones
+  bound to nodes, LODGroup, static-batch submesh ranges and roots; particles/lines/trails/sprites
+  counted, not drawn). One handedness conversion for everything: X mirrored for positions,
+  rotations (x, -y, -z, w), matrices (S M S), bind poses, bounds and LOD reference points; triangle
+  winding reversed; tangent sign flipped. Material mapping: the shader's name (known families),
+  sub-shader tags (Queue, UniversalMaterialType, ShaderGraphTargetId) and forward-pass state
+  (blend factors, ZWrite, Cull, with the material's overriding properties) pick one of six
+  `scene_*` programs (unlit / lit / lit + normal map, each also skinned) and the pipeline state;
+  without the shader, the material's keywords, queue and surface properties decide. Albedo,
+  normal map, tiling, base colour (linearised), cut-off and normal strength are passed on. Scene
+  renderer: LOD selection by screen-relative height, frustum culling, render-queue order with
+  opaque front-to-back and transparent back-to-front, GPU skinning (bone world * bind pose, up to
+  256 bones) through a new per-draw uniform block (`SetDrawUniforms`: dynamic uniform buffer on
+  Vulkan, UBO on OpenGL), additive/premultiplied blending, camera controller and render loop.
+  Shader variants come from one source (`name=vert:frag:DEFINES` in `rr_add_shader_programs`).
+  Synthetic demo scene (lit, normal-mapped, unlit vertex-coloured, alpha-tested, transparent,
+  additive, two animated skinned meshes, LOD group, culled objects): `sceneview --demo` and
+  `RangerRumble --scene-demo`, 1 differing pixel of 921,600 between backends.
+  On the 69 staged bundles (`sceneview --stats`, numbers only): 584 root objects, 12,923 nodes,
+  518 mesh + 151 skinned renderers, 50 LOD groups, 0 missing bones; 225 meshes, 126 materials and
+  109 textures resolved (0 failures); 307 material slots and 148 meshes point into bundles not
+  staged yet (131 of those meshes are built-in primitives); 4 materials found their shader (all
+  known families), 122 were mapped without it. Drawn with both backends from a framing camera:
+  467 draw calls (127 skinned), 577k triangles, 9 pipelines, no errors (Vulkan validation clean);
+  116 skinned instances skinned on the CPU land inside their stored bounds (110 within 5%)
 
 ## Known issues
 
@@ -241,14 +267,21 @@ local no-ops with documented behaviour.
   software decoding there); the OpenGL native path is tested on llvmpipe.
 - Mesh bounds (`m_LocalAABB`) of some skinned meshes are larger than their vertices; the
   submesh bounds match. Not investigated further.
-- The game's meshes are left-handed with clockwise front faces; meshview mirrors X and reverses
-  each triangle. The real scene renderer needs the same conversion (and for transforms).
+- Scene renderer: most of the staged materials point at shader objects in bundles that aren't
+  staged yet, so they're mapped from their own keywords/queue/properties (see the numbers below);
+  built-in primitive meshes live in `unity default resources`, which has no type descriptions and
+  isn't read yet; blend shapes, particles, lines, trails, sprites, emission, fog and shadows aren't
+  drawn; lighting is one directional light plus ambient, evaluated in object space (approximate
+  under non-uniform scale). A few NPC rigs skin outside their stored bounds at their prefab pose
+  (6 of 116 instances; heroes match exactly) - probably posed rigs, not checked further.
 
 ## Next
 
 1. quantum.core: memory/collections (in progress), collision geometry, frame/ECS
 2. Concrete Native::Allocator/Utility for the PC platform; hook DeterministicSession to quantum.core's game
-3. Renderer: materials (map the game's shaders to PC shader programs), skinning, render targets
+3. Renderer: level scenes once their bundles are staged, the shader bundle (exact material
+   mapping), built-in primitive meshes, animation clips and blend shapes, particles, shadows/fog,
+   render targets
 4. Asset reader for the game's content files (from the user's own copy)
 5. Gameplay systems from quantum.code.dll: damage pipeline and respawning next, then movement,
    weapons and projectiles (need the 3D scene from quantum.core)

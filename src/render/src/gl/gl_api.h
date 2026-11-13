@@ -48,6 +48,7 @@ inline constexpr GLenum GL_BACK = 0x0405;
 inline constexpr GLenum GL_FRONT = 0x0404;
 inline constexpr GLenum GL_CCW = 0x0901;
 inline constexpr GLenum GL_LEQUAL = 0x0203;
+inline constexpr GLenum GL_ONE = 1;
 inline constexpr GLenum GL_SRC_ALPHA = 0x0302;
 inline constexpr GLenum GL_ONE_MINUS_SRC_ALPHA = 0x0303;
 inline constexpr GLenum GL_ARRAY_BUFFER = 0x8892;

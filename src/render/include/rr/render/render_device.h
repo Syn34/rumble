@@ -12,6 +12,9 @@
 //   * textures: rows are uploaded in memory order and texture coordinate (0, 0)
 //     addresses the first texel in memory on both APIs; shaders declare up to
 //     kMaxTextureSlots textures with RR_TEXTURE(slot, uTexture<slot>)
+//   * larger per-draw data (skinning matrices) goes in one uniform block of at most
+//     kMaxDrawUniformsSize bytes, std140, declared as
+//     `RR_DRAW_UNIFORMS DrawUniforms { ... } name;` and set with SetDrawUniforms
 #pragma once
 
 #include "rr/platform/platform.h"
@@ -30,6 +33,9 @@ using platform::GraphicsApi;
 
 inline constexpr std::size_t kMaxDrawConstantsSize = 128;
 inline constexpr std::uint32_t kMaxTextureSlots = 4;
+// Size of the per-draw uniform block (the minimum uniform block size every
+// OpenGL 4.1 and Vulkan 1.0 implementation supports).
+inline constexpr std::size_t kMaxDrawUniformsSize = 16384;
 
 struct BufferHandle {
     std::uint32_t id = 0;
@@ -69,7 +75,12 @@ struct VertexLayout {
 
 enum class PrimitiveTopology { TriangleList, LineList };
 enum class CullMode { None, Back, Front };
-enum class BlendMode { Opaque, AlphaBlend };
+enum class BlendMode {
+    Opaque,
+    AlphaBlend,    // src * a + dst * (1 - a)
+    Additive,      // src * a + dst
+    Premultiplied, // src + dst * (1 - a)
+};
 
 struct PipelineDesc {
     std::string shaderProgram; // name of a program in src/render/shaders
@@ -179,6 +190,11 @@ public:
     virtual void BindVertexBuffer(BufferHandle buffer) = 0;
     virtual void BindIndexBuffer(BufferHandle buffer, IndexType type) = 0;
     virtual void SetDrawConstants(const void* data, std::size_t size) = 0;
+    // Sets the DrawUniforms block (at most kMaxDrawUniformsSize bytes) for the
+    // following draws. Each call may supply new contents; earlier draws keep the
+    // contents they were recorded with. Shaders that don't declare the block
+    // ignore it.
+    virtual void SetDrawUniforms(const void* data, std::size_t size) = 0;
     // Binds a texture to slot 0..kMaxTextureSlots-1 for the following draws. Slots
     // without a texture sample opaque white.
     virtual void BindTexture(std::uint32_t slot, TextureHandle texture, const SamplerDesc& sampler) = 0;
