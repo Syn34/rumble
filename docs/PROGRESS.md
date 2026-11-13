@@ -68,6 +68,13 @@ local no-ops with documented behaviour.
   prediction area), FrameMetaData, FrameSerializer with pointer keys, FrameChecksumerBitStream,
   CRC64. Pending: physics/navigation/asset/prototype parts of the frame, FilterStruct/ComponentGetter,
   DispatcherBase subscriptions
+- quantum.core narrow phase: 2D checks for every primitive pair (circle, box, polygon, edge,
+  incl. PolygonPolygon clipping, PolygonEdge, oriented BoxBox), 3D sphere-sphere/box/triangle,
+  Gjk2D/Gjk3D (distance, simplex solvers, GJK ray-cast shape casts, conservative-advancement time
+  of impact with separation functions), Entry2D/3D support mapping with CCD motion extrapolation,
+  GJKSettings/CCDSettings, TriangleCCW, line casts against bodies (LinecastBody). Pending: 3D
+  box-box and box-triangle (with NarrowData3D's box edge/plane caches); the scene (entries, Tls)
+  is represented by small stand-in views until Scene2D/Scene3D exist
 - `Photon.Deterministic.RNGSession` (13/13; PCG32 seeded by SplitMix64), `BitStream` (107/107,
   incl. generic `SerializeArrayLength`), `ByteUtils` (20/20; the gzip writer emits stored deflate
   blocks, so compressed bytes differ from zlib's)
