@@ -21,6 +21,7 @@ struct PhysicsCollider3D;
 struct PhysicsBody3D;
 struct PhysicsJoints3D;
 struct PhysicsCallbacks3D;
+struct PhysicsSceneSettings;
 } // namespace Quantum
 
 namespace Quantum::Physics3D {
@@ -282,15 +283,19 @@ struct Entry3D {
     // 0x7d7ac64 - narrow-phase pose from the transform; dynamic bodies (not compound parts)
     // also refresh their world-space body settings.
     static void InitNarrowData(Entry3D* entry, const FPVector3* pos, const FPQuaternion* rot);
-    // TODO(0x7d7a3dc, Quantum.Physics3D.Entry3D.CalculateWorldBodySettings): rotated centre
-    // of mass and world inverse inertia tensor (optionally for an explicit rotation).
+    // 0x7d7a3dc - rotated centre of mass and world inverse inertia tensor, from the narrow
+    // phase's rotated axes or an explicit rotation.
     static void CalculateWorldBodySettings(Entry3D* entry, std::optional<FPQuaternion> rotation);
-    // TODO(0x7d7a724, Quantum.Physics3D.Entry3D.IntegrateVelocity): gravity, forces, drag and
-    // torque into the body's velocities.
-    // TODO(0x7d7aa88, Quantum.Physics3D.Entry3D.ApplyMinVelocityIntegration)
-    // TODO(0x7d7ab5c, Quantum.Physics3D.Entry3D.ComputeEntryAabb)
-    // TODO(0x7d7adc8, Quantum.Physics3D.Entry3D.InitBroadAabb): bounds swept over the step
-    // for CCD entries.
+    // 0x7d7a724 - position and rotation over dt, then linear/angular drag.
+    static void IntegrateVelocity(Entry3D* entry, FP dt, const PhysicsSceneSettings& settings,
+                                  bool applyMinVelThreshold, bool integrateAngVel);
+    // 0x7d7aa88
+    static void ApplyMinVelocityIntegration(Entry3D* entry, const PhysicsSceneSettings& settings);
+    // 0x7d7ab5c
+    static void ComputeEntryAabb(const Shape3D* shape, const NarrowData3D* narrow, IntAABB* aabb);
+    // 0x7d7adc8
+    static void InitBroadAabb(Entry3D* entry, const FPVector3* pos, const FPQuaternion* rot,
+                              std::optional<FP> deltaTime);
 };
 static_assert(sizeof(Entry3D) == 0x8d0);
 static_assert(offsetof(Entry3D, Narrow) == 0xb0 && offsetof(Entry3D, SolverImpulsesAdr) == 0x8c8);

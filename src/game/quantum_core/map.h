@@ -12,6 +12,9 @@
 #include "quantum_core/asset_object.h"
 #include "quantum_core/builtin_assets.h"
 #include "quantum_core/navigation/navmesh.h"
+#include "quantum_core/shape3d.h"
+#include "photon_deterministic/fp_quaternion.h"
+#include "photon_deterministic/fp_vector3.h"
 #include "quantum_core/triangle_ccw.h"
 
 #include <cstdint>
@@ -22,6 +25,37 @@
 #include <vector>
 
 namespace Quantum {
+
+// Quantum.StaticColliderMutableMode
+enum class StaticColliderMutableMode : std::int32_t {
+    Immutable = 0,
+    ToggleableStartOn = 1,
+    ToggleableStartOff = 2,
+};
+
+// Quantum.StaticColliderData: what a static collider reports in hits and callbacks.
+struct StaticColliderData {
+    std::string Name;
+    std::string Tag;
+    std::int32_t Layer = 0;
+    AssetRef Asset;
+    bool IsTrigger = false;
+    std::int32_t ColliderIndex = 0;
+    StaticColliderMutableMode MutableMode = StaticColliderMutableMode::Immutable;
+};
+
+// Quantum.MapStaticCollider3D: a baked static collider of the map (sphere, box or mesh).
+struct MapStaticCollider3D {
+    Photon::Deterministic::FPQuaternion Rotation = Photon::Deterministic::FPQuaternion::Identity();
+    FPVector3 Position;
+    AssetRef PhysicsMaterial; // AssetRefPhysicsMaterial
+    Shape3DType ShapeType = Shape3DType::None;
+    FP SphereRadius;
+    FPVector3 BoxExtents;
+    bool SmoothSphereMeshCollisions = false;
+    StaticColliderData StaticData;
+    StaticColliderMutableMode MutableMode = StaticColliderMutableMode::Immutable;
+};
 
 class Map final : public AssetObject, public IBuiltInAssetObject {
   public:
@@ -48,8 +82,9 @@ class Map final : public AssetObject, public IBuiltInAssetObject {
     std::int32_t GridNodeSize = 0;
     std::vector<AssetRefNavMesh> NavMeshLinks;
     std::vector<std::string> Regions;
-    // Not reproduced yet: StaticColliders2D (MapStaticCollider2D[]) and StaticColliders3D
-    // (MapStaticCollider3D[]); they belong to the physics system.
+    // Not reproduced yet: StaticColliders2D (MapStaticCollider2D[]).
+    // The map's static 3D colliders; the 3D scene turns them into its static entries.
+    std::vector<MapStaticCollider3D> StaticColliders3D;
     // The map's baked entities, created together by FrameBase::Create(prototypes, map);
     // they refer to each other by index (MapEntityId).
     std::vector<std::shared_ptr<EntityPrototypeContainer>> MapEntities;

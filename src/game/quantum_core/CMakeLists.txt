@@ -19,6 +19,8 @@ add_library(rr_quantum_core
     physics2d/gjk2d.cpp
     physics3d/collision_manifold3d.cpp
     physics3d/hit3d.cpp
+    physics3d/scene3d.cpp
+    physics3d/physics_engine3d.cpp
     physics3d/narrow_checks.cpp
     physics3d/narrow_checks_box.cpp
     physics_components.cpp
