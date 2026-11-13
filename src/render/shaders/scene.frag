@@ -34,8 +34,8 @@ void main() {
 #ifdef RR_NORMAL_MAP
     // Accepts both RGB-encoded and AG-encoded (x in alpha) normal maps: one of
     // red or alpha is always 1 in those layouts.
-    vec4 packed = texture(uTexture1, vTexCoord);
-    vec2 xy = vec2(packed.r * packed.a, packed.g) * 2.0 - 1.0;
+    vec4 encoded = texture(uTexture1, vTexCoord);
+    vec2 xy = vec2(encoded.r * encoded.a, encoded.g) * 2.0 - 1.0;
     xy *= uDraw.params.y;
     vec3 ts = vec3(xy, sqrt(clamp(1.0 - dot(xy, xy), 0.0, 1.0)));
     vec3 t = vTangent.xyz - n * dot(n, vTangent.xyz);

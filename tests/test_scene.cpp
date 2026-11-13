@@ -9,6 +9,7 @@
 #include "rr/scene/resources.h"
 #include "rr/scene/scene.h"
 
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <memory>
@@ -471,4 +472,99 @@ TEST_CASE("material mapping: materials without their shader") {
     CHECK(ParseRenderQueue("Transparent-10") == 2990);
     CHECK(ParseRenderQueue("2100") == 2100);
     CHECK(ParseRenderQueue("bogus", 7) == 7);
+}
+
+// --- draw lists, LOD selection, skinning ------------------------------------------
+
+#include "rr/scene/demo_scene.h"
+#include "rr/scene/scene_renderer.h"
+
+TEST_CASE("draw list: culling, sorting and LOD selection on the demo scene") {
+    auto demo = BuildDemoScene();
+    const Mat4 projection = demo->camera.Projection(16.0f / 9.0f);
+    DrawListStats stats;
+    const auto items = BuildDrawList(demo->scene, demo->resources, demo->camera.view, projection, {}, &stats);
+    CHECK(stats.instances == demo->scene.Instances().size());
+    CHECK(stats.lodRejected == 1); // one of the two LOD levels
+    CHECK(stats.culled > 0);       // pillars behind the camera
+    CHECK(stats.visible + stats.culled + stats.lodRejected == stats.instances);
+    CHECK(stats.transparentItems == 3);
+    CHECK(items.size() == stats.opaqueItems + stats.transparentItems);
+
+    // Queue order; front to back within opaque queues, back to front within transparent ones.
+    for (std::size_t i = 1; i < items.size(); ++i) {
+        const DrawItem& a = items[i - 1];
+        const DrawItem& b = items[i];
+        CHECK(a.renderQueue <= b.renderQueue);
+        if (a.renderQueue == b.renderQueue) {
+            if (a.renderQueue > 2500) {
+                CHECK(a.depth >= b.depth);
+            } else {
+                CHECK(a.depth <= b.depth);
+            }
+        }
+    }
+    CHECK(items.back().transparent);
+
+    // Close up the detailed level is used, from far away the coarse one, and from
+    // very far away neither.
+    const LodGroup& group = demo->scene.LodGroups()[static_cast<std::size_t>(demo->lodGroup)];
+    const Vec3 center = demo->scene.Nodes()[static_cast<std::size_t>(group.node)].world.Translation();
+    const auto lodAt = [&](float distance) {
+        const Mat4 view = LookAt(center + Vec3{0, 0, distance}, center, {0, 1, 0});
+        return SelectLods(demo->scene, view, projection, {})[static_cast<std::size_t>(demo->lodGroup)];
+    };
+    CHECK(lodAt(3.0f) == 0);
+    CHECK(lodAt(30.0f) == 1);
+    CHECK(lodAt(300.0f) == -1);
+    DrawListOptions forced;
+    forced.forceLod = 0;
+    CHECK(SelectLods(demo->scene, demo->camera.view, projection, forced)[0] == 0);
+
+    // Disabling culling keeps every instance of the selected LODs.
+    DrawListOptions noCull;
+    noCull.frustumCull = false;
+    BuildDrawList(demo->scene, demo->resources, demo->camera.view, projection, noCull, &stats);
+    CHECK(stats.culled == 0);
+}
+
+TEST_CASE("skinning: bind pose reproduces the mesh, bent bones move vertices") {
+    auto demo = BuildDemoScene();
+    const auto& instances = demo->scene.Instances();
+    const auto it = std::find_if(instances.begin(), instances.end(),
+                                 [](const RenderInstance& i) { return i.kind == RendererKind::Skinned; });
+    CHECK(it != instances.end());
+    if (it == instances.end()) return;
+    const MeshData& mesh = demo->resources.Mesh(it->mesh);
+    CHECK(mesh.HasSkin() && mesh.bindPoses.size() == 3);
+
+    const auto skinnedPosition = [&](const std::vector<Mat4>& bones, std::size_t v) {
+        const MeshVertex& mv = mesh.vertices[v];
+        const SkinVertex& sv = mesh.skin[v];
+        Vec3 sum;
+        for (int k = 0; k < 4; ++k) {
+            const auto bone = static_cast<std::size_t>(sv.boneIndices[k]);
+            sum = sum + TransformPoint(bones[bone], {mv.position[0], mv.position[1], mv.position[2]}) * sv.boneWeights[k];
+        }
+        return sum;
+    };
+
+    demo->Animate(0.0f); // sin(0) = 0 for the first bone; force an exact bind pose
+    for (int b : demo->bendBones) demo->scene.Nodes()[static_cast<std::size_t>(b)].localRotation = {};
+    demo->scene.UpdateTransforms();
+    const Mat4& rendererWorld = demo->scene.Nodes()[static_cast<std::size_t>(it->node)].world;
+    auto bones = SceneRenderer::BoneMatrices(demo->scene, *it, mesh);
+    for (std::size_t v = 0; v < mesh.vertices.size(); v += 37) {
+        const MeshVertex& mv = mesh.vertices[v];
+        CHECK(Near(skinnedPosition(bones, v), TransformPoint(rendererWorld, {mv.position[0], mv.position[1], mv.position[2]}), 1e-3f));
+    }
+
+    // Bend: the top vertex moves sideways, the bottom one stays.
+    demo->Animate(1.2f);
+    bones = SceneRenderer::BoneMatrices(demo->scene, *it, mesh);
+    const std::size_t top = mesh.vertices.size() - 1;
+    const MeshVertex& tv = mesh.vertices[top];
+    CHECK(!Near(skinnedPosition(bones, top), TransformPoint(rendererWorld, {tv.position[0], tv.position[1], tv.position[2]}), 1e-2f));
+    CHECK(Near(skinnedPosition(bones, 0), TransformPoint(rendererWorld, {mesh.vertices[0].position[0], mesh.vertices[0].position[1],
+                                                                         mesh.vertices[0].position[2]}), 1e-3f));
 }

@@ -7,6 +7,9 @@ add_library(rr_scene
     src/scene.cpp
     src/prefab_instancer.cpp
     src/content_resolver.cpp
+    src/scene_renderer.cpp
+    src/demo_scene.cpp
+    src/camera_controller.cpp
 )
 add_library(rr::scene ALIAS rr_scene)
 target_include_directories(rr_scene PUBLIC include)
