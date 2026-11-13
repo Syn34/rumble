@@ -71,6 +71,14 @@ target_sources(rr_game PRIVATE
     quantum_code/systems/actor_manager_systems.cpp
 )
 
+# quantum.code systems: character movement (KccExtension, MovementSystem)
+target_sources(rr_game PRIVATE
+    quantum_code/systems/physics_utility.cpp
+    quantum_code/systems/movement_libs.cpp
+    quantum_code/systems/kcc_extension_move.cpp
+    quantum_code/systems/movement_systems.cpp
+)
+
 # Component prototypes of the gameplay simulation (quantum_code/prototypes/).
 target_sources(rr_game PRIVATE
     quantum_code/prototypes/prototypes_values.cpp

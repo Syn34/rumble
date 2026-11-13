@@ -28,8 +28,10 @@ struct PhysicsAbstraction {
     void DisablePhysics(Frame* frame);
     // 0x7bdf130 - Re-enables the character, cleared of leftover motion.
     void EnablePhysics(Frame* frame);
-    // TODO(0x7bdee20, Quantum.PhysicsAbstraction.GetAnyComponentSet), TODO(0x7bded30,
-    // Quantum.PhysicsAbstraction.AddPush), TODO(0x7bdeea8,
+    // 0x7bded30 - A physics body takes the force as an impulse at the hit point; a
+    // character queues it as a push (the hit point and pusher are not used then).
+    void AddPush(Frame* f, FPVector3 force, FPVector3 hitpoint, Transform3D* transform, EntityRef pusherActor);
+    // TODO(0x7bdee20, Quantum.PhysicsAbstraction.GetAnyComponentSet), TODO(0x7bdeea8,
     // Quantum.PhysicsAbstraction.GetVelocity), TODO(0x7bdefdc,
     // Quantum.PhysicsAbstraction.ApplyPushStop): not reimplemented yet.
 };

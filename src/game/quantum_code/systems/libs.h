@@ -102,6 +102,34 @@ class CallbackActionLib {
     static void Execute(AssetRefCallbackAction callbackActionAssetRef, Frame* frame, EntityRef entity);
 };
 
+class PlayerActorInputActionLib {
+  public:
+    // 0x7c0c678
+    static bool FilterContains(PlayerActorInputActionFilter filter, PlayerActorInputAction action) {
+        return ((static_cast<std::uint32_t>(filter) >> static_cast<std::uint32_t>(action)) & 1U) != 0;
+    }
+    // 0x7c04b7c - Neither a running ultimate nor a gadget in use forbids the action.
+    static bool IsInputActionAllowed(Frame* frame, EntityRef entity, PlayerActorInputAction inputAction) {
+        const bool byUltimate = IsAllowedByUltimate(frame, entity, inputAction);
+        const bool byGadget = IsAllowedByGadget(frame, entity, inputAction);
+        return byUltimate && byGadget;
+    }
+    // 0x7c0c684 - While an ultimate is active its spec's allowed actions decide (allowed
+    // when the spec is missing).
+    static bool IsAllowedByUltimate(Frame* frame, EntityRef entity, PlayerActorInputAction inputAction);
+    // 0x7c0c7a8 - Same for a gadget in use.
+    static bool IsAllowedByGadget(Frame* frame, EntityRef entity, PlayerActorInputAction inputAction);
+};
+
+class UnlockedFeaturesLib {
+  public:
+    // 0x7be70dc - The entity's unlocked features; entities without the manager get
+    // `isUnlockedByDefault`.
+    static bool IsFeatureUnlocked(Frame* f, EntityRef entity, UnlockedFeature feature, bool isUnlockedByDefault);
+    // 0x7be7190 - False when the entity has no UnlockedFeaturesManager.
+    static bool TryUnlockFeature(Frame* f, EntityRef entity, UnlockedFeature feature);
+};
+
 class UltimateAbilityLib {
   public:
     // TODO(0x7c0c114, Quantum.UltimateAbilityLib.TryGiveCharge): adds charge to the

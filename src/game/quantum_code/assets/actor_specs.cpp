@@ -12,6 +12,17 @@ FP ActorManagerConfig::GetTotalRespawnDuration(bool isBot) const {
     return RespawnDuration + pending;
 }
 
+bool KccExtensionConfig::TryGetWalkingPushMultiplier(EntityInfoType type, FP& multiplier) const {
+    for (const EntityMultiplierPair& pair : WalkingPushMultiplierByEntity) {
+        if (pair.EntityInfoType == type) {
+            multiplier = pair.Multiplier;
+            return true;
+        }
+    }
+    multiplier = FP{};
+    return false;
+}
+
 } // namespace Quantum
 
 namespace Quantum {

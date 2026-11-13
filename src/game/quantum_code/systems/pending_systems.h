@@ -150,23 +150,6 @@ class AISpawnerSystem : public SystemMainThread {
     void Update(Frame* f) override { (void)f; }
 };
 
-// Quantum.ActorInputConverterSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
-class ActorInputConverterSystem : public SystemMainThread {
-  public:
-    // TODO(0x7cb201c, Quantum.ActorInputConverterSystem.Update): Update(f, filter); not reimplemented yet.
-    // TODO(0x7cb23c8, Quantum.ActorInputConverterSystem..ctor): .ctor(); not reimplemented yet.
-    void Update(Frame* f) override { (void)f; }
-};
-
-// Quantum.ActorInputUpdateSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
-class ActorInputUpdateSystem : public SystemMainThread {
-  public:
-    // TODO(0x7cb2410, Quantum.ActorInputUpdateSystem.Update): Update(f, filter); not reimplemented yet.
-    // TODO(0x7cb263c, Quantum.ActorInputUpdateSystem.HandlePlayerCommands): HandlePlayerCommands(frame, entity); not reimplemented yet.
-    // TODO(0x7cb27c4, Quantum.ActorInputUpdateSystem..ctor): .ctor(); not reimplemented yet.
-    void Update(Frame* f) override { (void)f; }
-};
-
 // Quantum.ActorManagerRespawnTesterSystem (original base: Quantum.SystemSignalsOnly)
 class ActorManagerRespawnTesterSystem : public SystemSignalsOnly {
   public:
@@ -1130,24 +1113,6 @@ class MoveToSystem : public SystemMainThread {
     bool get_StartEnabled() const override { return false; }
     // TODO(0x7bd0a10, Quantum.MoveToSystem.Update): Update(frame, filter); not reimplemented yet.
     // TODO(0x7bd0a1c, Quantum.MoveToSystem..ctor): .ctor(); not reimplemented yet.
-    void Update(Frame* f) override { (void)f; }
-};
-
-// Quantum.MovementSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
-class MovementSystem : public SystemMainThread {
-  public:
-    // TODO(0x7bdd258, Quantum.MovementSystem.OnAdded): OnAdded(f, entity, component); not reimplemented yet.
-    // TODO(0x7bdd310, Quantum.MovementSystem.KccExtension_OnConfigChanged): KccExtension_OnConfigChanged(f, entity, component); not reimplemented yet.
-    // TODO(0x7bdd3b4, Quantum.MovementSystem.OnAdded): OnAdded(f, entity, component); not reimplemented yet.
-    // TODO(0x7bdd530, Quantum.MovementSystem.OnAdded): OnAdded(f, entity, component); not reimplemented yet.
-    // TODO(0x7bdd548, Quantum.MovementSystem.Killable_OnRevive): Killable_OnRevive(frame, entity, position, rotation); not reimplemented yet.
-    // TODO(0x7bdd554, Quantum.MovementSystem.ResetKccMotion): ResetKccMotion(frame, entity); not reimplemented yet.
-    // TODO(0x7bdd6d8, Quantum.MovementSystem.Killable_OnKill): Killable_OnKill(frame, entity, killedBy); not reimplemented yet.
-    // TODO(0x7bdd760, Quantum.MovementSystem.Update): Update(f, filter); not reimplemented yet.
-    // TODO(0x7bde1dc, Quantum.MovementSystem.UpdateRotation): UpdateRotation(f, filter, input, configExt); not reimplemented yet.
-    // TODO(0x7bde664, Quantum.MovementSystem.OnCharacterCollision3D): OnCharacterCollision3D(fbase, character, hit); not reimplemented yet.
-    // TODO(0x7bdebc4, Quantum.MovementSystem.OnCharacterTrigger3D): OnCharacterTrigger3D(f, character, hit); not reimplemented yet.
-    // TODO(0x7bdebc8, Quantum.MovementSystem..ctor): .ctor(); not reimplemented yet.
     void Update(Frame* f) override { (void)f; }
 };
 

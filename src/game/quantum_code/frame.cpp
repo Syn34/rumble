@@ -76,8 +76,38 @@ void Frame::Copy(const Photon::Deterministic::DeterministicFrame& frame) {
 }
 
 void Frame::Free() {
+    for (auto* collection : {&_persistentHitCollection, &_areaOfEffectHitCollection}) {
+        if (*collection != nullptr) {
+            (*collection)->Free(NativeAlloc());
+            collection->reset();
+        }
+    }
     FreeGen();
     Core::FrameBase::Free();
+}
+
+namespace {
+
+Physics3D::HitCollection3D* ReusableHitCollection(std::unique_ptr<Physics3D::HitCollection3D>& collection,
+                                                  Core::FrameContext* context, int threadIndex) {
+    if (threadIndex != 0) {
+        throw std::out_of_range("Frame: the PC build has a single simulation thread");
+    }
+    if (collection == nullptr) {
+        collection = std::make_unique<Physics3D::HitCollection3D>(64, Physics3D::HitCollection3D::Persistent, context);
+    }
+    collection->Reset();
+    return collection.get();
+}
+
+} // namespace
+
+Physics3D::HitCollection3D* Frame::GetPersistentHitCollection(int threadIndex) {
+    return ReusableHitCollection(_persistentHitCollection, get_Context(), threadIndex);
+}
+
+Physics3D::HitCollection3D* Frame::GetAreaOfEffectHitCollection(int threadIndex) {
+    return ReusableHitCollection(_areaOfEffectHitCollection, get_Context(), threadIndex);
 }
 
 std::vector<std::uint8_t> Frame::Serialize(Photon::Deterministic::DeterministicFrameSerializeMode mode) {

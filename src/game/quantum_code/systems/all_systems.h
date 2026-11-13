@@ -9,6 +9,7 @@
 #include "quantum_code/systems/game_mode_systems.h"
 #include "quantum_code/systems/health_systems.h"
 #include "quantum_code/systems/killable_systems.h"
+#include "quantum_code/systems/movement_systems.h"
 #include "quantum_code/systems/physics_systems.h"
 #include "quantum_code/systems/reward_systems.h"
 #include "quantum_code/systems/pending_systems.h"

@@ -64,6 +64,18 @@ PhysicsAbstraction PhysicsAbstraction::Create(Frame* frame, EntityRef entity) {
     return physics;
 }
 
+void PhysicsAbstraction::AddPush(Frame* f, FPVector3 force, FPVector3 hitpoint, Transform3D* transform,
+                                 EntityRef pusherActor) {
+    (void)pusherActor;
+    if (physicsBody != nullptr) {
+        physicsBody->AddLinearImpulseAtPosition(force, hitpoint, transform);
+        return;
+    }
+    if (kccExtension != nullptr && characterController != nullptr) {
+        kccExtension->AddPush(f, force, false);
+    }
+}
+
 void PhysicsAbstraction::DisablePhysics(Frame* frame, FP delay) {
     if (kccExtension == nullptr) {
         return;

@@ -188,10 +188,13 @@ class Frame : public Core::FrameBase {
     void CopyFromGen(const Frame* frame);
     // 0x7c70364 - Unscaled delta time starts at the delta time.
     void InitUser() { _unscaledDeltaTime = _globals->DeltaTime; }
-    // TODO(0x7c70308, Quantum.Frame.AllocUser): takes per-thread hit collections from the
-    // context (FrameContextUser), which needs the physics hit collections.
-    // TODO(0x7c73cf4, Quantum.Frame.GetPersistentHitCollection), TODO(0x7c73d5c,
-    // Quantum.Frame.GetAreaOfEffectHitCollection): same.
+    // 0x7c73cf4 - A reusable hit collection for the thread, emptied. The original keeps one
+    // per worker thread in the context (FrameContextUser, handed out by AllocUser
+    // 0x7c70308, capacity 64, persistent); the PC build simulates on one thread, so the
+    // frame owns its collection and creates it on first use.
+    Physics3D::HitCollection3D* GetPersistentHitCollection(int threadIndex = 0);
+    // 0x7c73d5c - The same for area-of-effect queries.
+    Physics3D::HitCollection3D* GetAreaOfEffectHitCollection(int threadIndex = 0);
     // TODO(0x7c735c0, Quantum.Frame.GetPlayerData), TODO(0x7c717fc,
     // Quantum.Frame.TryGetPlayerData), TODO(0x7c735f0, Quantum.Frame.UpdatePlayerData):
     // need RuntimePlayer and the session's player data (PersistentMap).
@@ -320,6 +323,8 @@ class Frame : public Core::FrameBase {
     std::vector<SystemBase*> _systemsRoots;
     std::unordered_map<std::type_index, int> _systemIndexByType;
     FP _unscaledDeltaTime;
+    std::unique_ptr<Physics3D::HitCollection3D> _persistentHitCollection;
+    std::unique_ptr<Physics3D::HitCollection3D> _areaOfEffectHitCollection;
 };
 
 // ---------------------------------------------------------------------------------------

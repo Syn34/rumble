@@ -27,6 +27,12 @@
 namespace Quantum {
 
 class Frame;
+struct Input;
+struct CharacterController3D;
+struct CharacterController3DMovement;
+class CharacterController3DConfig;
+class IKCCCallbacks3D;
+class KccExtensionConfig;
 // Asset classes named by component methods (quantum_code/assets/).
 class EnergyCellManagerSpec;
 class GameModeHandlerLevelConfig;
@@ -2730,6 +2736,9 @@ struct alignas(8) GadgetUser {
     AssetRefGadgetSpec gadgetSpec;
     GadgetStats Stats;
 
+    // 0x7c46af8 - A gadget is in use.
+    bool get_IsActive() const { return activationFrame != 0; }
+
     // 0x7c468b4
     std::int32_t GetHashCode() const;
     // 0x7c4694c
@@ -3560,6 +3569,68 @@ struct alignas(8) KccExtension {
     // 0x7c54d9c
     void RemoveExpiredModifiers(Frame* f, Collections::QListPtr<ModInfo> list);
 
+    // --- movement (systems/kcc_extension_move.cpp) ---------------------------------------
+
+    // 0x7c4f940 - Queues a push for the next MovementSystem update (optionally cancelling the
+    // controller's velocity first). Unless upward correction is off, a push close to the
+    // horizontal is bent upwards by the config's lerp, which fades out between the two
+    // configured angles.
+    void AddPush(Frame* f, FPVector3 _push, bool resetPush);
+    // 0x7c4fd7c - An impulse consumed on the next update, with a forced input along its
+    // horizontal direction; the controller counts as having jumped. `_pushAnim` is unused.
+    void AddImpulsionWithInputs(Frame* f, CharacterController3D* pKcc, FPVector3 _impulse, FP _velocityBlend,
+                                FP _inputBlend, FP _inputDuration, FP _inputFallOff, FP _duration, bool _pushAnim,
+                                bool _snapOnGround);
+    // 0x7c4c6c0 - The same with blend, durations and fall-off scaled by the impulse's
+    // strength (|impulse| / 25, at most 2).
+    void AddImpulsionWithInputsAuto(Frame* f, CharacterController3D* pKcc, FPVector3 _impulse);
+    // 0x7c4ffa0 - One step of the character: ledge grab, wall-run auto jump and ledge slow
+    // checks, max speed, push decay, the contacts (or the cached movement pack), steering,
+    // speed modifiers, the move itself with penetration correction and rebound, the
+    // go-through-wall check, then grounding and the grounded/air timers.
+    void Move(Frame* f, EntityRef entity, Transform3D* pTransform, CharacterController3D* pKcc, KccExtension* kccExt,
+              FPVector3 direction, CharacterController3DConfig* configKcc, KccExtensionConfig* configExt,
+              IKCCCallbacks3D* callback);
+    // 0x7c51720 - Human players running into a runnable wall they face jump onto it.
+    static void UpdateWallRunAutoJump(Frame* frame, EntityRef entity, bool isHuman, CharacterController3D* pKcc,
+                                      KccExtension* kccExt, Transform3D* pTransform,
+                                      CharacterController3DConfig* configKcc, KccExtensionConfig* configExt);
+    // 0x7c53078 - The horizontal velocity points within the auto-jump angle of the facing.
+    static bool IsMovingForward(CharacterController3D* pKcc, Transform3D* pTransform, KccExtensionConfig* configExt);
+    // 0x7c53040 - Spreads periodic checks over frames: true one frame in `frameSlicing`.
+    static bool CheckFrameSlicing(Frame* frame, EntityRef entity, std::int32_t frameSlicing);
+    // 0x7c53170 - Requested (or automatic) jumps and the jump state; true when the state
+    // changed or a jump was made.
+    bool UpdateJumpBeforeMove(Frame* f, EntityRef entity, CharacterController3D* pKcc, KccExtension* kccExt,
+                              CharacterController3DConfig* configKcc, KccExtensionConfig* configExt);
+    // 0x7c53e24 - Empty in the original.
+    void UpdateJumpAfterMove(Frame* f, CharacterController3D* pKcc, bool jumpedThisFrame) {
+        (void)f, (void)pKcc, (void)jumpedThisFrame;
+    }
+    // 0x7c53d64 - Sets the vertical velocity for a first or double jump (grounded, unless
+    // `ignoreGrounded`) and marks the controller as jumped.
+    static void Jump(Frame* frame, CharacterController3D* pKcc, KccExtension* kccExt, CharacterController3DConfig* configKcc,
+                     KccExtensionConfig* configExt, JumpState jumpState, bool ignoreGrounded);
+    // 0x7c520d8 - The velocity from the movement pack: bounce, cheat flight, or per movement
+    // type gravity, acceleration and braking with the modifiers, then the speed limits.
+    void ComputeRawSteer(Frame* f, EntityRef entity, CharacterController3D* pKcc, Transform3D* pTransform,
+                         CharacterController3DConfig* configKcc, KccExtensionConfig* configExt,
+                         CharacterController3DMovement& movementPack, FP dt);
+    // 0x7c534d4 - Bots on a navigation jump link jump by themselves at edges (with
+    // cool-downs after manual and automatic jumps).
+    bool AutoJumpRequested(Frame* f, EntityRef entity, CharacterController3D* pKcc, CharacterController3DConfig* configKcc,
+                           KccExtensionConfig* configExt);
+    // 0x7c51aa0 - Lowers the max speed of human players walking towards a drop.
+    void UpdateLedgeSlow(Frame* f, EntityRef entity, CharacterController3D* pKcc, KccExtensionConfig* configExt);
+    // 0x7c51208 - Looks for a ledge to grab ahead (and to the sides) while airborne.
+    void UpdateLedgeGrab(Frame* f, EntityRef entity, CharacterController3D* pKcc, Transform3D* pTransform,
+                         FPVector3 inputDirection);
+    // 0x7c55744 - Rebound bonus of the static colliders around the character.
+    static FP CalculateReboundBonus(Frame* f, EntityRef entity, Transform3D* transform, CharacterController3DConfig* configKcc);
+    // 0x7c52d0c - A strong recent push into a wall bounces back.
+    void ComputeRebound(Frame* f, EntityRef entity, KccExtensionConfig* configExt, FPVector3 avgNormal,
+                        Transform3D* pTransform, CharacterController3DConfig* configKcc);
+
     // 0x7c4e638
     std::int32_t GetHashCode() const;
     // 0x7c4f25c
@@ -4229,6 +4300,10 @@ struct alignas(8) PlayerActor {
 
     // 0x7c5ad84 - Not a bot (implemented in systems/combat_libs.cpp).
     bool get_IsHuman() const;
+    // 0x7c5ad78
+    bool get_IsBot() const { return isBot; }
+    // 0x7c5ada4 - The player's input of this frame; bots have none (null).
+    ::Quantum::Input* GetInput(Frame* f) const;
 
     // 0x7c5a3ac
     std::int32_t GetHashCode() const;
@@ -5582,6 +5657,9 @@ struct alignas(8) UltimateAbilityUser {
     FP chargeWithTimeMultiplier;
     FP chargedValue;
 
+    // 0x7c65a6c - An ultimate is running.
+    bool get_IsActive() const { return activationFrame != 0; }
+
     // 0x7c65704
     std::int32_t GetHashCode() const;
     // 0x7c65850
@@ -5648,6 +5726,12 @@ struct alignas(4) UnlockedFeaturesManager {
     // 0x7c65ec8
     std::span<QBoolean> get_unlockedFeatures() { return _unlockedFeatures_; }
     std::span<const QBoolean> get_unlockedFeatures() const { return _unlockedFeatures_; }
+    // 0x7c66614
+    bool IsFeatureUnlocked(UnlockedFeature feature) const {
+        return get_unlockedFeatures()[static_cast<std::size_t>(feature)];
+    }
+    // 0x7c6642c - Unlocks a feature once, telling the simulation and the view.
+    void UnlockFeature(Frame* f, EntityRef entity, UnlockedFeature feature);
 
     // 0x7c65f30
     std::int32_t GetHashCode() const;
