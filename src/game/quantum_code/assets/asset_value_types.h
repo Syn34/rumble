@@ -543,7 +543,8 @@ struct DifficultyIntervalInt {
     // 0x7cbdb38
     DifficultyIntervalInt() = default;
 
-    // TODO(0x7cbdb0c, Quantum.DifficultyIntervalInt.Get): int Get(FP difficulty_0_1)
+    // 0x7cbdb0c - the value at a difficulty in [0, 1], interpolated and rounded up.
+    std::int32_t Get(FP difficulty_0_1) const;
 };
 
 struct ElectricalDamageSettings {

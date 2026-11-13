@@ -19,7 +19,7 @@ class AddTargetToBlacklistAction : public AIAction {
     AddTargetToBlacklistAction() = default;
 
     // TODO(0x7cb9f98, Quantum.AddTargetToBlacklistAction.Update): void Update(Frame f, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses AINavigationBlacklist.AddOrUpdateTarget, Log.Error
 };
 
 class ChargeAttackStartAction : public AIAction {
@@ -29,7 +29,7 @@ class ChargeAttackStartAction : public AIAction {
     ChargeAttackStartAction() = default;
 
     // TODO(0x7cc7850, Quantum.ChargeAttackStartAction.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses ChargeAttack.StartAttack
 };
 
 class ChargeWrenchAction : public AIAction {
@@ -41,7 +41,9 @@ class ChargeWrenchAction : public AIAction {
     ChargeWrenchAction() = default;
 
     // TODO(0x7ccf028, Quantum.ChargeWrenchAction.Update): void Update(Frame frame, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses FPMath.Lerp, RNGSession.Next,
+    //   AimBotSystem.HasPendingFireRequest, AimBotSystem.RequestFire,
+    //   BlastBallGameLib.TryGetGameData, Frame.get_RNG
 };
 
 class ChoosePatrolDestinationAction : public AIAction {
@@ -55,7 +57,9 @@ class ChoosePatrolDestinationAction : public AIAction {
     ChoosePatrolDestinationAction() = default;
 
     // TODO(0x7cba3f8, Quantum.ChoosePatrolDestinationAction.Update): void Update(Frame f, EntityRef
-    //   entity, AIContext ctx)
+    //   entity, AIContext ctx); uses FPVector3.get_Up, RNGSession.Next, AIBlackboardComponent.Set,
+    //   AINavigationSystem.FindGroundUnderPosition, AINavigationSystem.FindNearestNavMeshPos,
+    //   Frame.get_RNG, QBoolean.op_Implicit
 };
 
 class DashRoboBall : public AIAction {
@@ -65,7 +69,7 @@ class DashRoboBall : public AIAction {
     DashRoboBall() = default;
 
     // TODO(0x7ccf5d4, Quantum.DashRoboBall.Update): void Update(Frame f, EntityRef agentEntity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class DestroyAction : public AIAction {
@@ -75,7 +79,7 @@ class DestroyAction : public AIAction {
     DestroyAction() = default;
 
     // TODO(0x7cba838, Quantum.DestroyAction.Update): void Update(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses KillableLib.Kill
 };
 
 class DispatchMobSlamAttacksEventAction : public AIAction {
@@ -86,7 +90,7 @@ class DispatchMobSlamAttacksEventAction : public AIAction {
     DispatchMobSlamAttacksEventAction() = default;
 
     // TODO(0x7cd2fdc, Quantum.DispatchMobSlamAttacksEventAction.Update): void Update(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses FrameEvents.MobSlamAttackEvent
 };
 
 class DispatchMobsEventAction : public AIAction {
@@ -97,7 +101,7 @@ class DispatchMobsEventAction : public AIAction {
     DispatchMobsEventAction() = default;
 
     // TODO(0x7cd2f00, Quantum.DispatchMobsEventAction.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext ctx)
+    //   entity, AIContext ctx); uses FrameEvents.MobsEvent
 };
 
 class DispatchShooterEventAction : public AIAction {
@@ -108,7 +112,7 @@ class DispatchShooterEventAction : public AIAction {
     DispatchShooterEventAction() = default;
 
     // TODO(0x7cd57d0, Quantum.DispatchShooterEventAction.Update): void Update(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses FrameEvents.ShootingEnemyEvent
 };
 
 class DispatchSpinnerEventAction : public AIAction {
@@ -119,7 +123,7 @@ class DispatchSpinnerEventAction : public AIAction {
     DispatchSpinnerEventAction() = default;
 
     // TODO(0x7cd5864, Quantum.DispatchSpinnerEventAction.Update): void Update(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses FrameEvents.SpinningEnemyEvent
 };
 
 class DistanceFromPositionDecision : public HFSMDecision {
@@ -154,7 +158,9 @@ class FindTargetAction : public AIAction {
     FindTargetAction() = default;
 
     // TODO(0x7cba858, Quantum.FindTargetAction.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AIBlackboardComponent.GetEntityRef, AIBlackboardComponent.Set,
+    //   DamageLib.TryGetHitBy, EntityRef.get_None, EntityRef.op_Inequality, HFSMAgent.GetConfig,
+    //   KillableLib.IsAlive
 };
 
 class GameIsStarted : public HFSMDecision {
@@ -175,7 +181,9 @@ class GoTo : public AIAction {
     GoTo() = default;
 
     // TODO(0x7cc4bbc, Quantum.GoTo.Update): void Update(Frame f, EntityRef agentEntity, AIContext
-    //   aiContext)
+    //   aiContext); uses FPVector3.get_Zero, AINavigationSystem.SetDestination,
+    //   AINavigationSystem.StopPathFinding, DroppableLib.GetFromIndexAndID, EntityRef.op_Equality,
+    //   GoldenBoltManager.get_SpawnedGoldenBolts, Log.Error, QBoolean.op_Implicit
 };
 
 class GoToControlZone : public AIAction {
@@ -187,9 +195,12 @@ class GoToControlZone : public AIAction {
     GoToControlZone() = default;
 
     // TODO(0x7cd0b74, Quantum.GoToControlZone.Update): void Update(Frame frame, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses RNGSession.Next, Frame.get_RNG,
+    //   GoToControlZone.TryGetRandomPositionInZone, ZoneControlLib.TryGetActiveZone
     // TODO(0x7cd0dac, Quantum.GoToControlZone.TryGetRandomPositionInZone): bool
-    //   TryGetRandomPositionInZone(Frame frame, ControlZoneData zoneData, FPVector3 randomPosition)
+    //   TryGetRandomPositionInZone(Frame frame, ControlZoneData zoneData, FPVector3
+    //   randomPosition); uses Frame.get_RNG, FrameUtility.GetNavMesh,
+    //   NavMesh.FindRandomPointOnNavmesh, NavMeshRegionMask.get_Default
 };
 
 class GoToPlayerDebugPos : public AIAction {
@@ -199,7 +210,7 @@ class GoToPlayerDebugPos : public AIAction {
     GoToPlayerDebugPos() = default;
 
     // TODO(0x7cc533c, Quantum.GoToPlayerDebugPos.Update): void Update(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses AINavigationSystem.SetDestination
 };
 
 class GroundDashAction : public AIAction {
@@ -209,7 +220,7 @@ class GroundDashAction : public AIAction {
     GroundDashAction() = default;
 
     // TODO(0x7cbaccc, Quantum.GroundDashAction.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class HasLineOfSightToTargetDecision : public HFSMDecision {
@@ -220,7 +231,8 @@ class HasLineOfSightToTargetDecision : public HFSMDecision {
     HasLineOfSightToTargetDecision() = default;
 
     // TODO(0x7cca74c, Quantum.HasLineOfSightToTargetDecision.Decide): bool Decide(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses AIBlackboardComponent.GetEntityRef, Log.Error,
+    //   TargetFinder.HasLineOfSightToTarget
 };
 
 class HasMoveBehaviourBouncedDecision : public HFSMDecision {
@@ -242,7 +254,7 @@ class HasReachedTime : public HFSMDecision {
     HasReachedTime() = default;
 
     // TODO(0x7ccac00, Quantum.HasReachedTime.Decide): bool Decide(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AIBlackboardComponent.GetFP
 };
 
 class HasTarget : public HFSMDecision {
@@ -253,7 +265,8 @@ class HasTarget : public HFSMDecision {
     HasTarget() = default;
 
     // TODO(0x7ccaca0, Quantum.HasTarget.Decide): bool Decide(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AIBlackboardComponent.GetEntityRef, EntityRef.get_None,
+    //   EntityRef.op_Inequality
 };
 
 class IdleAction : public AIAction {
@@ -277,7 +290,7 @@ class ImpulseAction : public AIAction {
     ImpulseAction() = default;
 
     // TODO(0x7cbad78, Quantum.ImpulseAction.Update): void Update(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses KccExtension.AddImpulsionWithInputs, Transform3D.get_Forward
 };
 
 class ImpulseTowardTargetAction : public AIAction {
@@ -293,7 +306,9 @@ class ImpulseTowardTargetAction : public AIAction {
     ImpulseTowardTargetAction() = default;
 
     // TODO(0x7cbafbc, Quantum.ImpulseTowardTargetAction.Update): void Update(Frame f, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses FPQuaternion.LookRotation, FPVector3.Normalize,
+    //   AIBlackboardComponent.GetEntityRef, EntityRef.get_None, EntityRef.op_Inequality,
+    //   KccExtension.AddImpulsionWithInputs, KillableLib.IsAlive, Transform3D.get_Forward...
 };
 
 class IsDeadDecision : public HFSMDecision {
@@ -303,7 +318,7 @@ class IsDeadDecision : public HFSMDecision {
     IsDeadDecision() = default;
 
     // TODO(0x7ccace0, Quantum.IsDeadDecision.Decide): bool Decide(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses KillableLib.IsDead
 };
 
 class IsGroundedDecision : public HFSMDecision {
@@ -313,7 +328,7 @@ class IsGroundedDecision : public HFSMDecision {
     IsGroundedDecision() = default;
 
     // TODO(0x7ccad64, Quantum.IsGroundedDecision.Decide): bool Decide(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses CharacterController3D.get_Grounded
 };
 
 class IsTargetValidDecision : public HFSMDecision {
@@ -325,7 +340,7 @@ class IsTargetValidDecision : public HFSMDecision {
     IsTargetValidDecision() = default;
 
     // TODO(0x7ccae10, Quantum.IsTargetValidDecision.Decide): bool Decide(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AIBlackboardComponent.GetEntityRef
 };
 
 class JumpAction : public AIAction {
@@ -336,7 +351,7 @@ class JumpAction : public AIAction {
     JumpAction() = default;
 
     // TODO(0x7cbb364, Quantum.JumpAction.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses FPVector3.get_Up, KccExtension.AddImpulse
 };
 
 class JumpAttackAction : public AIAction {
@@ -347,7 +362,7 @@ class JumpAttackAction : public AIAction {
     JumpAttackAction() = default;
 
     // TODO(0x7cc7c80, Quantum.JumpAttackAction.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses JumpAttack.StartAttack, Log.Error
 };
 
 class MoveTowardTargetAction : public AIAction {
@@ -361,7 +376,8 @@ class MoveTowardTargetAction : public AIAction {
     MoveTowardTargetAction() = default;
 
     // TODO(0x7cbb524, Quantum.MoveTowardTargetAction.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses FPVector2.get_Zero, EntityRef.get_None,
+    //   EntityRef.op_Equality, QBoolean.op_Implicit
 };
 
 class NavigateToTargetAction : public AIAction {
@@ -380,9 +396,13 @@ class NavigateToTargetAction : public AIAction {
     NavigateToTargetAction() = default;
 
     // TODO(0x7cbb8f8, Quantum.NavigateToTargetAction.Update): void Update(Frame f, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses AIBlackboardComponent.GetByte,
+    //   AIBlackboardComponent.GetEntityRef, AIBlackboardComponent.GetVector3,
+    //   AIBlackboardComponent.HasEntry, AIBlackboardComponent.Set,
+    //   AINavigationSystem.SetDestination, EntityRef.get_None, FrameThreadSafe.op_Explicit...
     // TODO(0x7cbc018, Quantum.NavigateToTargetAction.GetNearbyPointToTarget): FPVector3
-    //   GetNearbyPointToTarget(Frame f, FPVector3 targetPos, FPVector3 agentPos, FP distance)
+    //   GetNearbyPointToTarget(Frame f, FPVector3 targetPos, FPVector3 agentPos, FP distance); uses
+    //   FPMath.SqrtRaw
 };
 
 class PrepareShootingAction : public AIAction {
@@ -392,7 +412,7 @@ class PrepareShootingAction : public AIAction {
     PrepareShootingAction() = default;
 
     // TODO(0x7be7330, Quantum.PrepareShootingAction.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses Weapon.PrepareUse, Unsafe.TryGetWeaponUser
 };
 
 class RaiseAgentOfDoomViewEvent : public AIAction {
@@ -403,7 +423,7 @@ class RaiseAgentOfDoomViewEvent : public AIAction {
     RaiseAgentOfDoomViewEvent() = default;
 
     // TODO(0x7cd2a5c, Quantum.RaiseAgentOfDoomViewEvent.Update): void Update(Frame f, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses FrameEvents.AgentOfDoomEvent
 };
 
 class ReachedPointDecision : public HFSMDecision {
@@ -416,7 +436,8 @@ class ReachedPointDecision : public HFSMDecision {
     ReachedPointDecision() = default;
 
     // TODO(0x7ccb038, Quantum.ReachedPointDecision.Decide): bool Decide(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses FPVector3.get_Zero, AIBlackboardComponent.GetVector3,
+    //   AIBlackboardComponent.HasEntry
 };
 
 class ResetMaxSpeedModifier : public AIAction {
@@ -426,7 +447,7 @@ class ResetMaxSpeedModifier : public AIAction {
     ResetMaxSpeedModifier() = default;
 
     // TODO(0x7cbc148, Quantum.ResetMaxSpeedModifier.Update): void Update(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses KccExtension.ClearModifiersOfType
 };
 
 class ResetTargetAction : public AIAction {
@@ -437,7 +458,7 @@ class ResetTargetAction : public AIAction {
     ResetTargetAction() = default;
 
     // TODO(0x7cbc1f0, Quantum.ResetTargetAction.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AIBlackboardComponent.Set, EntityRef.get_None
 };
 
 class ResetTimerAction : public AIAction {
@@ -448,7 +469,7 @@ class ResetTimerAction : public AIAction {
     ResetTimerAction() = default;
 
     // TODO(0x7cbc234, Quantum.ResetTimerAction.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AIBlackboardComponent.Set
 };
 
 class SeekNewTarget : public HFSMDecision {
@@ -462,9 +483,13 @@ class SeekNewTarget : public HFSMDecision {
     SeekNewTarget() = default;
 
     // TODO(0x7ccb1b0, Quantum.SeekNewTarget.Decide): bool Decide(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AIBlackboardComponent.Set, GameModeHandlerLib.IsInActionPhase,
+    //   SeekNewTarget.FindTargetInRadius
     // TODO(0x7ccb2bc, Quantum.SeekNewTarget.FindTargetInRadius): EntityRef FindTargetInRadius(Frame
-    //   f, EntityRef entity, AIContext aiContext)
+    //   f, EntityRef entity, AIContext aiContext); uses FPQuaternion.get_Identity,
+    //   AINavigationBlacklist.get_entries, EntityRef.get_None, EntityRef.op_Equality,
+    //   Frame.GetPersistentHitCollection, KillableLib.IsDead, LayerMask.op_Implicit,
+    //   Physics3D.HitCollection3D.Reset...
 };
 
 class SetAttackInfoActiveAction : public AIAction {
@@ -477,7 +502,7 @@ class SetAttackInfoActiveAction : public AIAction {
     SetAttackInfoActiveAction() = default;
 
     // TODO(0x7cd2d5c, Quantum.SetAttackInfoActiveAction.Update): void Update(Frame f, EntityRef
-    //   entity, AIContext ctx)
+    //   entity, AIContext ctx); uses QBoolean.op_Implicit
 };
 
 class SetCompoundHFSMSchedulePeriodAction : public AIAction {
@@ -505,7 +530,7 @@ class SetCurrentMaxSpeedModifier : public AIAction {
     SetCurrentMaxSpeedModifier() = default;
 
     // TODO(0x7cbc254, Quantum.SetCurrentMaxSpeedModifier.Update): void Update(Frame f, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses KccExtension.AddModifier_MaxSpeed
 };
 
 class SetGravityModifierAction : public AIAction {
@@ -517,7 +542,7 @@ class SetGravityModifierAction : public AIAction {
     SetGravityModifierAction() = default;
 
     // TODO(0x7cbc348, Quantum.SetGravityModifierAction.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses KccExtension.AddModifier_Gravity
 };
 
 class SetGroupTargetAction : public AIAction {
@@ -539,7 +564,7 @@ class SetOwnerInBlackboardAction : public AIAction {
     SetOwnerInBlackboardAction() = default;
 
     // TODO(0x7cbc51c, Quantum.SetOwnerInBlackboardAction.Update): void Update(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses AIBlackboardComponent.Set
 };
 
 class SetPositionInBlackboardAction : public AIAction {
@@ -552,7 +577,7 @@ class SetPositionInBlackboardAction : public AIAction {
     SetPositionInBlackboardAction() = default;
 
     // TODO(0x7cbc658, Quantum.SetPositionInBlackboardAction.Update): void Update(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses AIBlackboardComponent.Set
 };
 
 class SetShootPrecision : public AIAction {
@@ -562,7 +587,7 @@ class SetShootPrecision : public AIAction {
     SetShootPrecision() = default;
 
     // TODO(0x7cc5820, Quantum.SetShootPrecision.Update): void Update(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses BotDifficultyLib.SetShootPrecision
 };
 
 class SetSpawnerPositionInBlackboardAction : public AIAction {
@@ -573,7 +598,7 @@ class SetSpawnerPositionInBlackboardAction : public AIAction {
     SetSpawnerPositionInBlackboardAction() = default;
 
     // TODO(0x7cbc820, Quantum.SetSpawnerPositionInBlackboardAction.Update): void Update(Frame f,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses AIBlackboardComponent.Set, Log.Error
 };
 
 class SetSpawnerWanderRadiusInBlackboardAction : public AIAction {
@@ -584,7 +609,8 @@ class SetSpawnerWanderRadiusInBlackboardAction : public AIAction {
     SetSpawnerWanderRadiusInBlackboardAction() = default;
 
     // TODO(0x7cbcbb4, Quantum.SetSpawnerWanderRadiusInBlackboardAction.Update): void Update(Frame
-    //   f, EntityRef entity, AIContext aiContext)
+    //   f, EntityRef entity, AIContext aiContext); uses AIBlackboardComponent.Set,
+    //   AISpawner.GetPrototype, Log.Error
 };
 
 class SetupAoEAction : public AIAction {
@@ -596,7 +622,7 @@ class SetupAoEAction : public AIAction {
     SetupAoEAction() = default;
 
     // TODO(0x7cbcef4, Quantum.SetupAoEAction.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class ShootBallAction : public AIAction {
@@ -606,7 +632,9 @@ class ShootBallAction : public AIAction {
     ShootBallAction() = default;
 
     // TODO(0x7cd0604, Quantum.ShootBallAction.Update): void Update(Frame frame, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses FPVector3.Normalize, FPVector3.ProjectOnPlane,
+    //   RNGSession.Next, AimBotSystem.RequestFire, BlastBallAIHelper.GetBotShootingZone,
+    //   BlastBallGameLib.TryGetGameData, BlastBallGameLib.TryGetGameModeSpec, EntityRef.get_None...
 };
 
 class ShootTarget : public AIAction {
@@ -616,7 +644,9 @@ class ShootTarget : public AIAction {
     ShootTarget() = default;
 
     // TODO(0x7cc5ac8, Quantum.ShootTarget.Update): void Update(Frame f, EntityRef agentEntity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses RNGSession.Next, BotLib.InFOV_XZ, EntityRef.get_None,
+    //   EntityRef.op_Equality, Frame.get_RNG, KillableLib.IsDead, PlayerActor.get_IsBot,
+    //   PlayerActor.get_IsHuman...
 };
 
 class StartMeleeAttackAction : public AIAction {
@@ -627,7 +657,7 @@ class StartMeleeAttackAction : public AIAction {
     StartMeleeAttackAction() = default;
 
     // TODO(0x7cc8844, Quantum.StartMeleeAttackAction.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses Log.Error, MeleeAttack.StartAttack, QBoolean.op_Implicit
 };
 
 class StartShootingAction : public AIAction {
@@ -638,7 +668,7 @@ class StartShootingAction : public AIAction {
     StartShootingAction() = default;
 
     // TODO(0x7be7404, Quantum.StartShootingAction.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses Unsafe.StartShooting
 };
 
 class StopNavigationAction : public AIAction {
@@ -648,7 +678,7 @@ class StopNavigationAction : public AIAction {
     StopNavigationAction() = default;
 
     // TODO(0x7cbd08c, Quantum.StopNavigationAction.Update): void Update(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AINavigationSystem.StopPathFinding, Log.Error
 };
 
 class StopPathFinding : public AIAction {
@@ -658,7 +688,7 @@ class StopPathFinding : public AIAction {
     StopPathFinding() = default;
 
     // TODO(0x7cc4ba0, Quantum.StopPathFinding.Update): void Update(Frame f, EntityRef agentEntity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AINavigationSystem.StopPathFinding
 };
 
 class StopShootingAction : public AIAction {
@@ -668,7 +698,7 @@ class StopShootingAction : public AIAction {
     StopShootingAction() = default;
 
     // TODO(0x7be7520, Quantum.StopShootingAction.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses EntityRef.get_None, Unsafe.StopShooting
 };
 
 class SweepAttackAction : public AIAction {
@@ -678,7 +708,7 @@ class SweepAttackAction : public AIAction {
     SweepAttackAction() = default;
 
     // TODO(0x7cc96c4, Quantum.SweepAttackAction.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses Log.Error, SweepAttack.StartAttack
 };
 
 class SwitchWeapon : public AIAction {
@@ -702,7 +732,7 @@ class SwitchWeaponUltimate : public AIAction {
     SwitchWeaponUltimate() = default;
 
     // TODO(0x7cc4b70, Quantum.SwitchWeaponUltimate.Update): void Update(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class TimerDecision : public HFSMDecision {
@@ -724,7 +754,7 @@ class ToggleAoEAction : public AIAction {
     ToggleAoEAction() = default;
 
     // TODO(0x7cbd194, Quantum.ToggleAoEAction.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class ToggleMovementBehaviourAction : public AIAction {
@@ -736,7 +766,7 @@ class ToggleMovementBehaviourAction : public AIAction {
     ToggleMovementBehaviourAction() = default;
 
     // TODO(0x7cbd2f4, Quantum.ToggleMovementBehaviourAction.Update): void Update(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class ToggleMovementPackSlicingAction : public AIAction {
@@ -758,7 +788,7 @@ class ToggleTargetFinderAction : public AIAction {
     ToggleTargetFinderAction() = default;
 
     // TODO(0x7cbd61c, Quantum.ToggleTargetFinderAction.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class TurnTowardTargetAction : public AIAction {
@@ -772,7 +802,8 @@ class TurnTowardTargetAction : public AIAction {
     TurnTowardTargetAction() = default;
 
     // TODO(0x7cbd780, Quantum.TurnTowardTargetAction.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses FPVector2.get_Zero, FPVector3.Normalize,
+    //   QBoolean.op_Implicit
 };
 
 class UpdateStrikeZonePositionAction : public AIAction {
@@ -786,7 +817,9 @@ class UpdateStrikeZonePositionAction : public AIAction {
     UpdateStrikeZonePositionAction() = default;
 
     // TODO(0x7cce480, Quantum.UpdateStrikeZonePositionAction.Update): void Update(Frame frame,
-    //   EntityRef agentEntity, AIContext aiContext)
+    //   EntityRef agentEntity, AIContext aiContext); uses FPMath.SqrtRaw,
+    //   FPVector3.DistanceSquared, AIBlackboardComponent.GetVector3, AIBlackboardComponent.Set,
+    //   BlastBallAIHelper.TryGetStrikePosition, BlastBallGameLib.TryGetGameData, Team.GetTeamID
 };
 
 class UseGadget : public AIAction {
@@ -798,7 +831,8 @@ class UseGadget : public AIAction {
     UseGadget() = default;
 
     // TODO(0x7cc55a8, Quantum.UseGadget.Update): void Update(Frame frame, EntityRef agentEntity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses FPMath.Lerp, RNGSession.Next, Frame.get_RNG, Log.Error,
+    //   QBoolean.op_Implicit
 };
 
 class UseWrench : public AIAction {
@@ -809,7 +843,7 @@ class UseWrench : public AIAction {
     UseWrench() = default;
 
     // TODO(0x7cc53c0, Quantum.UseWrench.Update): void Update(Frame f, EntityRef agentEntity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AimBotSystem.UseWrenchNow
 };
 
 class Wander : public AIAction {
@@ -823,9 +857,14 @@ class Wander : public AIAction {
     Wander() = default;
 
     // TODO(0x7cc5ec4, Quantum.Wander.Update): void Update(Frame f, EntityRef agentEntity, AIContext
-    //   aiContext)
+    //   aiContext); uses RNGSession.Next, AINavigationSystem.IsGrindingOnRail,
+    //   AINavigationSystem.SetDestination, CharacterController3D.get_Grounded, Frame.get_RNG,
+    //   FrameUtility.GetNavMesh, Log.Error, Wander.FindWanderPosition
     // TODO(0x7cc6178, Quantum.Wander.FindWanderPosition): bool FindWanderPosition(Frame f,
-    //   AIContext aiContext, NavMesh navmesh, FPVector3 wanderPoint)
+    //   AIContext aiContext, NavMesh navmesh, FPVector3 wanderPoint); uses FPMath.SqrtRaw,
+    //   FPVector3.get_Zero, RNGSession.Next, AINavigationSystem.IsFreeNavigationPosition,
+    //   Frame.get_RNG, NavMesh.FindRandomPointOnTriangle, ShrinkingZone.GetPointer,
+    //   ShrinkingZone.IsNearBorder...
 };
 
 class WithinRangeDecision : public HFSMDecision {
@@ -840,12 +879,15 @@ class WithinRangeDecision : public HFSMDecision {
     WithinRangeDecision() = default;
 
     // TODO(0x7ccba8c, Quantum.WithinRangeDecision.Decide): bool Decide(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses CompoundShape3D.GetShapes, FPMath.SqrtRaw,
+    //   AIBlackboardComponent.GetEntityRef, AIBlackboardComponent.HasEntry, EntityRef.get_None,
+    //   WithinRangeDecision.GetSqrDistToClosestPointOnBox, WithinRangeDecision.GetTargetBoundSize
     // TODO(0x7ccc004, Quantum.WithinRangeDecision.GetTargetBoundSize): FP GetTargetBoundSize(Frame
     //   frame, EntityRef target, FP baseSize)
     // TODO(0x7ccbea4, Quantum.WithinRangeDecision.GetSqrDistToClosestPointOnBox): FP
     //   GetSqrDistToClosestPointOnBox(Frame frame, EntityRef target, Transform3D* targetTransform,
-    //   PhysicsCollider3D* targetCollider, FPVector3 entityPos)
+    //   PhysicsCollider3D* targetCollider, FPVector3 entityPos); uses FPMath.Clamp,
+    //   Transform3D.InverseTransformPoint, WithinRangeDecision.GetTargetBoundSize
 };
 
 class AIFunctionAND : public AIFunctionT<bool> {
@@ -929,7 +971,7 @@ class AimAtPassingTargetEvaluator : public AIFunctionT<FP> {
     AimAtPassingTargetEvaluator() = default;
 
     // TODO(0x7cce868, Quantum.AimAtPassingTargetEvaluator.Execute): FP Execute(Frame frame,
-    //   EntityRef agentEntity, AIContext aiContext)
+    //   EntityRef agentEntity, AIContext aiContext); uses BotLib.NoUtility
 };
 
 class AirSaveEvaluator : public AIFunctionT<FP> {
@@ -944,9 +986,12 @@ class AirSaveEvaluator : public AIFunctionT<FP> {
     AirSaveEvaluator() = default;
 
     // TODO(0x7cc2da4, Quantum.AirSaveEvaluator.ResetAirSave): void ResetAirSave(Frame f, EntityRef
-    //   agentEntity, bool releaseJumpButton, FP cooldownToSet)
+    //   agentEntity, bool releaseJumpButton, FP cooldownToSet); uses QBoolean.op_Implicit
     // TODO(0x7cc2f38, Quantum.AirSaveEvaluator.Execute): FP Execute(Frame f, EntityRef agentEntity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses FPMath.Lerp, FPVector3.get_Up, RNGSession.Next,
+    //   AINavigationSystem.FindGroundUnderPosition, AINavigationSystem.IsGrindingOnRail,
+    //   AINavigationSystem.IsJumping, AINavigationSystem.IsTakingBumper,
+    //   AirSaveEvaluator.ResetAirSave...
 };
 
 class ArithmeticFPFunction : public AIFunctionT<FP> {
@@ -966,7 +1011,7 @@ class ArithmeticFPFunction : public AIFunctionT<FP> {
     ArithmeticFPFunction() = default;
 
     // TODO(0x7cd12a4, Quantum.ArithmeticFPFunction.Execute): FP Execute(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses Log.Error
 };
 
 class AttackControlZoneEvaluator : public AIFunctionT<FP> {
@@ -978,7 +1023,9 @@ class AttackControlZoneEvaluator : public AIFunctionT<FP> {
     AttackControlZoneEvaluator() = default;
 
     // TODO(0x7cd0ea4, Quantum.AttackControlZoneEvaluator.Execute): FP Execute(Frame frame,
-    //   EntityRef agentEntity, AIContext aiContext)
+    //   EntityRef agentEntity, AIContext aiContext); uses BotLib.NoUtility,
+    //   BotLib.UtilityValue_0_100, EntityRef.get_None, EntityRef.op_Equality, KillableLib.IsDead,
+    //   PlayerActorLib.IsBot, Team.GetTeamID, Team.GetTeamMembers...
 };
 
 class AttackPlayerEvaluator : public AIFunctionT<FP> {
@@ -999,29 +1046,45 @@ class AttackPlayerEvaluator : public AIFunctionT<FP> {
     AttackPlayerEvaluator() = default;
 
     // TODO(0x7cbfec8, Quantum.AttackPlayerEvaluator.StopAttackAndStartCooldown): void
-    //   StopAttackAndStartCooldown(Frame f, Bot* pBot)
+    //   StopAttackAndStartCooldown(Frame f, Bot* pBot); uses RNGSession.Next, BotLib.StopAttack,
+    //   Frame.get_RNG
     // TODO(0x7cbff5c, Quantum.AttackPlayerEvaluator.ComputeAttackPosition): bool
     //   ComputeAttackPosition(Frame f, AIContext aiContext, EntityRef targetPlayer, FPVector3
-    //   attackPos, bool needsLineOfSight, bool forceSuccess)
+    //   attackPos, bool needsLineOfSight, bool forceSuccess); uses FPMath.Atan2, FPMath.SqrtRaw,
+    //   FPVector3.get_Up, FPVector3.get_Zero, AINavigationSystem.FindGroundUnderPosition,
+    //   AINavigationSystem.IsFreeNavigationPosition, AttackPlayerEvaluator.HasLineOfSight,
+    //   AttackPlayerEvaluator.TrySnapToNavMesh...
     // TODO(0x7cc052c, Quantum.AttackPlayerEvaluator.TrySnapToNavMesh): bool TrySnapToNavMesh(Frame
-    //   f, AIContext aiContext, FPVector3 groundPos, FPVector3 navMeshPos)
+    //   f, AIContext aiContext, FPVector3 groundPos, FPVector3 navMeshPos); uses FPVector3.get_Up,
+    //   AINavigationSystem.FindNearestNavMeshPos
     // TODO(0x7cc05f4, Quantum.AttackPlayerEvaluator.HasLineOfSight): bool HasLineOfSight(Frame f,
-    //   FPVector3 fromGroundPos, FPVector3 targetPos)
+    //   FPVector3 fromGroundPos, FPVector3 targetPos); uses FPMath.SqrtRaw, FPVector3.get_Up
     // TODO(0x7cc0770, Quantum.AttackPlayerEvaluator.CanAttackTarget): bool CanAttackTarget(Frame f,
     //   GAME_MODE gameMode, EntityRef botEntity, int botTeamID, EntityRef targetEntity, bool
-    //   ignoreAggroBehaviour, EntityInfoType targetType)
+    //   ignoreAggroBehaviour, EntityInfoType targetType); uses EntityInfoLib.EntityHasTypeMatching,
+    //   PlayerActorLib.IsBot, PlayerActorLib.IsHuman, QBoolean.op_Implicit, Team.TryGetTeamID
     // TODO(0x7cc09b4, Quantum.AttackPlayerEvaluator.FindTargetToAttack): EntityRef
     //   FindTargetToAttack(Frame f, AIContext aiContext, FPVector3 botPosition, EntityRef
-    //   botEntity, EntityInfoType targetType)
+    //   botEntity, EntityInfoType targetType); uses FPVector3.DistanceSquared,
+    //   AttackPlayerEvaluator.CanAttackTarget, AttackPlayerEvaluator.IsTargetAlreadyAttacked,
+    //   AttackPlayerEvaluator.StopAttackAndStartCooldown,
+    //   AttackPlayerEvaluator.TryGetHumanAttacker, EntityRef.get_None, EntityRef.op_Equality,
+    //   EntityRef.op_Inequality...
     // TODO(0x7cc12b4, Quantum.AttackPlayerEvaluator.IsTargetAlreadyAttacked): bool
     //   IsTargetAlreadyAttacked(Frame f, EntityRef self, EntityRef target, EntityRef
-    //   otherAttackerForTarget)
+    //   otherAttackerForTarget); uses EntityRef.get_None, EntityRef.op_Equality,
+    //   EntityRef.op_Inequality
     // TODO(0x7cc10a4, Quantum.AttackPlayerEvaluator.TryGetHumanAttacker): bool
-    //   TryGetHumanAttacker(Frame f, EntityRef self, EntityRef entityRef)
+    //   TryGetHumanAttacker(Frame f, EntityRef self, EntityRef entityRef); uses EntityRef.get_None,
+    //   EntityRef.op_Equality, PlayerActor.get_IsHuman
     // TODO(0x7cc151c, Quantum.AttackPlayerEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses FPMath.SqrtRaw, RNGSession.Next,
+    //   AINavigationSystem.IsGrindingOnRail, AttackPlayerEvaluator.ComputeAttackPosition,
+    //   AttackPlayerEvaluator.FindTargetToAttack, AttackPlayerEvaluator.GetTargetUtilityValue,
+    //   AttackPlayerEvaluator.StopAttackAndStartCooldown,
+    //   AttackPlayerEvaluator.TryGetHumanAttacker...
     // TODO(0x7cc1cf4, Quantum.AttackPlayerEvaluator.GetTargetUtilityValue): int
-    //   GetTargetUtilityValue(EntityInfoType targetType)
+    //   GetTargetUtilityValue(EntityInfoType targetType); uses EntityInfoLib.FilterContains
 };
 
 class ChargeAttackGetMaxDistanceFunction : public AIFunctionT<FP> {
@@ -1056,7 +1119,7 @@ class ChargeWrenchEvaluator : public AIFunctionT<FP> {
     ChargeWrenchEvaluator() = default;
 
     // TODO(0x7cceeb8, Quantum.ChargeWrenchEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses BotLib.NoUtility
 };
 
 class DashBlastBallEvaluator : public AIFunctionT<FP> {
@@ -1070,9 +1133,13 @@ class DashBlastBallEvaluator : public AIFunctionT<FP> {
     DashBlastBallEvaluator() = default;
 
     // TODO(0x7ccf0e8, Quantum.DashBlastBallEvaluator.RefreshCurrentCustomTarget): bool
-    //   RefreshCurrentCustomTarget(Frame f, AIContext aiContext)
+    //   RefreshCurrentCustomTarget(Frame f, AIContext aiContext); uses QBoolean.op_Implicit,
+    //   TargetFinder.get_PotentialTargets
     // TODO(0x7ccf364, Quantum.DashBlastBallEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses FPMath.Lerp, RNGSession.Next,
+    //   BlastBallAIHelper.GetBotShootingZone, BlastBallGameLib.TryGetGameData,
+    //   BlastBallGameLib.TryGetGameModeSpec, BotLib.NoUtility, BotLib.UtilityValue_0_100,
+    //   DashBlastBallEvaluator.RefreshCurrentCustomTarget...
 };
 
 class DefaultAIFunctionAssetRef : public AIFunctionT<AssetRef> {
@@ -1082,7 +1149,7 @@ class DefaultAIFunctionAssetRef : public AIFunctionT<AssetRef> {
     DefaultAIFunctionAssetRef() = default;
 
     // TODO(0x7b7e920, Quantum.DefaultAIFunctionAssetRef.Execute): AssetRef Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses AssetRef.op_Implicit
 };
 
 class DefaultAIFunctionBool : public AIFunctionT<bool> {
@@ -1132,7 +1199,7 @@ class DefaultAIFunctionFPVector2 : public AIFunctionT<FPVector2> {
     DefaultAIFunctionFPVector2() = default;
 
     // TODO(0x7b7eab4, Quantum.DefaultAIFunctionFPVector2.Execute): FPVector2 Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses FPVector2.get_Zero
 };
 
 class DefaultAIFunctionFPVector3 : public AIFunctionT<FPVector3> {
@@ -1142,7 +1209,7 @@ class DefaultAIFunctionFPVector3 : public AIFunctionT<FPVector3> {
     DefaultAIFunctionFPVector3() = default;
 
     // TODO(0x7b7eb04, Quantum.DefaultAIFunctionFPVector3.Execute): FPVector3 Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses FPVector3.get_Zero
 };
 
 class DefaultAIFunctionInt : public AIFunctionT<std::int32_t> {
@@ -1173,7 +1240,8 @@ class DefendControlZoneEvaluator : public AIFunctionT<FP> {
     DefendControlZoneEvaluator() = default;
 
     // TODO(0x7cd0a00, Quantum.DefendControlZoneEvaluator.Execute): FP Execute(Frame frame,
-    //   EntityRef agentEntity, AIContext aiContext)
+    //   EntityRef agentEntity, AIContext aiContext); uses BotLib.NoUtility,
+    //   BotLib.UtilityValue_0_100, Team.GetTeamID, ZoneControlLib.TryGetActiveZone
 };
 
 class EntityExistsFunction : public AIFunctionT<bool> {
@@ -1195,7 +1263,7 @@ class EntityIsGroundedFunction : public AIFunctionT<bool> {
     EntityIsGroundedFunction() = default;
 
     // TODO(0x7cd155c, Quantum.EntityIsGroundedFunction.Execute): bool Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses CharacterController3D.get_Grounded
 };
 
 class EntityRefsAreEqualFunction : public AIFunctionT<bool> {
@@ -1207,7 +1275,7 @@ class EntityRefsAreEqualFunction : public AIFunctionT<bool> {
     EntityRefsAreEqualFunction() = default;
 
     // TODO(0x7cd1688, Quantum.EntityRefsAreEqualFunction.Execute): bool Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses EntityRef.op_Equality
 };
 
 class EscapeShrinkingZoneEvaluator : public AIFunctionT<FP> {
@@ -1219,7 +1287,8 @@ class EscapeShrinkingZoneEvaluator : public AIFunctionT<FP> {
     EscapeShrinkingZoneEvaluator() = default;
 
     // TODO(0x7cc2c20, Quantum.EscapeShrinkingZoneEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses BotLib.RegisterUtility, ShrinkingZone.GetPointer,
+    //   ShrinkingZone.IsNearBorder
 };
 
 class FrameTimeHasElapsedFunction : public AIFunctionT<bool> {
@@ -1241,7 +1310,7 @@ class GetAttackInfoActiveFunction : public AIFunctionT<bool> {
     GetAttackInfoActiveFunction() = default;
 
     // TODO(0x7cd2a88, Quantum.GetAttackInfoActiveFunction.Execute): bool Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class GetAttackInfoTargetFunction : public AIFunctionT<EntityRef> {
@@ -1251,7 +1320,7 @@ class GetAttackInfoTargetFunction : public AIFunctionT<EntityRef> {
     GetAttackInfoTargetFunction() = default;
 
     // TODO(0x7cd2b7c, Quantum.GetAttackInfoTargetFunction.Execute): EntityRef Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses EntityRef.get_None
 };
 
 class GetAttackInfoWasRunningFunction : public AIFunctionT<bool> {
@@ -1261,7 +1330,7 @@ class GetAttackInfoWasRunningFunction : public AIFunctionT<bool> {
     GetAttackInfoWasRunningFunction() = default;
 
     // TODO(0x7cd2c68, Quantum.GetAttackInfoWasRunningFunction.Execute): bool Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class GetEntityPositionFunction : public AIFunctionT<FPVector3> {
@@ -1292,7 +1361,7 @@ class GetGroupEntityFunction : public AIFunctionT<EntityRef> {
     GetGroupEntityFunction() = default;
 
     // TODO(0x7cd3140, Quantum.GetGroupEntityFunction.Execute): EntityRef Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses EntityRef.get_None
 };
 
 class GetGroupTargetFunction : public AIFunctionT<EntityRef> {
@@ -1302,7 +1371,8 @@ class GetGroupTargetFunction : public AIFunctionT<EntityRef> {
     GetGroupTargetFunction() = default;
 
     // TODO(0x7cd322c, Quantum.GetGroupTargetFunction.Execute): EntityRef Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses EntityRef.get_None,
+    //   MobGroupLib.TryGetMembersMobGroup
 };
 
 class GetHighestPriorityTargetEntityFunction : public AIFunctionT<EntityRef> {
@@ -1312,7 +1382,8 @@ class GetHighestPriorityTargetEntityFunction : public AIFunctionT<EntityRef> {
     GetHighestPriorityTargetEntityFunction() = default;
 
     // TODO(0x7cd3ee0, Quantum.GetHighestPriorityTargetEntityFunction.Execute): EntityRef
-    //   Execute(Frame frame, EntityRef entity, AIContext aiContext)
+    //   Execute(Frame frame, EntityRef entity, AIContext aiContext); uses EntityRef.get_None,
+    //   PrioritisedTargetHandler.GetHighestPrioTarget
 };
 
 class GetHighestPriorityTargetPositionFunction : public AIFunctionT<FPVector3> {
@@ -1323,7 +1394,8 @@ class GetHighestPriorityTargetPositionFunction : public AIFunctionT<FPVector3> {
     GetHighestPriorityTargetPositionFunction() = default;
 
     // TODO(0x7cd400c, Quantum.GetHighestPriorityTargetPositionFunction.Execute): FPVector3
-    //   Execute(Frame frame, EntityRef entity, AIContext aiContext)
+    //   Execute(Frame frame, EntityRef entity, AIContext aiContext); uses FPVector3.get_Zero,
+    //   PrioritisedTargetHandler.GetHighestPrioTargetPosition
 };
 
 class GetRandomFPFunction : public AIFunctionT<FP> {
@@ -1335,7 +1407,7 @@ class GetRandomFPFunction : public AIFunctionT<FP> {
     GetRandomFPFunction() = default;
 
     // TODO(0x7cd1a64, Quantum.GetRandomFPFunction.Execute): FP Execute(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses RNGSession.Next, Frame.get_RNG
 };
 
 class GetRecentPriorityTargetPositionFunction : public AIFunctionT<FPVector3> {
@@ -1345,7 +1417,8 @@ class GetRecentPriorityTargetPositionFunction : public AIFunctionT<FPVector3> {
     GetRecentPriorityTargetPositionFunction() = default;
 
     // TODO(0x7cd430c, Quantum.GetRecentPriorityTargetPositionFunction.Execute): FPVector3
-    //   Execute(Frame frame, EntityRef entity, AIContext aiContext)
+    //   Execute(Frame frame, EntityRef entity, AIContext aiContext); uses FPVector3.get_Zero,
+    //   PrioritisedTargetHandler.GetPrioTargetOfType
 };
 
 class GetTargetFinderRangeNoWeaponFunction : public AIFunctionT<FP> {
@@ -1355,7 +1428,7 @@ class GetTargetFinderRangeNoWeaponFunction : public AIFunctionT<FP> {
     GetTargetFinderRangeNoWeaponFunction() = default;
 
     // TODO(0x7cd1b64, Quantum.GetTargetFinderRangeNoWeaponFunction.Execute): FP Execute(Frame
-    //   frame, EntityRef entity, AIContext aiContext)
+    //   frame, EntityRef entity, AIContext aiContext); uses Log.Error, TargetFinder.GetSpec
 };
 
 class GetVec2Element : public AIFunctionT<FP> {
@@ -1390,7 +1463,9 @@ class GroupTeamEvaluator : public AIFunctionT<FP> {
     GroupTeamEvaluator() = default;
 
     // TODO(0x7cbf698, Quantum.GroupTeamEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses FPVector3.DistanceSquared, FPVector3.get_Zero,
+    //   BotLib.ForbidSeek, BotLib.IsAbleToSeek, BotLib.RegisterUtility, EntityRef.get_None,
+    //   EntityRef.op_Equality, EntityRef.op_Inequality...
 };
 
 class HasGroupTargetFunction : public AIFunctionT<bool> {
@@ -1400,7 +1475,7 @@ class HasGroupTargetFunction : public AIFunctionT<bool> {
     HasGroupTargetFunction() = default;
 
     // TODO(0x7cd33a8, Quantum.HasGroupTargetFunction.Execute): bool Execute(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses MobGroupLib.TryGetMembersMobGroup
 };
 
 class HasNavLineOfSightToTargetFunction : public AIFunctionT<bool> {
@@ -1411,7 +1486,8 @@ class HasNavLineOfSightToTargetFunction : public AIFunctionT<bool> {
     HasNavLineOfSightToTargetFunction() = default;
 
     // TODO(0x7cd1e2c, Quantum.HasNavLineOfSightToTargetFunction.Execute): bool Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses Core.FrameBase.get_Navigation,
+    //   FrameUtility.GetNavMesh, NavMesh.LineOfSight, NavMeshRegionMask.get_Default
 };
 
 class HasValidRecentPriorityTargetFunction : public AIFunctionT<bool> {
@@ -1421,7 +1497,8 @@ class HasValidRecentPriorityTargetFunction : public AIFunctionT<bool> {
     HasValidRecentPriorityTargetFunction() = default;
 
     // TODO(0x7cd41b0, Quantum.HasValidRecentPriorityTargetFunction.Execute): bool Execute(Frame
-    //   frame, EntityRef entity, AIContext aiContext)
+    //   frame, EntityRef entity, AIContext aiContext); uses
+    //   PrioritisedTargetHandler.GetPrioTargetOfType
 };
 
 class InShootingZoneMovementEvaluator : public AIFunctionT<FP> {
@@ -1436,7 +1513,10 @@ class InShootingZoneMovementEvaluator : public AIFunctionT<FP> {
     InShootingZoneMovementEvaluator() = default;
 
     // TODO(0x7ccf604, Quantum.InShootingZoneMovementEvaluator.Execute): FP Execute(Frame frame,
-    //   EntityRef agentEntity, AIContext aiContext)
+    //   EntityRef agentEntity, AIContext aiContext); uses FPMath.Lerp, FPVector3.Normalize,
+    //   RNGSession.Next, BlastBallAIHelper.GetBehaviorState, BlastBallAIHelper.GetBotShootingZone,
+    //   BlastBallAIHelper.GetTeamDistanceRank, BlastBallGameLib.TryGetGameData,
+    //   BlastBallGameLib.TryGetGameModeSpec...
 };
 
 class InputCheatFollowPlayer : public AIFunctionT<FP> {
@@ -1446,7 +1526,7 @@ class InputCheatFollowPlayer : public AIFunctionT<FP> {
     InputCheatFollowPlayer() = default;
 
     // TODO(0x7cbe8c8, Quantum.InputCheatFollowPlayer.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class KccIsMovingFunction : public AIFunctionT<bool> {
@@ -1466,7 +1546,7 @@ class MeleeAttackIsActiveFunction : public AIFunctionT<bool> {
     MeleeAttackIsActiveFunction() = default;
 
     // TODO(0x7cc8274, Quantum.MeleeAttackIsActiveFunction.Execute): bool Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses QBoolean.op_Implicit
 };
 
 class MinMaxFPFunction : public AIFunctionT<FP> {
@@ -1484,7 +1564,7 @@ class MinMaxFPFunction : public AIFunctionT<FP> {
     MinMaxFPFunction() = default;
 
     // TODO(0x7cd2148, Quantum.MinMaxFPFunction.Execute): FP Execute(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses FPMath.Max, FPMath.Min, Log.Error
 };
 
 class MoveAwayFromTeammatesEvaluator : public AIFunctionT<FP> {
@@ -1496,7 +1576,9 @@ class MoveAwayFromTeammatesEvaluator : public AIFunctionT<FP> {
     MoveAwayFromTeammatesEvaluator() = default;
 
     // TODO(0x7ccfeb8, Quantum.MoveAwayFromTeammatesEvaluator.Execute): FP Execute(Frame frame,
-    //   EntityRef agentEntity, AIContext aiContext)
+    //   EntityRef agentEntity, AIContext aiContext); uses FPVector3.Normalize, FPVector3.get_Zero,
+    //   BlastBallGameLib.TryGetGameData, BlastBallGameLib.TryGetGameModeSpec, BotLib.NoUtility,
+    //   BotLib.UtilityValue_0_100, EntityRef.op_Equality, Team.GetTeamID
 };
 
 class MoveToClosestEnemyEvaluator : public AIFunctionT<FP> {
@@ -1507,7 +1589,8 @@ class MoveToClosestEnemyEvaluator : public AIFunctionT<FP> {
     MoveToClosestEnemyEvaluator() = default;
 
     // TODO(0x7cc1e14, Quantum.MoveToClosestEnemyEvaluator.Execute): FP Execute(Frame frame,
-    //   EntityRef agentEntity, AIContext aiContext)
+    //   EntityRef agentEntity, AIContext aiContext); uses FPVector3.get_Zero,
+    //   BotLib.RegisterUtility, EntityRef.op_Equality, Team.GetTeamID
 };
 
 class MoveTowardsBallEvaluator : public AIFunctionT<FP> {
@@ -1518,7 +1601,7 @@ class MoveTowardsBallEvaluator : public AIFunctionT<FP> {
     MoveTowardsBallEvaluator() = default;
 
     // TODO(0x7cce924, Quantum.MoveTowardsBallEvaluator.Execute): FP Execute(Frame frame, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses BotLib.NoUtility
 };
 
 class PassingEvaluator : public AIFunctionT<FP> {
@@ -1529,7 +1612,7 @@ class PassingEvaluator : public AIFunctionT<FP> {
     PassingEvaluator() = default;
 
     // TODO(0x7ccef7c, Quantum.PassingEvaluator.Execute): FP Execute(Frame frame, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses BotLib.NoUtility
 };
 
 class PriorityTargetTypeCompareFunction : public AIFunctionT<bool> {
@@ -1547,9 +1630,10 @@ class PriorityTargetTypeCompareFunction : public AIFunctionT<bool> {
     PriorityTargetTypeCompareFunction() = default;
 
     // TODO(0x7cd44ec, Quantum.PriorityTargetTypeCompareFunction.Execute): bool Execute(Frame frame,
-    //   EntityRef entity, AIContext aiContext)
+    //   EntityRef entity, AIContext aiContext); uses PriorityTargetTypeCompareFunction.GetEnumValue
     // TODO(0x7cd4600, Quantum.PriorityTargetTypeCompareFunction.GetEnumValue): PrioTargetType
-    //   GetEnumValue(Frame frame, EntityRef entity, AIContext aiContext)
+    //   GetEnumValue(Frame frame, EntityRef entity, AIContext aiContext); uses
+    //   PrioritisedTargetHandler.GetHighestPrioTargetType
 };
 
 class ReachEnemyGoalEvaluator : public AIFunctionT<FP> {
@@ -1560,7 +1644,7 @@ class ReachEnemyGoalEvaluator : public AIFunctionT<FP> {
     ReachEnemyGoalEvaluator() = default;
 
     // TODO(0x7cce7bc, Quantum.ReachEnemyGoalEvaluator.Execute): FP Execute(Frame frame, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses BotLib.NoUtility
 };
 
 class ReachShootingZoneEvaluator : public AIFunctionT<FP> {
@@ -1574,7 +1658,10 @@ class ReachShootingZoneEvaluator : public AIFunctionT<FP> {
     ReachShootingZoneEvaluator() = default;
 
     // TODO(0x7ccfa64, Quantum.ReachShootingZoneEvaluator.Execute): FP Execute(Frame frame,
-    //   EntityRef agentEntity, AIContext aiContext)
+    //   EntityRef agentEntity, AIContext aiContext); uses BlastBallAIHelper.GetBehaviorState,
+    //   BlastBallAIHelper.GetBotShootingZone, BlastBallAIHelper.GetRandomPointInShootingZone,
+    //   BlastBallAIHelper.GetTeamDistanceRank, BlastBallGameLib.TryGetGameData,
+    //   BlastBallGameLib.TryGetGameModeSpec, BotLib.NoUtility, BotLib.UtilityValue_0_100...
 };
 
 class ReachStrikeZoneEvaluator : public AIFunctionT<FP> {
@@ -1586,7 +1673,9 @@ class ReachStrikeZoneEvaluator : public AIFunctionT<FP> {
     ReachStrikeZoneEvaluator() = default;
 
     // TODO(0x7cce2c4, Quantum.ReachStrikeZoneEvaluator.Execute): FP Execute(Frame frame, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses AIBlackboardComponent.GetVector3,
+    //   BlastBallAIHelper.IsInStrikeZone, BlastBallGameLib.TryGetGameData, BotLib.NoUtility,
+    //   BotLib.UtilityValue_0_100
 };
 
 class SeekCrateEvaluator : public AIFunctionT<FP> {
@@ -1599,9 +1688,12 @@ class SeekCrateEvaluator : public AIFunctionT<FP> {
     SeekCrateEvaluator() = default;
 
     // TODO(0x7cbea60, Quantum.SeekCrateEvaluator.IsAValidCrate): bool IsAValidCrate(Frame f,
-    //   EntityRef entity, FPVector3 pos, ShrinkingZone* pZone, FP safetyMargin)
+    //   EntityRef entity, FPVector3 pos, ShrinkingZone* pZone, FP safetyMargin); uses
+    //   EntityInfoLib.EntityHasTypeMatching, ShrinkingZone.IsNearBorder
     // TODO(0x7cbeb1c, Quantum.SeekCrateEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses FPVector3.DistanceSquared, FPVector3.get_Down,
+    //   AINavigationSystem.FindNearestNavMeshPos, BotLib.ForbidSeek, BotLib.IsAbleToSeek,
+    //   BotLib.IsAttacking, BotLib.RegisterUtility, EntityRef.get_None...
 };
 
 class SeekDroppableEvaluator : public AIFunctionT<FP> {
@@ -1612,7 +1704,10 @@ class SeekDroppableEvaluator : public AIFunctionT<FP> {
     SeekDroppableEvaluator() = default;
 
     // TODO(0x7cbf26c, Quantum.SeekDroppableEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses FPVector3.get_Up,
+    //   AINavigationSystem.FindGroundUnderPosition, Bot.get_inRangeDroppables, BotLib.ForbidSeek,
+    //   BotLib.IsAbleToSeek, BotLib.IsAttacking, BotLib.RegisterUtility,
+    //   DroppableLib.GetFromIndexAndID
 };
 
 class SeekGoldenBoltEvaluator : public AIFunctionT<FP> {
@@ -1627,9 +1722,11 @@ class SeekGoldenBoltEvaluator : public AIFunctionT<FP> {
 
     // TODO(0x7cc372c, Quantum.SeekGoldenBoltEvaluator.ComputeUtilityDependingOnDistance): FP
     //   ComputeUtilityDependingOnDistance(Frame f, GoldenBoltManager* goldenBoltManager, AIContext
-    //   aiContext)
+    //   aiContext); uses BotLib.RegisterUtility, GoldenBoltManager.TryGetClosestGoldenBolt
     // TODO(0x7cc3898, Quantum.SeekGoldenBoltEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses FPMath.Clamp01, FPVector3.Normalize,
+    //   FPVector3.get_Zero, BotLib.InFOV_XZ, BotLib.RegisterUtility,
+    //   BotLib.TryGetGoldenBoltManager, EntityRef.get_None, EntityRef.op_Inequality...
 };
 
 class ShootBallEvaluator : public AIFunctionT<FP> {
@@ -1640,7 +1737,10 @@ class ShootBallEvaluator : public AIFunctionT<FP> {
     ShootBallEvaluator() = default;
 
     // TODO(0x7cd02d4, Quantum.ShootBallEvaluator.Execute): FP Execute(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses FPVector3.DistanceSquared,
+    //   AimBotSystem.HasPendingFireRequest, BlastBallAIHelper.GetBotShootingZone,
+    //   BlastBallGameLib.TryGetGameData, BlastBallGameLib.TryGetGameModeSpec, BotLib.NoUtility,
+    //   BotLib.UtilityValue_0_100, EntityRef.get_None...
 };
 
 class ShootEvaluator : public AIFunctionT<FP> {
@@ -1655,9 +1755,14 @@ class ShootEvaluator : public AIFunctionT<FP> {
     ShootEvaluator() = default;
 
     // TODO(0x7cc2054, Quantum.ShootEvaluator.RefreshCurrentCustomTarget): bool
-    //   RefreshCurrentCustomTarget(Frame f, AIContext aiContext)
+    //   RefreshCurrentCustomTarget(Frame f, AIContext aiContext); uses FPVector3.DistanceSquared,
+    //   BlastBallGameLib.TryGetGameModeSpec, BotLib.InFOV_XZ, BotLib.TargetIsDead,
+    //   EntityInfoLib.EntityHasTypeMatching, EntityRef.get_None, EntityRef.op_Equality,
+    //   EntityRef.op_Inequality...
     // TODO(0x7cc28c0, Quantum.ShootEvaluator.Execute): FP Execute(Frame f, EntityRef agentEntity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses BotLib.RegisterUtility, EntityRef.get_None,
+    //   EntityRef.op_Equality, QBoolean.op_Implicit, ShootEvaluator.RefreshCurrentCustomTarget,
+    //   Weapon.IsReloading, Unsafe.TryGetWeaponUser
 };
 
 class StopToShootEvaluator : public AIFunctionT<FP> {
@@ -1667,7 +1772,7 @@ class StopToShootEvaluator : public AIFunctionT<FP> {
     StopToShootEvaluator() = default;
 
     // TODO(0x7cbfe1c, Quantum.StopToShootEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses BotLib.RegisterUtility
 };
 
 class SwitchWeaponEvaluator : public AIFunctionT<FP> {
@@ -1679,7 +1784,7 @@ class SwitchWeaponEvaluator : public AIFunctionT<FP> {
     SwitchWeaponEvaluator() = default;
 
     // TODO(0x7cc3488, Quantum.SwitchWeaponEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses BotLib.RegisterUtility
 };
 
 class SwitchWeaponUltimateEvaluator : public AIFunctionT<FP> {
@@ -1689,7 +1794,10 @@ class SwitchWeaponUltimateEvaluator : public AIFunctionT<FP> {
     SwitchWeaponUltimateEvaluator() = default;
 
     // TODO(0x7cc3540, Quantum.SwitchWeaponUltimateEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses BotLib.RegisterUtility, BotLib.TargetIsDead,
+    //   EntityInfoLib.EntityHasTypeMatching, QBoolean.op_Implicit, RuntimeConfig.get_IsInFTUE,
+    //   RuntimeConfig.get_IsTutorial, UltimateAbilityLib.IsUltimateActive,
+    //   UltimateAbilityLib.IsUltimateAvailable
 };
 
 class TakeDefensivePositionEvaluator : public AIFunctionT<FP> {
@@ -1704,7 +1812,10 @@ class TakeDefensivePositionEvaluator : public AIFunctionT<FP> {
     TakeDefensivePositionEvaluator() = default;
 
     // TODO(0x7cce9d0, Quantum.TakeDefensivePositionEvaluator.Execute): FP Execute(Frame frame,
-    //   EntityRef agentEntity, AIContext aiContext)
+    //   EntityRef agentEntity, AIContext aiContext); uses FPVector3.Normalize,
+    //   FPVector3.ProjectOnPlane, RNGSession.Next, BlastBallAIHelper.GetBehaviorState,
+    //   BlastBallAIHelper.GetRandomPointInShootingZone, BlastBallAIHelper.GetTeamDistanceRank,
+    //   BlastBallGameLib.TryGetGameData, BlastBallGameLib.TryGetGameModeSpec...
 };
 
 class UseGadgetEvaluator : public AIFunctionT<FP> {
@@ -1718,9 +1829,13 @@ class UseGadgetEvaluator : public AIFunctionT<FP> {
     UseGadgetEvaluator() = default;
 
     // TODO(0x7cc45f4, Quantum.UseGadgetEvaluator.Execute): FP Execute(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses RNGSession.Next, BotLib.RegisterUtility, Frame.get_RNG,
+    //   GadgetSpec.IsOnCooldown, GadgetUser.get_IsActive, QBoolean.op_Implicit,
+    //   UseGadgetEvaluator.HasValidTargetInRange
     // TODO(0x7cc484c, Quantum.UseGadgetEvaluator.HasValidTargetInRange): bool
-    //   HasValidTargetInRange(Frame frame, EntityRef botEntity, GadgetSpec gadgetSpec)
+    //   HasValidTargetInRange(Frame frame, EntityRef botEntity, GadgetSpec gadgetSpec); uses
+    //   FPVector3.DistanceSquared, BotLib.TargetIsDead, EntityInfoLib.EntityHasTypeMatching,
+    //   EntityRef.get_None, EntityRef.op_Equality
 };
 
 class UseWrenchEvaluator : public AIFunctionT<FP> {
@@ -1735,9 +1850,14 @@ class UseWrenchEvaluator : public AIFunctionT<FP> {
     UseWrenchEvaluator() = default;
 
     // TODO(0x7cc3eb4, Quantum.UseWrenchEvaluator.RefreshCurrentCustomTarget): bool
-    //   RefreshCurrentCustomTarget(Frame f, AIContext aiContext)
+    //   RefreshCurrentCustomTarget(Frame f, AIContext aiContext); uses FPMath.SqrtRaw,
+    //   BlastBallAIHelper.GetBotShootingZone, BlastBallGameLib.TryGetBlastBall,
+    //   BlastBallGameLib.TryGetGameData, BlastBallGameLib.TryGetGameModeSpec, BotLib.InFOV_XZ,
+    //   BotLib.TargetIsDead, EntityInfoLib.EntityHasTypeMatching...
     // TODO(0x7cc42b8, Quantum.UseWrenchEvaluator.Execute): FP Execute(Frame f, EntityRef
-    //   agentEntity, AIContext aiContext)
+    //   agentEntity, AIContext aiContext); uses FPMath.Lerp, RNGSession.Next,
+    //   BlastBallGameLib.TryGetBlastBall, BotLib.RegisterUtility, DashActorLib.IsDashing,
+    //   Frame.get_RNG, QBoolean.op_Implicit, UseWrenchEvaluator.RefreshCurrentCustomTarget...
 };
 
 class WanderEvaluator : public AIFunctionT<FP> {
@@ -1748,7 +1868,7 @@ class WanderEvaluator : public AIFunctionT<FP> {
     WanderEvaluator() = default;
 
     // TODO(0x7cbe944, Quantum.WanderEvaluator.Execute): FP Execute(Frame f, EntityRef agentEntity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses BotLib.RegisterUtility
 };
 
 class PathfindStatusEqualsFunction : public EnumEqualsFunction<PATH_FINDING_STATUS> {

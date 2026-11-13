@@ -131,6 +131,12 @@ void HFSMTransitionSet::Loaded(IResourceManager* resourceManager, Allocator* all
     for (HFSMTransition& transition : Transitions) transition.Setup(resourceManager);
 }
 
+const AIConfig::KeyValuePair* AIConfig::Get(const std::string& key) const {
+    for (const KeyValuePair& pair : KeyValuePairs)
+        if (pair.Key == key) return &pair;
+    return nullptr;
+}
+
 void UTRoot::Loaded(IResourceManager* resourceManager, Allocator* allocator) {
     (void)allocator;
     Considerations = LinkAssets<Consideration>(resourceManager, ConsiderationsRefs);

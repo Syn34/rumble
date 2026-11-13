@@ -65,10 +65,12 @@ class AIBlackboardInitializer : public AssetObject {
     // TODO(0x7b890d0, Quantum.AIBlackboardInitializer.InitializeBlackboard): void
     //   InitializeBlackboard(Frame frame, AIBlackboardComponent* blackboard,
     //   AIBlackboardInitializer blackboardInitializer, AIBlackboardInitialValueEntry[]
-    //   blackboardOverrides)
+    //   blackboardOverrides); uses AIBlackboardComponent.Initialize,
+    //   AIBlackboardInitializer.ApplyEntries
     // TODO(0x7b8919c, Quantum.AIBlackboardInitializer.ApplyEntries): void ApplyEntries(Frame frame,
     //   AIBlackboardComponent* blackboard, AIBlackboardInitializer blackboardInitializer,
-    //   AIBlackboardInitialValueEntry[] values)
+    //   AIBlackboardInitialValueEntry[] values); uses AIBlackboardComponent.GetBlackboardValue,
+    //   AIBlackboardComponent.HasEntry, AIBlackboardComponent.Set, Log.Warn, QBoolean.op_Implicit
 };
 
 class AIConfig : public AssetObject {
@@ -113,7 +115,8 @@ class AIConfig : public AssetObject {
     // 0x7b7f1a0
     AIConfig() = default;
 
-    // TODO(0x7b7f0d8, Quantum.AIConfig.Get): KeyValuePair Get(string key)
+    // 0x7b7f0d8 - the entry with that key (this config's own entries only), or null.
+    const KeyValuePair* Get(const std::string& key) const;
 };
 
 class AIFunction : public AssetObject {
@@ -193,7 +196,7 @@ class Consideration : public AssetObject {
     Consideration() = default;
 
     // TODO(0x7b84968, Quantum.Consideration.GetConsideration): AssetRefConsideration
-    //   GetConsideration(AssetRefConsideration> sourceList, int id)
+    //   GetConsideration(AssetRefConsideration> sourceList, int id); uses AssetObject.get_Guid
     // TODO(0x7b849b8, Quantum.Consideration.Count): int Count(AssetRefConsideration> sourceList)
     // TODO(0x7b849d0, Quantum.Consideration.GetRank): int GetRank(FrameThreadSafe frame, EntityRef
     //   entity, AIContext aiContext)
@@ -204,7 +207,8 @@ class Consideration : public AssetObject {
     // TODO(0x7b84b80, Quantum.Consideration.OnExit): void OnExit(FrameThreadSafe frame, EntityRef
     //   entity, AIContext aiContext)
     // TODO(0x7b84c14, Quantum.Consideration.OnUpdate): void OnUpdate(FrameThreadSafe frame,
-    //   UtilityReasoner* reasoner, EntityRef entity, AIContext aiContext)
+    //   UtilityReasoner* reasoner, EntityRef entity, AIContext aiContext); uses
+    //   Consideration.OnUpdate
     // 0x7b84d60 - resolves the rank and commitment functions, the response curves, the enter/update/exit actions and the next considerations.
     void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
@@ -320,24 +324,32 @@ class HFSMState : public AssetObject {
     // 0x7b83100 - resolves the update/enter/exit actions, the children and the parent, and sets up the transitions.
     void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
     // TODO(0x7b827b0, Quantum.HFSMState.UpdateState): bool UpdateState(FrameThreadSafe frame, FP
-    //   deltaTime, HFSMData* hfsmData, EntityRef entity, AIContext aiContext)
+    //   deltaTime, HFSMData* hfsmData, EntityRef entity, AIContext aiContext); uses
+    //   HFSMData.get_Times, HFSMState.CheckTransitions, HFSMState.UpdateActions,
+    //   HFSMState.UpdateState
     // TODO(0x7b829a0, Quantum.HFSMState.Event): bool Event(FrameThreadSafe frame, HFSMData*
-    //   hfsmData, EntityRef entity, int eventInt, AIContext aiContext)
+    //   hfsmData, EntityRef entity, int eventInt, AIContext aiContext); uses
+    //   HFSMState.CheckTransitions, HFSMState.Event
     // TODO(0x7b82bf8, Quantum.HFSMState.EnterState): void EnterState(FrameThreadSafe frame,
-    //   HFSMData* hfsmData, EntityRef entity, AIContext aiContext)
+    //   HFSMData* hfsmData, EntityRef entity, AIContext aiContext); uses HFSMData.get_Times,
+    //   HFSMState.FindChildInHistory, HFSMState.UpdateActions, QBoolean.op_Implicit,
+    //   ThreadSafe.ChangeState
     // TODO(0x7b83e94, Quantum.HFSMState.FindChildInHistory): HFSMState
     //   FindChildInHistory(FrameThreadSafe frame, HFSMData* hfsmData)
     // TODO(0x7b82ab4, Quantum.HFSMState.ExitState): void ExitState(HFSMState nextState,
-    //   FrameThreadSafe frame, HFSMData* hfsmData, EntityRef entity, AIContext aiContext)
+    //   FrameThreadSafe frame, HFSMData* hfsmData, EntityRef entity, AIContext aiContext); uses
+    //   HFSMState.IsSiblingOf, HFSMState.UpdateActions, QBoolean.op_Implicit
     // 0x7b83f00 - whether `state` is an ancestor of this state.
     bool IsChildOf(const HFSMState* state) const;
     // TODO(0x7b83f1c, Quantum.HFSMState.IsSiblingOf): bool IsSiblingOf(FrameThreadSafe frame,
     //   HFSMData* hfsmData, HFSMState state)
     // TODO(0x7b83bc4, Quantum.HFSMState.UpdateActions): void UpdateActions(FrameThreadSafe frame,
-    //   EntityRef entity, HFSMData* hfsmData, AIContext aiContext, AIAction[] actions)
+    //   EntityRef entity, HFSMData* hfsmData, AIContext aiContext, AIAction[] actions); uses
+    //   HFSMData.get_Times
     // TODO(0x7b83ccc, Quantum.HFSMState.CheckTransitions): bool CheckTransitions(FrameThreadSafe
     //   frame, HFSMTransition[] transitions, HFSMData* hfsmData, EntityRef entity, int eventKey,
-    //   AIContext aiContext, int depth)
+    //   AIContext aiContext, int depth); uses HFSMData.get_Times, HFSMState.CheckTransitions,
+    //   ThreadSafe.ChangeState
 };
 
 class HFSMTransitionSet : public AssetObject {
@@ -419,7 +431,8 @@ class CheckBlackboardInt : public HFSMDecision {
     CheckBlackboardInt() = default;
 
     // TODO(0x7b8a030, Quantum.CheckBlackboardInt.Decide): bool Decide(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses AIBlackboardComponent.GetBlackboardValue,
+    //   BlackboardValue.get_IntegerValue
 };
 
 class DebugAction : public AIAction {
@@ -430,7 +443,7 @@ class DebugAction : public AIAction {
     DebugAction() = default;
 
     // TODO(0x7b89d54, Quantum.DebugAction.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses Log.Info
 };
 
 class DebugService : public BTService {
@@ -508,7 +521,8 @@ class IncreaseBlackboardInt : public AIAction {
     IncreaseBlackboardInt() = default;
 
     // TODO(0x7b89e90, Quantum.IncreaseBlackboardInt.Update): void Update(Frame frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses AIBlackboardComponent.GetBlackboardValue,
+    //   AIBlackboardComponent.Set, BlackboardValue.get_IntegerValue
 };
 
 class IsTrue : public HFSMDecision {
@@ -531,7 +545,7 @@ class SetBlackboardBool : public AIAction {
     SetBlackboardBool() = default;
 
     // TODO(0x7cba3ac, Quantum.SetBlackboardBool.Update): void Update(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AIBlackboardComponent.Set, QBoolean.op_Implicit
 };
 
 class SetBlackboardEntityRef : public AIAction {
@@ -543,7 +557,7 @@ class SetBlackboardEntityRef : public AIAction {
     SetBlackboardEntityRef() = default;
 
     // TODO(0x7cba318, Quantum.SetBlackboardEntityRef.Update): void Update(Frame f, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses AIBlackboardComponent.Set
 };
 
 class SetBlackboardFP : public AIAction {
@@ -555,7 +569,7 @@ class SetBlackboardFP : public AIAction {
     SetBlackboardFP() = default;
 
     // TODO(0x7cba1b4, Quantum.SetBlackboardFP.Update): void Update(Frame f, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AIBlackboardComponent.Set
 };
 
 class SetBlackboardFPVector3 : public AIAction {
@@ -567,7 +581,7 @@ class SetBlackboardFPVector3 : public AIAction {
     SetBlackboardFPVector3() = default;
 
     // TODO(0x7cba248, Quantum.SetBlackboardFPVector3.Update): void Update(Frame f, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses AIBlackboardComponent.Set
 };
 
 class SetBlackboardInt : public AIAction {
@@ -579,7 +593,7 @@ class SetBlackboardInt : public AIAction {
     SetBlackboardInt() = default;
 
     // TODO(0x7b89f98, Quantum.SetBlackboardInt.Update): void Update(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses AIBlackboardComponent.Set
 };
 
 class TrueDecision : public HFSMDecision {
@@ -674,7 +688,8 @@ class HFSMAndDecision : public HFSMLogicalDecision {
     HFSMAndDecision() = default;
 
     // TODO(0x7b81d60, Quantum.HFSMAndDecision.DecideThreadSafe): bool
-    //   DecideThreadSafe(FrameThreadSafe frame, EntityRef entity, AIContext aiContext)
+    //   DecideThreadSafe(FrameThreadSafe frame, EntityRef entity, AIContext aiContext); uses
+    //   HFSMAndDecision.CheckDecisions
     // TODO(0x7b81d64, Quantum.HFSMAndDecision.CheckDecisions): bool CheckDecisions(FrameThreadSafe
     //   frame, EntityRef entity, AIContext aiContext)
 };
@@ -686,7 +701,8 @@ class HFSMNotDecision : public HFSMLogicalDecision {
     HFSMNotDecision() = default;
 
     // TODO(0x7b81e18, Quantum.HFSMNotDecision.DecideThreadSafe): bool
-    //   DecideThreadSafe(FrameThreadSafe frame, EntityRef entity, AIContext aiContext)
+    //   DecideThreadSafe(FrameThreadSafe frame, EntityRef entity, AIContext aiContext); uses
+    //   HFSMNotDecision.CheckDecisions
     // TODO(0x7b81e1c, Quantum.HFSMNotDecision.CheckDecisions): bool CheckDecisions(FrameThreadSafe
     //   frame, EntityRef entity, AIContext aiContext)
 };
@@ -698,7 +714,8 @@ class HFSMOrDecision : public HFSMLogicalDecision {
     HFSMOrDecision() = default;
 
     // TODO(0x7b81ca4, Quantum.HFSMOrDecision.DecideThreadSafe): bool
-    //   DecideThreadSafe(FrameThreadSafe frame, EntityRef entity, AIContext aiContext)
+    //   DecideThreadSafe(FrameThreadSafe frame, EntityRef entity, AIContext aiContext); uses
+    //   HFSMOrDecision.CheckDecisions
     // TODO(0x7b81ca8, Quantum.HFSMOrDecision.CheckDecisions): bool CheckDecisions(FrameThreadSafe
     //   frame, EntityRef entity, AIContext aiContext)
 };
@@ -714,9 +731,10 @@ class ResponseCurve : public AIFunctionT<FP> {
     ResponseCurve() = default;
 
     // TODO(0x7b80088, Quantum.ResponseCurve.Execute): FP Execute(Frame frame, EntityRef entity,
-    //   AIContext aiContext)
+    //   AIContext aiContext); uses FrameThreadSafe.op_Explicit
     // TODO(0x7b800d8, Quantum.ResponseCurve.Execute): FP Execute(FrameThreadSafe frame, EntityRef
-    //   entity, AIContext aiContext)
+    //   entity, AIContext aiContext); uses BotSDKSystem.GetBlackboardComponent,
+    //   FPAnimationCurve.Evaluate
 };
 
 class WaitLeaf : public BTLeaf {

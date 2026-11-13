@@ -318,19 +318,29 @@ class DamageSpec : public AssetObject {
     DamageSpec() = default;
 
     // TODO(0x7c8e2a4, Quantum.DamageSpec.CreateHitData): HitData CreateHitData(Frame frame,
-    //   FPVector3 position, FPVector3 direction, EntityRef sourceEntity, EntityRef targetEntity)
+    //   FPVector3 position, FPVector3 direction, EntityRef sourceEntity, EntityRef targetEntity);
+    //   uses DamageLib.TryGetDamageMultiplier, DamageSpec.CalculateDamages,
+    //   DamageSpec.GetDamageModifier, Ownership.GetOwnershipOrDefault, QBoolean.op_Implicit
     // TODO(0x7c8e70c, Quantum.DamageSpec.CalculateDamages): FP CalculateDamages(Frame frame,
-    //   HitData hitData, EntityRef targetEntity)
+    //   HitData hitData, EntityRef targetEntity); uses FPMath.Min, FPVector3.Distance,
+    //   DamageLib.GetTotalDamageMultiplier, DamageSpec.CalculateRawDamages,
+    //   FPAnimationCurve.Evaluate, PowerUpUser.get_ActivePowerUps,
+    //   ProjectileLib.ComputeProjectileDamageMultiplier, Unsafe.TryGetWeaponUser
     // TODO(0x7c8f030, Quantum.DamageSpec.CalculateRawDamages): FP CalculateRawDamages(Frame frame,
-    //   HitData hitData)
+    //   HitData hitData); uses FPMath.Clamp, FPMath.Lerp, BalancingLib.TryGetHumanHeroesLevelRatio,
+    //   WeaponLib.TryGetWeaponLevel
     // TODO(0x7c8edc8, Quantum.DamageSpec.GetDamageModifier): void GetDamageModifier(Frame frame,
-    //   Ownership sourceOwnership, DamageModifier> resultDamageModifier)
+    //   Ownership sourceOwnership, DamageModifier> resultDamageModifier); uses
+    //   AssetGuid.get_IsValid, BalancingLib.TryGetHeroSpec,
+    //   DamageSpec.GetDamageModifiersFromHeroImprovements,
+    //   DamageSpec.GetDamageModifiersFromWeaponEnhancement
     // TODO(0x7c8f4e8, Quantum.DamageSpec.GetDamageModifiersFromWeaponEnhancement): void
     //   GetDamageModifiersFromWeaponEnhancement(Frame frame, WeaponEnhancementSpec enhancementSpec,
-    //   EntityRef sourceWeapon, DamageModifier> damageModifierList)
+    //   EntityRef sourceWeapon, DamageModifier> damageModifierList); uses AssetGuid.op_Inequality,
+    //   AssetObject.get_Guid, SimulationWeaponTable.TryGetWeaponId
     // TODO(0x7c8f2cc, Quantum.DamageSpec.GetDamageModifiersFromHeroImprovements): void
     //   GetDamageModifiersFromHeroImprovements(Frame frame, ImprovementSpec improvementSpec,
-    //   DamageModifier> damageModifierList)
+    //   DamageModifier> damageModifierList); uses AssetGuid.op_Inequality, AssetObject.get_Guid
 };
 
 class DamageToImpulseConverterSpec : public AssetObject {
@@ -446,7 +456,7 @@ class DroppableManagerSpec : public AssetObject {
     // TODO(0x7c8ff78, Quantum.DroppableManagerSpec.GetDroppableSpec): DroppableSpec
     //   GetDroppableSpec(DroppableType type)
     // TODO(0x7c900d8, Quantum.DroppableManagerSpec.TryGetPowerUpSpec): bool TryGetPowerUpSpec(Frame
-    //   f, DroppableType type, PowerUpSpec spec)
+    //   f, DroppableType type, PowerUpSpec spec); uses AssetGuid.get_IsValid
 };
 
 class ElementalDamageTable : public AssetObject {
@@ -743,9 +753,11 @@ class PowerUpSpec : public AssetObject {
         (void)f, (void)userEntity;
         NotReimplemented("Quantum.PowerUpSpec.OnFinished");
     }
-    // TODO(0x7c9388c, Quantum.PowerUpSpec.Start): void Start(Frame f, EntityRef userEntity)
+    // TODO(0x7c9388c, Quantum.PowerUpSpec.Start): void Start(Frame f, EntityRef userEntity); uses
+    //   FrameEvents.PowerUp_OnStarted, AssetRefPowerUpSpec.op_Implicit, PowerUpSpec.Finish,
+    //   PowerUpUser.get_ActivePowerUps
     // TODO(0x7c93b08, Quantum.PowerUpSpec.Finish): void Finish(Frame f, EntityRef userEntity, int
-    //   stackIndex)
+    //   stackIndex); uses FrameEvents.PowerUp_OnFinished
 };
 
 class PrioritisedTargetHandlerSpec : public AssetObject {
@@ -838,7 +850,8 @@ class ProjectileSpec : public AssetObject {
     //   TrajectoryCurveData> higherTrajectory)
     // TODO(0x7c93d5c, Quantum.ProjectileSpec.GetLobTrajectoryData): void GetLobTrajectoryData(FP
     //   angle, TrajectoryCurveData> lowerTrajectory, TrajectoryCurveData> higherTrajectory, FP
-    //   rangeRatio, FP height, FP trajectoryLerp)
+    //   rangeRatio, FP height, FP trajectoryLerp); uses FPMath.InverseLerp, FPMath.Lerp,
+    //   ProjectileSpec.GetSurroundingTrajectories
 };
 
 class PusherSpec : public AssetObject {
@@ -864,9 +877,11 @@ class PusherSpec : public AssetObject {
     // 0x7c94438
     PusherSpec() = default;
 
-    // TODO(0x7c940c4, Quantum.PusherSpec.SetupPushData): void SetupPushData(PushData pushData)
+    // TODO(0x7c940c4, Quantum.PusherSpec.SetupPushData): void SetupPushData(PushData pushData);
+    //   uses QBoolean.op_Implicit
     // TODO(0x7c94160, Quantum.PusherSpec.CalculateImpulse): FPVector3 CalculateImpulse(Frame f,
-    //   FPVector3 forceDirection, FPVector3 hitPoint, EntityRef pusherEntity)
+    //   FPVector3 forceDirection, FPVector3 hitPoint, EntityRef pusherEntity); uses FPMath.SqrtRaw,
+    //   FPVector3.Normalize, FPVector3.get_Zero, FPAnimationCurve.Evaluate, Transform3D.get_Forward
 };
 
 class RewardSpec : public AssetObject {
@@ -1005,7 +1020,7 @@ class Action_AddModifierMoveSpeed : public CallbackAction {
     Action_AddModifierMoveSpeed() = default;
 
     // TODO(0x7cb120c, Quantum.Action_AddModifierMoveSpeed.Execute): void Execute(Frame frame,
-    //   EntityRef entity)
+    //   EntityRef entity); uses KccExtension.AddModifier_MoveSpeed
     // TODO(0x7cb12c8, Quantum.Action_AddModifierMoveSpeed.Execute): void Execute(Frame frame,
     //   EntityRef entity, EntityRef targetEntity)
 };
@@ -1016,7 +1031,8 @@ class Action_KillSelf : public CallbackAction {
     // 0x7cb1300
     Action_KillSelf() = default;
 
-    // TODO(0x7cb12dc, Quantum.Action_KillSelf.Execute): void Execute(Frame frame, EntityRef entity)
+    // TODO(0x7cb12dc, Quantum.Action_KillSelf.Execute): void Execute(Frame frame, EntityRef
+    //   entity); uses KillableLib.Kill
     // TODO(0x7cb12f4, Quantum.Action_KillSelf.Execute): void Execute(Frame frame, EntityRef entity,
     //   EntityRef targetEntity)
 };
@@ -1028,9 +1044,9 @@ class Action_MoveTo_StartMoving : public CallbackAction {
     Action_MoveTo_StartMoving() = default;
 
     // TODO(0x7cb1308, Quantum.Action_MoveTo_StartMoving.Execute): void Execute(Frame frame,
-    //   EntityRef entity)
+    //   EntityRef entity); uses MoveTo.StartMoving
     // TODO(0x7cb13b4, Quantum.Action_MoveTo_StartMoving.Execute): void Execute(Frame frame,
-    //   EntityRef entity, EntityRef targetEntity)
+    //   EntityRef entity, EntityRef targetEntity); uses MoveTo.StartMoving
 };
 
 class Action_SpawnEntities : public CallbackAction {
@@ -1046,7 +1062,9 @@ class Action_SpawnEntities : public CallbackAction {
     Action_SpawnEntities() = default;
 
     // TODO(0x7cb1470, Quantum.Action_SpawnEntities.Execute): void Execute(Frame frame, EntityRef
-    //   entity)
+    //   entity); uses FrameSignals.Lifetime_OnSpawnEntityOnDeath, FPMath.SqrtRaw,
+    //   FPVector3.get_Down, AssetGuid.op_Equality, AssetGuid.op_Implicit, EntityRef.get_None,
+    //   FPMathUtility.OrientOnNormal, Frame.GetPersistentHitCollection...
     // TODO(0x7cb198c, Quantum.Action_SpawnEntities.Execute): void Execute(Frame frame, EntityRef
     //   entity, EntityRef targetEntity)
 };
@@ -1075,7 +1093,7 @@ class EnergyCellPowerUpSpec : public PowerUpSpec {
     // 0x7bc7968
     PowerUpType GetPowerUpType() const override { return PowerUpType::EnergyCell; }
     // TODO(0x7bc7970, Quantum.EnergyCellPowerUpSpec.OnStarted): void OnStarted(Frame f, EntityRef
-    //   userEntity)
+    //   userEntity); uses EnergyCellManager.TryGiveEnergyCell
     // 0x7bc7988 - nothing.
     void OnFinished(Frame* f, EntityRef userEntity) const override { (void)f, (void)userEntity; }
 };
@@ -1119,11 +1137,11 @@ class OverhealthPowerUpSpec : public PowerUpSpec {
     // 0x7bc79ac
     PowerUpType GetPowerUpType() const override { return PowerUpType::Overhealth; }
     // TODO(0x7bc79b4, Quantum.OverhealthPowerUpSpec.OnStarted): void OnStarted(Frame f, EntityRef
-    //   userEntity)
+    //   userEntity); uses Health.AddOverhealth, OverhealthPowerUpSpec.GetHealthBoost
     // TODO(0x7bc7cac, Quantum.OverhealthPowerUpSpec.OnFinished): void OnFinished(Frame f, EntityRef
-    //   userEntity)
+    //   userEntity); uses Health.DecreaseOverhealth, OverhealthPowerUpSpec.GetHealthBoost
     // TODO(0x7bc7a90, Quantum.OverhealthPowerUpSpec.GetHealthBoost): FP GetHealthBoost(Frame f,
-    //   EntityRef userEntity)
+    //   EntityRef userEntity); uses FPMath.Lerp, BalancingLib.TryGetHumanHeroesLevelRatio
 };
 
 class PowerUpDropperSpec : public EntityDropperSpec {
@@ -1143,9 +1161,9 @@ class SpeedBoostPowerUpSpec : public PowerUpSpec {
     // 0x7bc7dcc
     PowerUpType GetPowerUpType() const override { return PowerUpType::SpeedBoost; }
     // TODO(0x7bc7dd4, Quantum.SpeedBoostPowerUpSpec.OnStarted): void OnStarted(Frame f, EntityRef
-    //   userEntity)
+    //   userEntity); uses KccExtension.AddModifier_MoveSpeed
     // TODO(0x7bc7ea4, Quantum.SpeedBoostPowerUpSpec.OnFinished): void OnFinished(Frame f, EntityRef
-    //   userEntity)
+    //   userEntity); uses KccExtension.ClearModifiersOfType
 };
 
 } // namespace Quantum

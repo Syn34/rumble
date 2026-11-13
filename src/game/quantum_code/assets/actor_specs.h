@@ -230,14 +230,14 @@ class HeroSpec : public AssetObject {
     // 0x7c925cc
     HeroSpec() = default;
 
-    // TODO(0x7c921bc, Quantum.HeroSpec.GetLevelAtPower): int GetLevelAtPower(Frame frame,
-    //   GENERATED_CHARACTER_ID heroID, FP power)
+    // 0x7c921bc - the level (0-9) whose LeveledPower is closest to `power` (the higher level on ties).
+    std::int32_t GetLevelAtPower(Frame* frame, GENERATED_CHARACTER_ID heroID, FP power) const;
     // TODO(0x7c92254, Quantum.HeroSpec.InitializeHeroImprovementsFromTalentLevel): void
     //   InitializeHeroImprovementsFromTalentLevel(Frame frame, EntityRef heroEntity, int
-    //   heroTalentLevel)
+    //   heroTalentLevel); uses AssetGuid.get_IsValid, BalancingLib.TryGetHeroSpec
     // TODO(0x7c9240c, Quantum.HeroSpec.InitializeHeroImprovementsFromTalentLevel): void
     //   InitializeHeroImprovementsFromTalentLevel(Frame frame, EntityRef heroEntity, EntityRef
-    //   weaponEntity, int heroTalentLevel)
+    //   weaponEntity, int heroTalentLevel); uses AssetGuid.get_IsValid, BalancingLib.TryGetHeroSpec
 };
 
 class JumpAttackSpec : public AssetObject {
@@ -522,7 +522,8 @@ class ActorIcedSpec : public ActorComponentSpecBase {
     ActorIcedSpec() = default;
 
     // TODO(0x7cb9b24, Quantum.ActorIcedSpec.Init): void Init(Frame f, EntityRef e)
-    // TODO(0x7cb9b7c, Quantum.ActorIcedSpec.Shutdown): void Shutdown(Frame f, EntityRef e)
+    // TODO(0x7cb9b7c, Quantum.ActorIcedSpec.Shutdown): void Shutdown(Frame f, EntityRef e); uses
+    //   Core.FrameBase.RemoveComponentIndexUnchecked
 };
 
 class ActorPhysicsSpec : public ActorComponentSpecBase {
@@ -534,7 +535,10 @@ class ActorPhysicsSpec : public ActorComponentSpecBase {
     // 0x7cb8b78
     ActorPhysicsSpec() = default;
 
-    // TODO(0x7cb88a8, Quantum.ActorPhysicsSpec.Init): void Init(Frame f, EntityRef e)
+    // TODO(0x7cb88a8, Quantum.ActorPhysicsSpec.Init): void Init(Frame f, EntityRef e); uses
+    //   FrameSignals.KccExtension_OnConfigChanged, FPMath.Clamp, BalancingLib.TryGetHeroSpec,
+    //   CharacterController3D.SetConfig, FrameThreadSafe.op_Explicit, PhysicsCollider3D.Create,
+    //   Shape3DConfig.CreateShape
     // 0x7cb8b74 - nothing to undo.
     void Shutdown(Frame* f, EntityRef e) const override { (void)f, (void)e; }
 };
@@ -546,7 +550,8 @@ class ActorSheepedSpec : public ActorComponentSpecBase {
     ActorSheepedSpec() = default;
 
     // TODO(0x7cb9ca0, Quantum.ActorSheepedSpec.Init): void Init(Frame f, EntityRef e)
-    // TODO(0x7cb9cf8, Quantum.ActorSheepedSpec.Shutdown): void Shutdown(Frame f, EntityRef e)
+    // TODO(0x7cb9cf8, Quantum.ActorSheepedSpec.Shutdown): void Shutdown(Frame f, EntityRef e); uses
+    //   Core.FrameBase.RemoveComponentIndexUnchecked
 };
 
 class ActorStunnedSpec : public ActorComponentSpecBase {
@@ -556,7 +561,8 @@ class ActorStunnedSpec : public ActorComponentSpecBase {
     ActorStunnedSpec() = default;
 
     // TODO(0x7cb9e1c, Quantum.ActorStunnedSpec.Init): void Init(Frame f, EntityRef e)
-    // TODO(0x7cb9e74, Quantum.ActorStunnedSpec.Shutdown): void Shutdown(Frame f, EntityRef e)
+    // TODO(0x7cb9e74, Quantum.ActorStunnedSpec.Shutdown): void Shutdown(Frame f, EntityRef e); uses
+    //   Core.FrameBase.RemoveComponentIndexUnchecked
 };
 
 class AmoeboidLevelUpActorSpec : public LevelUpActorSpec {
@@ -567,7 +573,8 @@ class AmoeboidLevelUpActorSpec : public LevelUpActorSpec {
     AmoeboidLevelUpActorSpec() = default;
 
     // TODO(0x7bef160, Quantum.AmoeboidLevelUpActorSpec.LevelUp): void LevelUp(Frame f, EntityRef
-    //   entity, LevelUpActor* levelUpActor)
+    //   entity, LevelUpActor* levelUpActor); uses Core.FrameBase.Destroy,
+    //   FrameUtility.CreateDynamic, Team.GetTeamID
 };
 
 class DashActorConfig : public ActorComponentSpecBase {
@@ -592,8 +599,10 @@ class DashActorConfig : public ActorComponentSpecBase {
     // 0x7cb40a8
     DashActorConfig() = default;
 
-    // TODO(0x7cb3f58, Quantum.DashActorConfig.Init): void Init(Frame f, EntityRef e)
-    // TODO(0x7cb4000, Quantum.DashActorConfig.Shutdown): void Shutdown(Frame f, EntityRef e)
+    // TODO(0x7cb3f58, Quantum.DashActorConfig.Init): void Init(Frame f, EntityRef e); uses
+    //   DashActor.SetDisabled
+    // TODO(0x7cb4000, Quantum.DashActorConfig.Shutdown): void Shutdown(Frame f, EntityRef e); uses
+    //   DashActor.SetDisabled
 };
 
 class GrinderActorConfig : public ActorComponentSpecBase {
@@ -614,8 +623,10 @@ class GrinderActorConfig : public ActorComponentSpecBase {
     // 0x7cb53f0
     GrinderActorConfig() = default;
 
-    // TODO(0x7cb5208, Quantum.GrinderActorConfig.Init): void Init(Frame f, EntityRef e)
-    // TODO(0x7cb52ac, Quantum.GrinderActorConfig.Shutdown): void Shutdown(Frame f, EntityRef e)
+    // TODO(0x7cb5208, Quantum.GrinderActorConfig.Init): void Init(Frame f, EntityRef e); uses
+    //   QBoolean.op_Implicit
+    // TODO(0x7cb52ac, Quantum.GrinderActorConfig.Shutdown): void Shutdown(Frame f, EntityRef e);
+    //   uses GrinderActor.ExitGrindFromPush, QBoolean.op_Implicit
 };
 
 class GroundDashActorConfig : public ActorComponentSpecBase {
@@ -629,8 +640,10 @@ class GroundDashActorConfig : public ActorComponentSpecBase {
     // 0x7cb55c4
     GroundDashActorConfig() = default;
 
-    // TODO(0x7cb547c, Quantum.GroundDashActorConfig.Init): void Init(Frame f, EntityRef e)
-    // TODO(0x7cb5520, Quantum.GroundDashActorConfig.Shutdown): void Shutdown(Frame f, EntityRef e)
+    // TODO(0x7cb547c, Quantum.GroundDashActorConfig.Init): void Init(Frame f, EntityRef e); uses
+    //   QBoolean.op_Implicit
+    // TODO(0x7cb5520, Quantum.GroundDashActorConfig.Shutdown): void Shutdown(Frame f, EntityRef e);
+    //   uses QBoolean.op_Implicit
 };
 
 class HelipackActorSpec : public ActorComponentSpecBase {
@@ -649,8 +662,10 @@ class HelipackActorSpec : public ActorComponentSpecBase {
     // 0x7cb632c
     HelipackActorSpec() = default;
 
-    // TODO(0x7cb618c, Quantum.HelipackActorSpec.Init): void Init(Frame f, EntityRef e)
-    // TODO(0x7cb6230, Quantum.HelipackActorSpec.Shutdown): void Shutdown(Frame f, EntityRef e)
+    // TODO(0x7cb618c, Quantum.HelipackActorSpec.Init): void Init(Frame f, EntityRef e); uses
+    //   QBoolean.op_Implicit
+    // TODO(0x7cb6230, Quantum.HelipackActorSpec.Shutdown): void Shutdown(Frame f, EntityRef e);
+    //   uses HelipackActor.StopHelipack, QBoolean.op_Implicit
 };
 
 class UltimateAbilityUserSpec : public ActorComponentSpecBase {
@@ -659,9 +674,10 @@ class UltimateAbilityUserSpec : public ActorComponentSpecBase {
     // 0x7c0dfec
     UltimateAbilityUserSpec() = default;
 
-    // TODO(0x7c0dea4, Quantum.UltimateAbilityUserSpec.Init): void Init(Frame f, EntityRef e)
+    // TODO(0x7c0dea4, Quantum.UltimateAbilityUserSpec.Init): void Init(Frame f, EntityRef e); uses
+    //   QBoolean.op_Implicit
     // TODO(0x7c0df48, Quantum.UltimateAbilityUserSpec.Shutdown): void Shutdown(Frame f, EntityRef
-    //   e)
+    //   e); uses QBoolean.op_Implicit
 };
 
 class WeaponLoadoutSpec : public ActorComponentSpecBase {
@@ -673,8 +689,10 @@ class WeaponLoadoutSpec : public ActorComponentSpecBase {
     // 0x7c020cc
     WeaponLoadoutSpec() = default;
 
-    // TODO(0x7c01f84, Quantum.WeaponLoadoutSpec.Init): void Init(Frame f, EntityRef e)
-    // TODO(0x7c02028, Quantum.WeaponLoadoutSpec.Shutdown): void Shutdown(Frame f, EntityRef e)
+    // TODO(0x7c01f84, Quantum.WeaponLoadoutSpec.Init): void Init(Frame f, EntityRef e); uses
+    //   QBoolean.op_Implicit
+    // TODO(0x7c02028, Quantum.WeaponLoadoutSpec.Shutdown): void Shutdown(Frame f, EntityRef e);
+    //   uses QBoolean.op_Implicit
 };
 
 class WeaponUserSpec : public ActorComponentSpecBase {
@@ -683,9 +701,11 @@ class WeaponUserSpec : public ActorComponentSpecBase {
     // 0x7c0e1d8
     WeaponUserSpec() = default;
 
-    // TODO(0x7c0dff4, Quantum.WeaponUserSpec.Init): void Init(Frame frame, EntityRef entity)
+    // TODO(0x7c0dff4, Quantum.WeaponUserSpec.Init): void Init(Frame frame, EntityRef entity); uses
+    //   FrameEvents.WeaponUser_Activation, QBoolean.op_Implicit
     // TODO(0x7c0e0b4, Quantum.WeaponUserSpec.Shutdown): void Shutdown(Frame frame, EntityRef
-    //   entity)
+    //   entity); uses FrameEvents.WeaponUser_Activation, FrameSignals.Weapon_OnUnEquip,
+    //   QBoolean.op_Implicit, UltimateAbilityLib.FinishUltimate
 };
 
 } // namespace Quantum

@@ -8,6 +8,8 @@
 #include "quantum_core/map.h"
 
 #include <initializer_list>
+#include <map>
+#include <typeinfo>
 #include <memory>
 #include <string>
 #include <utility>
@@ -222,4 +224,124 @@ TEST_CASE("Unknown script classes have no factory") {
     rr::content::RegisterQuantumCodeAssetFactories();
     const auto settings = Struct("Nothing", {});
     CHECK(rr::content::BuildAsset("NotAnAssetClass", *settings) == nullptr);
+}
+
+namespace {
+
+// A resource manager serving a fixed set of assets by GUID.
+class FixedResourceManager final : public Quantum::IResourceManager {
+  public:
+    std::map<std::int64_t, std::shared_ptr<Quantum::AssetObject>> Assets;
+
+    std::shared_ptr<Quantum::AssetDB> CreateAssetDatabase() override { return nullptr; }
+    void DiposeAssetDatabase(Quantum::AssetDB*) override {}
+    bool DisposeAsset(Quantum::AssetGuid) override { return false; }
+    std::shared_ptr<Quantum::AssetObject> GetAsset(Quantum::AssetGuid guid, bool) override {
+        auto it = Assets.find(guid.Value);
+        return it != Assets.end() ? it->second : nullptr;
+    }
+    std::vector<std::shared_ptr<Quantum::AssetObject>> LoadAllAssets(bool) override { return {}; }
+    void MainThreadSimulationEnded() override {}
+    void MainThreadUpdate(Quantum::Profiling::Profiler*) override {}
+    void Dispose() override {}
+};
+
+} // namespace
+
+TEST_CASE("Bot SDK assets resolve their references when loaded") {
+    FixedResourceManager manager;
+    auto idle = std::make_shared<Quantum::HFSMState>();
+    auto child = std::make_shared<Quantum::HFSMState>();
+    auto decision = std::make_shared<Quantum::TrueDecision>();
+    manager.Assets[101] = idle;
+    manager.Assets[102] = child;
+    manager.Assets[103] = decision;
+
+    child->ParentLink.Id = Quantum::AssetGuid(101);
+    Quantum::HFSMTransition transition;
+    transition.DecisionLink.Id = Quantum::AssetGuid(103);
+    transition.StateLink.Id = Quantum::AssetGuid(101);
+    child->Transitions.push_back(transition);
+    child->Loaded(&manager, nullptr);
+    CHECK(child->Parent == idle.get());
+    CHECK(child->IsChildOf(idle.get()));
+    CHECK(!idle->IsChildOf(child.get()));
+    REQUIRE(child->Transitions.size() == 1);
+    CHECK(child->Transitions[0].Decision == decision.get());
+    CHECK(child->Transitions[0].State == idle.get());
+    CHECK(child->Transitions[0].TransitionSet == nullptr);
+
+    Quantum::HFSMRoot root;
+    root.StatesLinks = {Quantum::AssetRefHFSMState{Quantum::AssetGuid(101)}, Quantum::AssetRefHFSMState{Quantum::AssetGuid(102)}};
+    root.EventsNames = {"Alert", "Calm"};
+    root.Loaded(&manager, nullptr);
+    CHECK(root.InitialState().Id.Value == 101);
+    REQUIRE(root.States.size() == 2);
+    CHECK(root.States[1] == child.get());
+    CHECK(root.RegisteredEvents.at("Alert") == 1);
+    CHECK(root.RegisteredEvents.at("Calm") == 2);
+
+    // A reference to an asset of another type is an error, as the original's cast.
+    Quantum::HFSMState wrong;
+    wrong.ParentLink.Id = Quantum::AssetGuid(103);
+    bool threw = false;
+    try {
+        wrong.Loaded(&manager, nullptr);
+    } catch (const std::bad_cast&) {
+        threw = true;
+    }
+    CHECK(threw);
+
+    Quantum::AIBlackboard blackboard;
+    blackboard.Entries.resize(2);
+    blackboard.Entries[0].Key.Key = "target";
+    blackboard.Entries[1].Key.Key = "timer";
+    blackboard.Loaded(&manager, nullptr);
+    CHECK(blackboard.Map.at("timer") == 1);
+}
+
+TEST_CASE("Asset helpers: levelled values, tables and results") {
+    Quantum::WeaponSpecDefault weapon;
+    Quantum::WeaponSpecModifier power;
+    power.prop = Quantum::WeaponSpecModifier::Property::Power;
+    power.values = {FP::FromInt(100), FP::FromInt(120), FP::FromRaw(140 * 65536 + 40000)};
+    weapon.levelUpModifiers.push_back(power);
+    CHECK(weapon.GetWeaponPowerAtLevel(1) == 120);
+    CHECK(weapon.GetWeaponPowerAtLevel(7) == 140); // past the end: the last value, truncated
+    CHECK(Quantum::WeaponSpecDefault{}.GetWeaponPowerAtLevel(0) == -1);
+    CHECK(weapon.HasTag(static_cast<Quantum::WeaponTag>(0)) == false);
+
+    Quantum::SimulationGadgetTable gadgets;
+    gadgets.definitions.resize(2);
+    gadgets.definitions[1].characterId = static_cast<Quantum::GENERATED_CHARACTER_ID>(4);
+    gadgets.definitions[1].gadgetSpec.Id = Quantum::AssetGuid(55);
+    Quantum::SimulationGadgetTable::GadgetDefinition found;
+    CHECK(gadgets.TryGetGadget(static_cast<Quantum::GENERATED_CHARACTER_ID>(4), found));
+    CHECK(found.gadgetSpec.Id.Value == 55);
+    CHECK(!gadgets.TryGetGadget(static_cast<Quantum::GENERATED_CHARACTER_ID>(9), found));
+
+    CHECK(Quantum::BlastBallGameModeSpec::GetBattleResult(0, 0, 3, 1) == Quantum::BATTLE_RESULT::WIN);
+    CHECK(Quantum::BlastBallGameModeSpec::GetBattleResult(0, 0, 2, 2) == Quantum::BATTLE_RESULT::DRAW);
+    CHECK(Quantum::BlastBallGameModeSpec::GetBattleResult(0, 0, 0, 2) == Quantum::BATTLE_RESULT::LOSE);
+    CHECK(Quantum::FreeForAllGameModeSpec::GetBattleResult(4, 8, 0, 0) == Quantum::BATTLE_RESULT::WIN);
+    CHECK(Quantum::FreeForAllGameModeSpec::GetBattleResult(5, 8, 0, 0) == Quantum::BATTLE_RESULT::LOSE);
+
+    Quantum::DifficultyIntervalInt interval;
+    interval.atMinDiff = 10;
+    interval.atMaxDiff = 20;
+    CHECK(interval.Get(FP::FromRaw(32768)) == 15);
+    CHECK(interval.Get(FP::FromRaw(40000)) == 17); // 16.1 rounds up
+
+    Quantum::ActorManagerConfig actors;
+    actors.PendingRespawnDuration = FP::FromInt(2);
+    actors.BotsPendingRespawnDuration = FP::FromInt(5);
+    actors.RespawnDuration = FP::FromInt(1);
+    actors.BotsUseSpecificPendingRespawnDuration = true;
+    CHECK(actors.GetTotalRespawnDuration(false) == FP::FromInt(3));
+    CHECK(actors.GetTotalRespawnDuration(true) == FP::FromInt(6));
+
+    Quantum::HeroSpec hero;
+    for (int i = 0; i < 10; ++i) hero.LeveledPower[static_cast<std::size_t>(i)] = FP::FromInt(100 + 10 * i);
+    CHECK(hero.GetLevelAtPower(nullptr, static_cast<Quantum::GENERATED_CHARACTER_ID>(0), FP::FromInt(133)) == 3);
+    CHECK(hero.GetLevelAtPower(nullptr, static_cast<Quantum::GENERATED_CHARACTER_ID>(0), FP::FromInt(135)) == 4);
 }

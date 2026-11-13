@@ -80,7 +80,9 @@ class ElementalBuildUpMultiplierHeroImprovementSpec : public ImprovementSpec {
     ElementalBuildUpMultiplierHeroImprovementSpec() = default;
 
     // TODO(0x7bd3d4c, Quantum.ElementalBuildUpMultiplierHeroImprovementSpec.OnInit): void
-    //   OnInit(Frame f, EntityRef heroEntity)
+    //   OnInit(Frame f, EntityRef heroEntity); uses
+    //   ElementalBuildUpMultiplier.AddElectricalMultiplier,
+    //   ElementalBuildUpMultiplier.AddIceMultiplier
 };
 
 class HeroEnhancementSpec : public EnhancementSpec {
@@ -100,7 +102,8 @@ class JumpAttackHeroImprovementSpec : public ImprovementSpec {
     // 0x7bd3e0c - nothing at hero creation (the improvement is read where it applies).
     void OnInit(Frame* f, EntityRef heroEntity) const override { (void)f, (void)heroEntity; }
     // TODO(0x7bd3e10, Quantum.JumpAttackHeroImprovementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   heroEntity, EntityRef weaponEntity)
+    //   heroEntity, EntityRef weaponEntity); uses AssetRefMeleeJumpAttackSpec.op_Implicit,
+    //   ImprovementSpec.OnInit
 };
 
 class JumpMultiplierHeroImprovementSpec : public ImprovementSpec {
@@ -122,7 +125,7 @@ class OnKillCallbacksHeroImprovementSpec : public ImprovementSpec {
     OnKillCallbacksHeroImprovementSpec() = default;
 
     // TODO(0x7bd4098, Quantum.OnKillCallbacksHeroImprovementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef heroEntity)
+    //   EntityRef heroEntity); uses OnKillCallbacks.get_onPlayerKilled
 };
 
 class PlaceholderHeroImprovementSpec : public ImprovementSpec {
@@ -173,7 +176,8 @@ class WeaponStatsModifierHeroImprovementSpec : public ImprovementSpec {
     WeaponStatsModifierHeroImprovementSpec() = default;
 
     // TODO(0x7bd41d0, Quantum.WeaponStatsModifierHeroImprovementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef heroEntity, EntityRef weaponEntity)
+    //   EntityRef heroEntity, EntityRef weaponEntity); uses ImprovementSpec.OnInit,
+    //   SimulationWeaponTable.TryGetWeaponId, WeaponStatsLib.ApplyStatModifier
     // 0x7bd4498 - nothing at hero creation (the improvement is read where it applies).
     void OnInit(Frame* f, EntityRef heroEntity) const override { (void)f, (void)heroEntity; }
 };
@@ -196,7 +200,7 @@ class AddEntitiesToSpawnOnProjectileDeathSpec : public WeaponEnhancementSpec {
     AddEntitiesToSpawnOnProjectileDeathSpec() = default;
 
     // TODO(0x7b7cf64, AddEntitiesToSpawnOnProjectileDeathSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetObject.get_Guid
 };
 
 class AmmoMultiplierEnhancementSpec : public WeaponEnhancementSpec {
@@ -207,7 +211,7 @@ class AmmoMultiplierEnhancementSpec : public WeaponEnhancementSpec {
     AmmoMultiplierEnhancementSpec() = default;
 
     // TODO(0x7b7cffc, AmmoMultiplierEnhancementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   weaponEntity)
+    //   weaponEntity); uses Weapon.ResetReload, WeaponLib.TryGetWeaponSpec
 };
 
 class AmoeboidLauncherEnhancementPuddleSpec : public WeaponEnhancementSpec {
@@ -218,7 +222,7 @@ class AmoeboidLauncherEnhancementPuddleSpec : public WeaponEnhancementSpec {
     AmoeboidLauncherEnhancementPuddleSpec() = default;
 
     // TODO(0x7beee18, Quantum.AmoeboidLauncherEnhancementPuddleSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefAmoeboidLauncherEnhancementPuddleSpec.op_Implicit
 };
 
 class BlasterMoveSpeedEnhancementSpec : public WeaponEnhancementSpec {
@@ -229,7 +233,7 @@ class BlasterMoveSpeedEnhancementSpec : public WeaponEnhancementSpec {
     BlasterMoveSpeedEnhancementSpec() = default;
 
     // TODO(0x7befba8, Quantum.BlasterMoveSpeedEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefBlasterMoveSpeedEnhancementSpec.op_Implicit
 };
 
 class BlasterSpecialShotEnhancementSpec : public WeaponEnhancementSpec {
@@ -241,7 +245,7 @@ class BlasterSpecialShotEnhancementSpec : public WeaponEnhancementSpec {
     BlasterSpecialShotEnhancementSpec() = default;
 
     // TODO(0x7bf01b4, Quantum.BlasterSpecialShotEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefBlasterSpecialShotEnhancementSpec.op_Implicit
 };
 
 class CompoundEnhancementSpec : public WeaponEnhancementSpec {
@@ -263,7 +267,7 @@ class CooldownMultiplierEnhancementSpec : public WeaponEnhancementSpec {
     CooldownMultiplierEnhancementSpec() = default;
 
     // TODO(0x7b7d0f0, CooldownMultiplierEnhancementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   weaponEntity)
+    //   weaponEntity); uses WeaponLib.TryGetWeaponSpec
 };
 
 class DamageIncreasedOnTargetsEnhancementSpec : public WeaponEnhancementSpec {
@@ -275,7 +279,7 @@ class DamageIncreasedOnTargetsEnhancementSpec : public WeaponEnhancementSpec {
     DamageIncreasedOnTargetsEnhancementSpec() = default;
 
     // TODO(0x7becf38, Quantum.DamageIncreasedOnTargetsEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefDamageIncreasedOnTargetsEnhancementSpec.op_Implicit
 };
 
 class EnforcerFirstShotBonusEnhancementSpec : public WeaponEnhancementSpec {
@@ -287,7 +291,7 @@ class EnforcerFirstShotBonusEnhancementSpec : public WeaponEnhancementSpec {
     EnforcerFirstShotBonusEnhancementSpec() = default;
 
     // TODO(0x7bf6a38, Quantum.EnforcerFirstShotBonusEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefEnforcerFirstShotBonusEnhancementSpec.op_Implicit
 };
 
 class FirerateMultiplierEnhancementSpec : public WeaponEnhancementSpec {
@@ -298,7 +302,7 @@ class FirerateMultiplierEnhancementSpec : public WeaponEnhancementSpec {
     FirerateMultiplierEnhancementSpec() = default;
 
     // TODO(0x7b7d1c4, FirerateMultiplierEnhancementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   weaponEntity)
+    //   weaponEntity); uses WeaponLib.TryGetWeaponSpec
 };
 
 class GatlingEnhancementResetAmmoOnGadgetUseSpec : public WeaponEnhancementSpec {
@@ -308,7 +312,7 @@ class GatlingEnhancementResetAmmoOnGadgetUseSpec : public WeaponEnhancementSpec 
     GatlingEnhancementResetAmmoOnGadgetUseSpec() = default;
 
     // TODO(0x7bf6e30, Quantum.GatlingEnhancementResetAmmoOnGadgetUseSpec.OnInit): void OnInit(Frame
-    //   f, EntityRef weaponEntity)
+    //   f, EntityRef weaponEntity); uses QBoolean.op_Implicit
 };
 
 class GatlingEnhancementSpec : public WeaponEnhancementSpec {
@@ -319,7 +323,7 @@ class GatlingEnhancementSpec : public WeaponEnhancementSpec {
     GatlingEnhancementSpec() = default;
 
     // TODO(0x7bf6d5c, Quantum.GatlingEnhancementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   weaponEntity)
+    //   weaponEntity); uses AssetRefGatlingEnhancementSpec.op_Implicit
 };
 
 class GrenadeLauncherAftershockEnhancementSpec : public WeaponEnhancementSpec {
@@ -330,7 +334,10 @@ class GrenadeLauncherAftershockEnhancementSpec : public WeaponEnhancementSpec {
     GrenadeLauncherAftershockEnhancementSpec() = default;
 
     // TODO(0x7bf7f10, Quantum.GrenadeLauncherAftershockEnhancementSpec.OnInit): void OnInit(Frame
-    //   f, EntityRef weaponEntity)
+    //   f, EntityRef weaponEntity); uses
+    //   AssetRefGrenadeLauncherAftershockEnhancementSpec.op_Implicit,
+    //   GrenadeLauncherAftershockEnhancement.get_Specs,
+    //   GrenadeLauncherAftershockEnhancement.set_Specs
 };
 
 class GrenadeLauncherStunGrenadeEnhancementSpec : public WeaponEnhancementSpec {
@@ -343,7 +350,8 @@ class GrenadeLauncherStunGrenadeEnhancementSpec : public WeaponEnhancementSpec {
     GrenadeLauncherStunGrenadeEnhancementSpec() = default;
 
     // TODO(0x7bf805c, Quantum.GrenadeLauncherStunGrenadeEnhancementSpec.OnInit): void OnInit(Frame
-    //   f, EntityRef weaponEntity)
+    //   f, EntityRef weaponEntity); uses
+    //   AssetRefGrenadeLauncherStunGrenadeEnhancementSpec.op_Implicit
 };
 
 class HeadHunterWallHackEnhancementSpec : public WeaponEnhancementSpec {
@@ -354,7 +362,7 @@ class HeadHunterWallHackEnhancementSpec : public WeaponEnhancementSpec {
     HeadHunterWallHackEnhancementSpec() = default;
 
     // TODO(0x7bf866c, Quantum.HeadHunterWallHackEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefHeadHunterWallHackEnhancementSpec.op_Implicit
 };
 
 class HealthMultiplierEnhancementSpec : public HeroEnhancementSpec {
@@ -365,7 +373,7 @@ class HealthMultiplierEnhancementSpec : public HeroEnhancementSpec {
     HealthMultiplierEnhancementSpec() = default;
 
     // TODO(0x7b7d2a0, HealthMultiplierEnhancementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   heroEntity)
+    //   heroEntity); uses HealthLib.GetMaxHpMultiplier, HealthLib.SetMaxHpMultiplier
 };
 
 class HoloshieldGloveHealZoneEnhancementSpec : public WeaponEnhancementSpec {
@@ -376,7 +384,7 @@ class HoloshieldGloveHealZoneEnhancementSpec : public WeaponEnhancementSpec {
     HoloshieldGloveHealZoneEnhancementSpec() = default;
 
     // TODO(0x7bf86ec, Quantum.HoloshieldGloveHealZoneEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefHoloshieldGloveHealZoneEnhancementSpec.op_Implicit
 };
 
 class HoverBootsEnhancementCollisionSpec : public WeaponEnhancementSpec {
@@ -410,7 +418,7 @@ class MineLauncherEnhancementSpec : public WeaponEnhancementSpec {
     MineLauncherEnhancementSpec() = default;
 
     // TODO(0x7bfa9bc, Quantum.MineLauncherEnhancementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   weaponEntity)
+    //   weaponEntity); uses AssetRefWeaponEnhancementSpec.op_Implicit
 };
 
 class MineLauncherProjectileOverrideEnhancementSpec : public WeaponEnhancementSpec {
@@ -421,7 +429,7 @@ class MineLauncherProjectileOverrideEnhancementSpec : public WeaponEnhancementSp
     MineLauncherProjectileOverrideEnhancementSpec() = default;
 
     // TODO(0x7bfaa34, Quantum.MineLauncherProjectileOverrideEnhancementSpec.OnInit): void
-    //   OnInit(Frame f, EntityRef weaponEntity)
+    //   OnInit(Frame f, EntityRef weaponEntity); uses AssetRefWeaponEnhancementSpec.op_Implicit
 };
 
 class RecoverAmmoOnDashEnhancementSpec : public WeaponEnhancementSpec {
@@ -432,7 +440,7 @@ class RecoverAmmoOnDashEnhancementSpec : public WeaponEnhancementSpec {
     RecoverAmmoOnDashEnhancementSpec() = default;
 
     // TODO(0x7b7d3d0, RecoverAmmoOnDashEnhancementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   weaponEntity)
+    //   weaponEntity); uses AssetRefRecoverAmmoOnDashEnhancementSpec.op_Implicit
 };
 
 class ReplaceMultiShotConfigsEnhancementSpec : public WeaponEnhancementSpec {
@@ -444,7 +452,9 @@ class ReplaceMultiShotConfigsEnhancementSpec : public WeaponEnhancementSpec {
     ReplaceMultiShotConfigsEnhancementSpec() = default;
 
     // TODO(0x7beda08, Quantum.ReplaceMultiShotConfigsEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefReplaceMultiShotConfigsEnhancementSpec.op_Implicit,
+    //   QBoolean.op_Implicit, QMultiShotConfig.get_Data, QMultiShotConfig.set_Data,
+    //   WeaponStats.get_MultiShotConfigs
 };
 
 class ShotgunBerserkerEnhancementSpec : public WeaponEnhancementSpec {
@@ -455,7 +465,7 @@ class ShotgunBerserkerEnhancementSpec : public WeaponEnhancementSpec {
     ShotgunBerserkerEnhancementSpec() = default;
 
     // TODO(0x7bfc000, Quantum.ShotgunBerserkerEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefShotgunBerserkerEnhancementSpec.op_Implicit
 };
 
 class ShotgunEnhancementSpec : public WeaponEnhancementSpec {
@@ -466,7 +476,7 @@ class ShotgunEnhancementSpec : public WeaponEnhancementSpec {
     ShotgunEnhancementSpec() = default;
 
     // TODO(0x7bfbf84, Quantum.ShotgunEnhancementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   weaponEntity)
+    //   weaponEntity); uses AssetRefShotgunEnhancementSpec.op_Implicit
 };
 
 class TeslaClawMoreBeamEnhancementSpec : public WeaponEnhancementSpec {
@@ -478,7 +488,7 @@ class TeslaClawMoreBeamEnhancementSpec : public WeaponEnhancementSpec {
     TeslaClawMoreBeamEnhancementSpec() = default;
 
     // TODO(0x7bfc8c4, Quantum.TeslaClawMoreBeamEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefTeslaClawMoreBeamEnhancementSpec.op_Implicit
 };
 
 class VoidRepulserBulldozerEnhancementSpec : public WeaponEnhancementSpec {
@@ -490,7 +500,7 @@ class VoidRepulserBulldozerEnhancementSpec : public WeaponEnhancementSpec {
     VoidRepulserBulldozerEnhancementSpec() = default;
 
     // TODO(0x7bfd4cc, Quantum.VoidRepulserBulldozerEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefVoidRepulserBulldozerEnhancementSpec.op_Implicit
 };
 
 class VoidRepulserSpeedBoostEnhancementSpec : public WeaponEnhancementSpec {
@@ -502,7 +512,7 @@ class VoidRepulserSpeedBoostEnhancementSpec : public WeaponEnhancementSpec {
     VoidRepulserSpeedBoostEnhancementSpec() = default;
 
     // TODO(0x7bfe20c, Quantum.VoidRepulserSpeedBoostEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefVoidRepulserSpeedBoostEnhancementSpec.op_Implicit
 };
 
 class VoidRepulserVoidWaveEnhancementSpec : public WeaponEnhancementSpec {
@@ -513,7 +523,7 @@ class VoidRepulserVoidWaveEnhancementSpec : public WeaponEnhancementSpec {
     VoidRepulserVoidWaveEnhancementSpec() = default;
 
     // TODO(0x7bfe4c4, Quantum.VoidRepulserVoidWaveEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefVoidRepulserVoidWaveEnhancementSpec.op_Implicit
 };
 
 class WarmongerMiniRocketsEnhancementSpec : public WeaponEnhancementSpec {
@@ -525,7 +535,7 @@ class WarmongerMiniRocketsEnhancementSpec : public WeaponEnhancementSpec {
     WarmongerMiniRocketsEnhancementSpec() = default;
 
     // TODO(0x7bfe8a8, Quantum.WarmongerMiniRocketsEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefWarmongerMiniRocketsEnhancementSpec.op_Implicit
 };
 
 class WeaponChargingStatsModifierEnhancementSpec : public WeaponEnhancementSpec {
@@ -551,7 +561,7 @@ class WeaponProjectileSwitcherEnhancementSpec : public WeaponEnhancementSpec {
     WeaponProjectileSwitcherEnhancementSpec() = default;
 
     // TODO(0x7bedf7c, Quantum.WeaponProjectileSwitcherEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefWeaponProjectileSwitcherEnhancementSpec.op_Implicit
 };
 
 class WeaponStatsModifierEnhancementSpec : public WeaponEnhancementSpec {
@@ -562,7 +572,7 @@ class WeaponStatsModifierEnhancementSpec : public WeaponEnhancementSpec {
     WeaponStatsModifierEnhancementSpec() = default;
 
     // TODO(0x7beebf4, Quantum.WeaponStatsModifierEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses WeaponStatsLib.ApplyStatModifier
 };
 
 class WrenchGroundSlamEnhancementSpec : public WeaponEnhancementSpec {
@@ -573,7 +583,7 @@ class WrenchGroundSlamEnhancementSpec : public WeaponEnhancementSpec {
     WrenchGroundSlamEnhancementSpec() = default;
 
     // TODO(0x7c00134, Quantum.WrenchGroundSlamEnhancementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef weaponEntity)
+    //   EntityRef weaponEntity); uses AssetRefWrenchGroundSlamEnhancementSpec.op_Implicit
 };
 
 class WrenchThrowEnhancementSpec : public WeaponEnhancementSpec {
@@ -587,7 +597,7 @@ class WrenchThrowEnhancementSpec : public WeaponEnhancementSpec {
     WrenchThrowEnhancementSpec() = default;
 
     // TODO(0x7c000b0, Quantum.WrenchThrowEnhancementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   weaponEntity)
+    //   weaponEntity); uses AssetRefWrenchThrowEnhancementSpec.op_Implicit
 };
 
 } // namespace Quantum

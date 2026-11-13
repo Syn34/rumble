@@ -55,7 +55,9 @@ class ItemSpawnerConfig : public AssetObject {
     ItemSpawnerConfig() = default;
 
     // TODO(0x7c9278c, Quantum.ItemSpawnerConfig.TryGetEntityToSpawn): bool
-    //   TryGetEntityToSpawn(Frame frame, AssetRefEntityPrototype entityToSpawn)
+    //   TryGetEntityToSpawn(Frame frame, AssetRefEntityPrototype entityToSpawn); uses
+    //   RNGSession.Next, AssetGuid.op_Equality, AssetGuid.op_Implicit,
+    //   AssetRefEntityPrototype.op_Equality, AssetRefEntityPrototype.op_Implicit, Frame.get_RNG
 };
 
 class LevelButtonConfig : public AssetObject {
@@ -135,9 +137,10 @@ class ArenaCannonConfig : public LevelButtonGameplayElementConfig {
     ArenaCannonConfig() = default;
 
     // TODO(0x7bd7d10, Quantum.ArenaCannonConfig.OnSwitchOn): void OnSwitchOn(Frame f, EntityRef
-    //   entity, EntityRef pusherActor)
+    //   entity, EntityRef pusherActor); uses ArenaCannon.OnSwitchOn,
+    //   LevelButtonGameplayElementConfig.OnSwitchOn
     // TODO(0x7bd7ddc, Quantum.ArenaCannonConfig.OnSwitchOff): void OnSwitchOff(Frame f, EntityRef
-    //   entity)
+    //   entity); uses ArenaCannon.OnSwitchOff, LevelButtonGameplayElementConfig.OnSwitchOff
 };
 
 class AutoJumperStaticTriggerConfig : public StaticTriggerConfig {
@@ -147,7 +150,8 @@ class AutoJumperStaticTriggerConfig : public StaticTriggerConfig {
     AutoJumperStaticTriggerConfig() = default;
 
     // TODO(0x7bd5ce0, Quantum.AutoJumperStaticTriggerConfig.OnTriggerEnter): void
-    //   OnTriggerEnter(Frame frame, TriggerInfo3D info)
+    //   OnTriggerEnter(Frame frame, TriggerInfo3D info); uses FrameEvents.AutoJumperTriggered,
+    //   AutoJumperLib.StartAutoJump, TriggerInfo3D.get_Entity, TriggerInfo3D.get_StaticData
 };
 
 class DestroyElementConfig : public LevelButtonGameplayElementConfig {
@@ -157,7 +161,8 @@ class DestroyElementConfig : public LevelButtonGameplayElementConfig {
     DestroyElementConfig() = default;
 
     // TODO(0x7bd7e9c, Quantum.DestroyElementConfig.OnSwitchOn): void OnSwitchOn(Frame f, EntityRef
-    //   entity, EntityRef pusherActor)
+    //   entity, EntityRef pusherActor); uses Core.FrameBase.Destroy,
+    //   LevelButtonGameplayElementConfig.OnSwitchOn
 };
 
 class DestroyMobGroupGameplayElement : public LevelButtonGameplayElementConfig {
@@ -167,7 +172,8 @@ class DestroyMobGroupGameplayElement : public LevelButtonGameplayElementConfig {
     DestroyMobGroupGameplayElement() = default;
 
     // TODO(0x7cd3070, Quantum.DestroyMobGroupGameplayElement.OnSwitchOn): void OnSwitchOn(Frame f,
-    //   EntityRef entity, EntityRef pusherActor)
+    //   EntityRef entity, EntityRef pusherActor); uses LevelButtonGameplayElementConfig.OnSwitchOn,
+    //   MobGroup.KillAllGroupMembers
 };
 
 class MovingWallGameplayElementConfig : public LevelButtonGameplayElementConfig {
@@ -183,7 +189,9 @@ class MovingWallGameplayElementConfig : public LevelButtonGameplayElementConfig 
     MovingWallGameplayElementConfig() = default;
 
     // TODO(0x7bd8190, Quantum.MovingWallGameplayElementConfig.OnSwitchOn): void OnSwitchOn(Frame f,
-    //   EntityRef entity, EntityRef pusherActor)
+    //   EntityRef entity, EntityRef pusherActor); uses FrameEvents.OnMovingWallStart,
+    //   MovingWall.GetCurrentOffset, MovingWall.IncrementCurrentOffset,
+    //   NavMeshRegionMask.ToggleRegion, QBoolean.op_Implicit
 };
 
 class RailStaticTriggerConfig : public StaticTriggerConfig {
@@ -193,7 +201,9 @@ class RailStaticTriggerConfig : public StaticTriggerConfig {
     RailStaticTriggerConfig() = default;
 
     // TODO(0x7bd8f18, Quantum.RailStaticTriggerConfig.OnTriggerEnter): void OnTriggerEnter(Frame
-    //   frame, TriggerInfo3D info)
+    //   frame, TriggerInfo3D info); uses GrinderActor.get_CanGrind,
+    //   MapCustomData.TryGetStaticColliderToGrindRailIndex, QBoolean.op_Implicit,
+    //   RailLib.TryGrindOnRail, TriggerInfo3D.get_Entity, TriggerInfo3D.get_StaticData
 };
 
 class TravolatorStaticTriggerConfig : public StaticTriggerConfig {
@@ -205,9 +215,9 @@ class TravolatorStaticTriggerConfig : public StaticTriggerConfig {
     TravolatorStaticTriggerConfig() = default;
 
     // TODO(0x7bd9df0, Quantum.TravolatorStaticTriggerConfig.OnTrigger): void OnTrigger(Frame f,
-    //   TriggerInfo3D info)
+    //   TriggerInfo3D info); uses TriggerInfo3D.get_Entity, TriggerInfo3D.get_StaticData
     // TODO(0x7bda064, Quantum.TravolatorStaticTriggerConfig.OnTriggerExit): void
-    //   OnTriggerExit(Frame f, ExitInfo3D info)
+    //   OnTriggerExit(Frame f, ExitInfo3D info); uses FPVector3.get_Zero
 };
 
 } // namespace Quantum

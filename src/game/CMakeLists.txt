@@ -38,4 +38,5 @@ target_sources(rr_game PRIVATE
     quantum_code/assets/actor_specs.cpp
     quantum_code/assets/game_mode_specs.cpp
     quantum_code/assets/level_assets.cpp
+    quantum_code/assets/weapon_specs.cpp
 )

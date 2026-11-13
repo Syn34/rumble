@@ -59,3 +59,31 @@ FP ZoneControlGameModeSpec::GetZoneLoadingTime(Frame* f, const ZoneControlGameMo
 }
 
 } // namespace Quantum
+
+namespace Quantum {
+
+// The original compares the ids' String.GetHashCode values; comparing the strings is the
+// same test for distinct ids.
+bool WaveReferences::TryGetMobEntityPrototype(const std::string& id, AssetRefEntityPrototype& entityToSpawn) const {
+    entityToSpawn = AssetRefEntityPrototype{};
+    for (const WaveMobReference& reference : MobReferenceArray) {
+        if (reference.ID == id) {
+            entityToSpawn = reference.EntityToSpawn;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool WaveReferences::TryGetDropperSpecs(const std::string& id, std::vector<AssetRefEntityDropperSpec>& dropperSpec) const {
+    dropperSpec.clear();
+    for (const DroperReference& reference : DropperReferenceArray) {
+        if (reference.ID == id) {
+            dropperSpec = reference.DropperSpecs;
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace Quantum
