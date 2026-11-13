@@ -154,6 +154,12 @@ void PrototypeValidator::UnknownUnionField(const std::string& field,
                context.EntityPrototypeRef.ToString());
 }
 
+void PrototypeValidator::DuplicateKey(const std::string& key,
+                                      const PrototypeMaterializationContext& context) {
+    Log::Error("Prototype dictionary key {0} is already present; the first value is kept ({1})", key,
+               context.EntityPrototypeRef.ToString());
+}
+
 void PrototypeValidator::FindMapEntity(MapEntityId link,
                                        const PrototypeMaterializationContext& context,
                                        EntityRef& result) {

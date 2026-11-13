@@ -59,3 +59,12 @@ target_sources(rr_game PRIVATE
     quantum_code/assets/level_assets.cpp
     quantum_code/assets/weapon_specs.cpp
 )
+
+# Component prototypes of the gameplay simulation (quantum_code/prototypes/).
+target_sources(rr_game PRIVATE
+    quantum_code/prototypes/prototypes_values.cpp
+    quantum_code/prototypes/prototypes_a.cpp
+    quantum_code/prototypes/prototypes_b.cpp
+    quantum_code/prototypes/component_prototype_visitor.cpp
+    quantum_code/prototypes/flat_entity_prototype_container.cpp
+)

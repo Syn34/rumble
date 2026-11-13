@@ -10,3 +10,6 @@ add_library(rr_assets
 add_library(rr::assets ALIAS rr_assets)
 target_include_directories(rr_assets PUBLIC include)
 rr_set_warnings(rr_assets)
+
+# Prefab (game object hierarchy) reader.
+target_sources(rr_assets PRIVATE src/prefab.cpp)
