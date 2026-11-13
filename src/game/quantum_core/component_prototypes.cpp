@@ -74,7 +74,9 @@ void ComponentPrototypeVisitorBase::Visit(Transform2DVertical_Prototype& prototy
 void ComponentPrototypeVisitorBase::Visit(Transform3D_Prototype& prototype) {
     VisitFallback(prototype);
 }
-void ComponentPrototypeVisitorBase::Visit(View_Prototype& prototype) { VisitFallback(prototype); }
+void ComponentPrototypeVisitorBase::Visit(View_Prototype& prototype) {
+    VisitFallback(prototype);
+}
 
 void ComponentPrototypeVisitorBase::VisitFallback(ComponentPrototype& prototype) {
     throw std::logic_error("Component prototype visitor does not handle " +
@@ -102,7 +104,8 @@ bool Transform2DVertical_Prototype::AddToEntity(Core::FrameBase* f, EntityRef en
     return f->Set(entity, transform) == SetResult::ComponentAdded;
 }
 
-void Transform2DVertical_Prototype::Materialize(Core::FrameBase*, Transform2DVertical& result) const {
+void Transform2DVertical_Prototype::Materialize(Core::FrameBase*,
+                                                Transform2DVertical& result) const {
     result.Position = Position;
     result.Height = Height;
 }
@@ -126,7 +129,9 @@ bool View_Prototype::AddToEntity(Core::FrameBase* f, EntityRef entity,
     return f->Set(entity, view) == SetResult::ComponentAdded;
 }
 
-void View_Prototype::Materialize(Core::FrameBase*, View& result) const { result.Current = Current; }
+void View_Prototype::Materialize(Core::FrameBase*, View& result) const {
+    result.Current = Current;
+}
 
 // --- navigation ------------------------------------------------------------------------------
 

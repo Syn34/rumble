@@ -3,8 +3,8 @@
 #include "quantum_core/component_prototype.h"
 
 #include "photon_deterministic/log.h"
-#include "quantum_core/asset_object.h"
 #include "quantum_core/assert.h"
+#include "quantum_core/asset_object.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -37,14 +37,17 @@ bool PrototypeMaterializationContext::TryGetEntityRef(MapEntityId id, EntityRef&
 int ComponentPrototype::get_ComponentTypeId() {
     if (_componentTypeId == 0) {
         const std::type_info* type = get_ComponentType();
-        _componentTypeId = type != nullptr ? ComponentTypeId<>::GetComponentIndex(*type)
-                                           : ComponentTypeId<>::GetComponentIndex(ComponentTypeName());
+        _componentTypeId = type != nullptr
+                               ? ComponentTypeId<>::GetComponentIndex(*type)
+                               : ComponentTypeId<>::GetComponentIndex(ComponentTypeName());
     }
     Assert::Always(_componentTypeId > 0);
     return _componentTypeId;
 }
 
-std::string ComponentPrototype::PrototypeTypeName() const { return AssetTypeName(typeid(*this)); }
+std::string ComponentPrototype::PrototypeTypeName() const {
+    return AssetTypeName(typeid(*this));
+}
 
 // --- EntityPrototypeContainer ----------------------------------------------------------------
 
@@ -58,8 +61,9 @@ void EntityPrototypeContainer::EnsureIsSorted() {
             continue;
         }
 
-        const bool hasNull = std::any_of(Components.begin(), Components.end(),
-                                         [](const auto& component) { return component == nullptr; });
+        const bool hasNull =
+            std::any_of(Components.begin(), Components.end(),
+                        [](const auto& component) { return component == nullptr; });
         if (hasNull) {
             _sortState.store(SortState_Unsorted, std::memory_order_release);
             throw std::invalid_argument("EntityPrototypeContainer: null component prototype");
@@ -69,11 +73,10 @@ void EntityPrototypeContainer::EnsureIsSorted() {
         // Array.Sort is an insertion sort, which keeps entries with equal keys in their
         // authored order too. (Two prototypes of one component type do not occur in valid
         // data.)
-        std::stable_sort(Components.begin(), Components.end(),
-                         [](const std::shared_ptr<ComponentPrototype>& x,
-                            const std::shared_ptr<ComponentPrototype>& y) {
-                             return Compare(*x, *y) < 0;
-                         });
+        std::stable_sort(
+            Components.begin(), Components.end(),
+            [](const std::shared_ptr<ComponentPrototype>& x,
+               const std::shared_ptr<ComponentPrototype>& y) { return Compare(*x, *y) < 0; });
 
         // The flag only ever turns on here; SetDirty clears it.
         for (std::size_t i = 0; i < Components.size() && !HasAnyListeners; ++i) {
@@ -108,7 +111,8 @@ int EntityPrototypeContainer::InternalBinarySearch(
     int high = static_cast<int>(array.size()) - 1;
     while (low <= high) {
         const int middle = low + (high - low) / 2;
-        const std::shared_ptr<ComponentPrototype>& candidate = array[static_cast<std::size_t>(middle)];
+        const std::shared_ptr<ComponentPrototype>& candidate =
+            array[static_cast<std::size_t>(middle)];
         if (candidate == nullptr) {
             throw std::invalid_argument("EntityPrototypeContainer: null component prototype");
         }
@@ -150,7 +154,8 @@ void PrototypeValidator::UnknownUnionField(const std::string& field,
                context.EntityPrototypeRef.ToString());
 }
 
-void PrototypeValidator::FindMapEntity(MapEntityId link, const PrototypeMaterializationContext& context,
+void PrototypeValidator::FindMapEntity(MapEntityId link,
+                                       const PrototypeMaterializationContext& context,
                                        EntityRef& result) {
     if (!link.IsValid()) {
         result = EntityRef::None();

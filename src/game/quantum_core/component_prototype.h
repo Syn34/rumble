@@ -173,8 +173,7 @@ class PendingComponentPrototype : public ComponentPrototype {
     std::string ComponentTypeName() const override { return _componentName; }
 
   protected:
-    explicit PendingComponentPrototype(const char* componentName)
-        : _componentName(componentName) {}
+    explicit PendingComponentPrototype(const char* componentName) : _componentName(componentName) {}
 
   private:
     const char* _componentName;

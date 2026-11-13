@@ -242,8 +242,7 @@ class NavMeshPathfinder_Prototype final : public PendingComponentPrototype {
     void Dispatch(ComponentPrototypeVisitorBase& visitor) override { visitor.Visit(*this); }
 };
 
-class NavMeshSteeringAgent_Prototype final
-    : public TypedComponentPrototype<NavMeshSteeringAgent> {
+class NavMeshSteeringAgent_Prototype final : public TypedComponentPrototype<NavMeshSteeringAgent> {
   public:
     bool OverrideMaxSpeed = false;
     bool OverrideAcceleration = false;
