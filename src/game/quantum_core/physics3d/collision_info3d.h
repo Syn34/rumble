@@ -23,7 +23,7 @@ struct Entry3D;
 struct CollisionManifold3D;
 struct ManifoldData3D;
 } // namespace Physics3D
-struct TriangleMesh;
+class TriangleMesh;
 
 using Photon::Deterministic::FPVector3;
 
@@ -56,9 +56,14 @@ struct CollisionInfo3D {
     Physics3D::Entry3D* _entryA = nullptr;
     Physics3D::Entry3D* _entryB = nullptr;
     ContactPointIterator3D ContactPoints;
-    // TODO(0x7d3a7a4, Quantum.TriangleCollisionIterator..ctor) and TODO(0x7d3a898,
-    // Quantum.TriangleCollisionIterator.get_AverageNormal): the MeshTriangleCollisions
-    // iterator needs static triangle meshes; mesh collisions are not raised yet.
+    // The triangle manifolds of a mesh collision (all null otherwise); see
+    // NarrowChecks::TriangleCollisionIterator.
+    struct TriangleCollisions {
+        Physics3D::CollisionManifold3D* _meshManifold = nullptr;
+        Physics3D::CollisionManifold3D* _triManifolds = nullptr;
+        Physics3D::CollisionManifold3D* _currentTri = nullptr;
+        const TriangleMesh* _sceneMesh = nullptr;
+    } MeshTriangleCollisions;
 
     CollisionInfo3D() = default;
     // 0x7d3a680
@@ -68,7 +73,8 @@ struct CollisionInfo3D {
                     Physics3D::CollisionManifold3D* triManifolds);
 
     // 0x7d3a7d4 - the manifold normal as seen from Entity: the stored normal points from A
-    // to B, so it is negated for A and kept for B (the inverse info).
+    // to B, so it is negated for A and kept for B (the inverse info). A mesh collision
+    // reports the negated mean of its triangles' normals.
     FPVector3 ContactNormal() const;
     bool IsStatic() const { return _isStatic; } // 0x7d3a924
     // 0x7d3a92c

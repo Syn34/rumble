@@ -9,6 +9,13 @@
 
 #include <cstdint>
 
+namespace Quantum {
+struct MapStaticCollider3D;
+namespace Core {
+class FrameBase;
+}
+} // namespace Quantum
+
 namespace Quantum::Physics3D {
 
 using Photon::Deterministic::FP;
@@ -50,9 +57,12 @@ struct Hit3D {
     // 0x7d6db60
     std::int32_t GetHashCode() const;
 
-    // Need the frame / map assets:
-    // TODO(0x7d6d6e8, Quantum.Physics3D.Hit3D.TryGetStaticCollider), also 0x7d6d728,
-    // TODO(0x7d6d840, Quantum.Physics3D.Hit3D.GetStaticCollider), also 0x7d6d870.
+    // 0x7d6d6e8 / 0x7d6d728 (FrameBase and FrameThreadSafe forms) - the map's static
+    // collider of a static hit; false (and a default collider) for an entity hit, a map
+    // that is not found or an index past its colliders.
+    bool TryGetStaticCollider(Core::FrameBase* frame, MapStaticCollider3D& collider) const;
+    // 0x7d6d840 / 0x7d6d870 - the same, throwing for a missing map (null) or a bad index.
+    MapStaticCollider3D GetStaticCollider(Core::FrameBase* frame) const;
     // TODO(0x7d6d92c, Quantum.Physics3D.Hit3D.Serialize)
 };
 static_assert(sizeof(Hit3D) == Hit3D::SIZE);

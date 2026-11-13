@@ -233,6 +233,10 @@ struct IntAABB {
     std::int32_t MaxY = 0;
     std::int32_t MinZ = 0;
     std::int32_t MaxZ = 0;
+
+    // 0x7d7d5a4 - the half-diagonal's length (raw): half extents in 32 bits, squares
+    // shifted down one by one.
+    FP::Raw GetBroadRadiusRaw() const;
 };
 static_assert(sizeof(IntAABB) == 24);
 

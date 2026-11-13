@@ -3,6 +3,7 @@
 
 #include "photon_deterministic/fp_internal.h"
 #include "photon_deterministic/fp_math.h"
+#include "quantum_core/byte_stream.h"
 
 namespace Quantum {
 
@@ -92,6 +93,34 @@ void TriangleCCW::GetSupportOffset(const FPVector3& worldDir, FPVector3& support
     const FPVector3* best = dotB > dotA ? &CenterToB : &CenterToA;
     const FP bestDot = dotB > dotA ? dotB : dotA;
     supportOffset = dotC > bestDot ? CenterToC : *best;
+}
+
+// 0x7d39e5c
+void TriangleCCW::Serialize(ByteStream& stream, bool write, bool serializeTrianglesMetadata) {
+    using ByteStreamExtension::Serialize;
+    A = Serialize(stream, write, A);
+    B = Serialize(stream, write, B);
+    C = Serialize(stream, write, C);
+    if (serializeTrianglesMetadata) {
+        MaxY = Serialize(stream, write, MaxY);
+        MinY = Serialize(stream, write, MinY);
+        BroadRadius = Serialize(stream, write, BroadRadius);
+        EdgeA = Serialize(stream, write, EdgeA);
+        EdgeB = Serialize(stream, write, EdgeB);
+        EdgeC = Serialize(stream, write, EdgeC);
+        CenterToA = Serialize(stream, write, CenterToA);
+        CenterToB = Serialize(stream, write, CenterToB);
+        CenterToC = Serialize(stream, write, CenterToC);
+        LengthEdgeA = Serialize(stream, write, LengthEdgeA);
+        LengthEdgeB = Serialize(stream, write, LengthEdgeB);
+        LengthEdgeC = Serialize(stream, write, LengthEdgeC);
+        Normal = Serialize(stream, write, Normal);
+        InverseNormal = Serialize(stream, write, InverseNormal);
+        Center = Serialize(stream, write, Center);
+    } else {
+        ComputeNormal();
+    }
+    StaticDataIndex = Serialize(stream, write, StaticDataIndex);
 }
 
 } // namespace Quantum
