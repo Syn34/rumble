@@ -10,6 +10,10 @@
 #include <cstdint>
 #include <string>
 
+namespace Photon::Deterministic {
+class IDeterministicFrameSerializer;
+}
+
 namespace Quantum {
 
 struct AssetGuid {
@@ -40,8 +44,9 @@ struct AssetGuid {
     // 0x7ce07e4 / 0x7ce07ec - 16 upper-case hex digits, optionally in brackets.
     std::string ToString(bool brackets = true) const;
 
-    // TODO(0x7ce0610, Quantum.AssetGuid.Serialize): writes/reads Value through the
-    // frame serializer's BitStream; waits on the BitStream reimplementation.
+    // 0x7ce0610 - Writes or reads Value as a 64-bit integer through the serializer's
+    // stream.
+    static void Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer);
 };
 
 // A reference to an asset by GUID. Original: Quantum.AssetRef.
@@ -57,7 +62,10 @@ struct AssetRef {
 
     // TODO(0x7ce9f40, Quantum.AssetRef.op_Implicit(AssetObject)): returns the
     // asset's identifier GUID, or an empty reference for null; needs AssetObject.
-    // TODO(0x7ce9f4c, Quantum.AssetRef.Serialize): forwards to AssetGuid.Serialize.
+    // 0x7ce9f4c - Same as AssetGuid::Serialize on Id.
+    static void Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer) {
+        AssetGuid::Serialize(&static_cast<AssetRef*>(ptr)->Id, serializer);
+    }
     // TODO(0x7ce9f88, Quantum.AssetRef.Equals(object)): boxed comparison; not needed in C++.
 };
 

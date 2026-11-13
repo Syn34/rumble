@@ -43,6 +43,8 @@ add_library(rr_quantum_core
     frame_context.cpp
     frame_base.cpp
     frame_meta_data.cpp
+    q_list.cpp
+    input_types.cpp
 )
 add_library(rr::quantum_core ALIAS rr_quantum_core)
 target_include_directories(rr_quantum_core PUBLIC ..)
