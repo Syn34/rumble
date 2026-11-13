@@ -37,6 +37,16 @@ void RegisterAssetFactory(const std::string& scriptClass, AssetFactory factory) 
     Factories()[scriptClass] = std::move(factory);
 }
 
+std::shared_ptr<Quantum::AssetObject> BuildAsset(const std::string& scriptClass,
+                                                 const rr::assets::Value& settings) {
+    AssetFactory factory;
+    {
+        std::lock_guard lock(FactoryMutex());
+        if (auto it = Factories().find(scriptClass); it != Factories().end()) factory = it->second;
+    }
+    return factory ? factory(settings) : nullptr;
+}
+
 QuantumContentProvider::QuantumContentProvider(rr::assets::ContentLibrary& library,
                                                std::string bundlePrefix)
     : library_(library) {

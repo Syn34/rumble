@@ -35,6 +35,11 @@ using AssetFactory =
 // Registers the factory for one original script class name (e.g. "WeaponSpecAsset").
 void RegisterAssetFactory(const std::string& scriptClass, AssetFactory factory);
 
+// Builds an asset from its decoded `Settings` value with the factory registered for
+// `scriptClass`; null if there is none. (The identifier is left to the caller.)
+std::shared_ptr<Quantum::AssetObject> BuildAsset(const std::string& scriptClass,
+                                                 const rr::assets::Value& settings);
+
 class QuantumContentProvider final : public Quantum::IAssetResourceProvider {
 public:
     // `library` must outlive the provider. Only bundles whose file name starts with

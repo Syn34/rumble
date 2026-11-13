@@ -2,6 +2,7 @@
 //   contentindex <aa/Android folder> <libunity.so> [--load]
 // With --load, every asset is also built through the provider and the number of
 // assets served by a real C++ type vs. as raw data is reported.
+#include "content/quantum_code_factories.h"
 #include "content/quantum_content_provider.h"
 
 #include <cstdio>
@@ -23,6 +24,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     rr::assets::ContentLibrary library(argv[1], std::move(*strings));
+    rr::content::RegisterQuantumCodeAssetFactories();
     rr::content::QuantumContentProvider provider(library);
 
     const auto ids = provider.ListAssets();

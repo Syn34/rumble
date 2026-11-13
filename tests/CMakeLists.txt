@@ -32,3 +32,7 @@ add_executable(rr_tests
 target_link_libraries(rr_tests PRIVATE rr::game rr::assets)
 rr_set_warnings(rr_tests)
 add_test(NAME rr_tests COMMAND rr_tests)
+
+# Gameplay asset classes and their content factories.
+target_sources(rr_tests PRIVATE test_quantum_code_assets.cpp)
+target_link_libraries(rr_tests PRIVATE rr::content)
