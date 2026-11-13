@@ -23,7 +23,7 @@ struct Entry3D;
 struct CollisionManifold3D;
 struct ManifoldData3D;
 } // namespace Physics3D
-class TriangleMesh;
+struct TriangleMesh;
 
 using Photon::Deterministic::FPVector3;
 
