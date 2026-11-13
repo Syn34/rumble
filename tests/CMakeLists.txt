@@ -17,6 +17,7 @@ add_executable(rr_tests
     test_deterministic_session.cpp
     test_fp_collision.cpp
     test_quantum_collision.cpp
+    test_quantum_narrow2d.cpp
 )
 target_link_libraries(rr_tests PRIVATE rr::game rr::assets)
 rr_set_warnings(rr_tests)

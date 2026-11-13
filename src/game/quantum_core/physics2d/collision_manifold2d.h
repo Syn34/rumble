@@ -8,6 +8,7 @@
 
 #include "photon_deterministic/fp.h"
 #include "photon_deterministic/fp_vector2.h"
+#include "quantum_core/polygon_collider.h"
 #include "quantum_core/shape2d.h"
 
 #include <cstdint>
@@ -134,15 +135,32 @@ struct PolygonData {
     const FPVector2* Normals = nullptr;
     std::int32_t VerticesCount = 0;
     std::int32_t NormalsCount = 0;
+
+    // 0x7d18774 - points at the collider asset's vertex and normal arrays (the original
+    // uses the asset's native copies of them).
+    void Init(const PolygonCollider& polygonCollider);
+};
+
+// The parts of the entry's PhysicsBody2D component that the narrow phase reads (the
+// component itself belongs to the ECS, which is not part of this module).
+struct NarrowBody2D {
+    FP AngularVelocity;
+    FPVector2 Velocity;
 };
 
 // The fields of a broad-phase entry (Quantum.Physics2D.Entry2D) that the narrow-phase
 // checks read. The scene and its entries are not reimplemented yet; whoever builds them
-// fills this view (the original reads Entry2D.Shape, Entry2D.Polygon, Entry2D.Narrow).
+// fills this view (the original reads Entry2D.Shape, Polygon, Narrow, Body, Transform2D,
+// HasDynamicBody and RotatedCenterOfMass).
 struct NarrowEntry2D {
     const Shape2D* Shape = nullptr;
     PolygonData Polygon;
     NarrowData2D Narrow;
+    // Only read when a query extrapolates motion over a time step (CCD / time of impact).
+    const NarrowBody2D* Body = nullptr;
+    FPVector2 TransformPosition; // Entry2D.Transform2D->Position
+    bool HasDynamicBody = false;
+    FPVector2 RotatedCenterOfMass;
 };
 
 // The pair handed to every narrow-phase check.
