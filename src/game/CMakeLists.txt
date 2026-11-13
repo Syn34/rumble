@@ -9,6 +9,7 @@ add_subdirectory(quantum_core)
 add_library(rr_game
     quantum_code/fp_math_utility.cpp
     quantum_code/core_types.cpp
+    quantum_code/input.cpp
     quantum_code/components_1.cpp
     quantum_code/components_2.cpp
     quantum_code/components_3.cpp
