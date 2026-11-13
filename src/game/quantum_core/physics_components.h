@@ -31,6 +31,7 @@ using Photon::Deterministic::FPMatrix3x3;
 namespace Core {
 class FrameBase;
 }
+class FrameSerializer;
 
 // Quantum.PhysicsBody2D/3D.PhysicsBodyStatus
 enum class PhysicsBodyStatus : std::uint8_t {
@@ -187,7 +188,8 @@ struct PhysicsBody3D {
 
     // 0x7d33d60 - inverse inertia from the collider shape's inertia factor and the mass.
     void ResetInertia(Core::FrameBase* f, EntityRef entity);
-    // TODO(0x7d34bf4, Quantum.PhysicsBody3D.Serialize): field-by-field frame serialisation.
+    // 0x7d34bf4 - every field in declaration order.
+    static void Serialize(void* ptr, FrameSerializer* serializer);
 };
 static_assert(sizeof(PhysicsBody3D) == PhysicsBody3D::SIZE);
 
@@ -274,7 +276,8 @@ struct PhysicsBody2D {
 
     // TODO(0x7d310a8, Quantum.PhysicsBody2D.ResetInertia): needs Shape2D inertia factors.
     void ResetInertia(Core::FrameBase* f, EntityRef entity);
-    // TODO(0x7d3159c, Quantum.PhysicsBody2D.Serialize)
+    // 0x7d3159c - every field in declaration order.
+    static void Serialize(void* ptr, FrameSerializer* serializer);
 };
 static_assert(sizeof(PhysicsBody2D) == PhysicsBody2D::SIZE);
 

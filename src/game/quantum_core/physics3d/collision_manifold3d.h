@@ -337,8 +337,8 @@ struct FPVector3RawInt {
     explicit operator FPVector3() const;
     // 0x7d7b9e4 op_Explicit(FPVector3) -> FPVector3RawInt
     static FPVector3RawInt FromFPVector3(const FPVector3& value);
-    // TODO(0x7d7b6f4, Quantum.Physics3D.FPVector3RawInt.Serialize): three ints through the
-    // frame serializer's stream.
+    // 0x7d7b6f4 - three ints through the frame serializer's stream.
+    static void Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer);
 };
 static_assert(sizeof(FPVector3RawInt) == FPVector3RawInt::SIZE);
 
@@ -356,7 +356,8 @@ struct FPQuaternionRawInt {
     explicit operator FPQuaternion() const;
     // 0x7d7bdb8 op_Explicit(FPQuaternion) -> FPQuaternionRawInt
     static FPQuaternionRawInt FromFPQuaternion(const FPQuaternion& value);
-    // TODO(0x7d7b9f8, Quantum.Physics3D.FPQuaternionRawInt.Serialize)
+    // 0x7d7b9f8 - four ints.
+    static void Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer);
 };
 static_assert(sizeof(FPQuaternionRawInt) == FPQuaternionRawInt::SIZE);
 

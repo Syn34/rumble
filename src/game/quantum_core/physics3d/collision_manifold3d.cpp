@@ -6,6 +6,8 @@
 
 #include "photon_deterministic/fp_internal.h"
 #include "photon_deterministic/fp_quaternion.h"
+#include "photon_deterministic/bit_stream.h"
+#include "photon_deterministic/deterministic_frame_serializer.h"
 
 #include <algorithm>
 #include <cassert>
@@ -416,6 +418,25 @@ FPQuaternionRawInt::operator FPQuaternion() const {
 // 0x7d7bdb8
 FPQuaternionRawInt FPQuaternionRawInt::FromFPQuaternion(const FPQuaternion& value) {
     return {LowBits(value.X), LowBits(value.Y), LowBits(value.Z), LowBits(value.W)};
+}
+
+// 0x7d7b6f4
+void FPVector3RawInt::Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer) {
+    auto* v = static_cast<FPVector3RawInt*>(ptr);
+    Photon::Deterministic::IBitStream& stream = serializer->Stream();
+    stream.Serialize(&v->RawIntX);
+    stream.Serialize(&v->RawIntY);
+    stream.Serialize(&v->RawIntZ);
+}
+
+// 0x7d7b9f8
+void FPQuaternionRawInt::Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer) {
+    auto* q = static_cast<FPQuaternionRawInt*>(ptr);
+    Photon::Deterministic::IBitStream& stream = serializer->Stream();
+    stream.Serialize(&q->RawIntX);
+    stream.Serialize(&q->RawIntY);
+    stream.Serialize(&q->RawIntZ);
+    stream.Serialize(&q->RawIntW);
 }
 
 } // namespace Quantum::Physics3D
