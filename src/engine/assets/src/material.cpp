@@ -32,7 +32,44 @@ template <typename Fn> void ForEachPair(const Value* sheet, const char* field, F
     }
 }
 
+ShaderStateValue StateValue(const Value* v, float fallback) {
+    ShaderStateValue out;
+    out.value = FloatField(v, "val", fallback);
+    std::string name = StringField(v, "name");
+    if (name != "<noninit>") out.property = std::move(name);
+    return out;
+}
+
+std::map<std::string, std::string> ReadTags(const Value* tagMap) {
+    std::map<std::string, std::string> tags;
+    ForEachPair(tagMap, "tags", [&](const std::string& key, const Value& value) {
+        std::string k = key;
+        if (k == "QUEUE") k = "Queue";
+        if (value.AsString()) tags[k] = *value.AsString();
+    });
+    return tags;
+}
+
 } // namespace
+
+float ShaderStateValue::Resolve(const MaterialAsset& material) const {
+    if (property.empty()) return value;
+    if (auto it = material.floats.find(property); it != material.floats.end()) return it->second;
+    if (auto it = material.ints.find(property); it != material.ints.end()) return static_cast<float>(it->second);
+    return value;
+}
+
+const ShaderPassState* ShaderInfo::FindPass(const std::string& passName) const {
+    for (const ShaderPassState& p : passes) {
+        if (p.name == passName) return &p;
+    }
+    return nullptr;
+}
+
+std::string ShaderInfo::Tag(const std::string& key) const {
+    auto it = tags.find(key);
+    return it != tags.end() ? it->second : std::string{};
+}
 
 const MaterialTexture* MaterialAsset::MainTexture() const {
     for (const char* property : {"_BaseMap", "_MainTex", "_BaseColorMap", "_AlbedoMap", "_Albedo", "_BaseTexture"}) {
@@ -96,7 +133,30 @@ ShaderInfo ReadShaderInfo(const Value& shader) {
         if (const Value* type = p->Get("m_Type")) prop.type = static_cast<int>(type->AsInt());
         out.properties.push_back(std::move(prop));
     }
-    out.subShaderCount = static_cast<int>(ArrayField(parsed, "m_SubShaders").size());
+    const Value::Array& subShaders = ArrayField(parsed, "m_SubShaders");
+    out.subShaderCount = static_cast<int>(subShaders.size());
+    if (!subShaders.empty()) {
+        const Value* sub = subShaders.front().get();
+        out.tags = ReadTags(sub->Get("m_Tags"));
+        for (const ValuePtr& pass : ArrayField(sub, "m_Passes")) {
+            const Value* state = pass->Get("m_State");
+            if (!state) continue;
+            ShaderPassState ps;
+            ps.name = StringField(state, "m_Name");
+            ps.tags = ReadTags(state->Get("m_Tags"));
+            if (const Value* blend = state->Get("rtBlend0")) {
+                ps.srcBlend = StateValue(blend->Get("srcBlend"), 1.0f);
+                ps.destBlend = StateValue(blend->Get("destBlend"), 0.0f);
+            }
+            ps.zWrite = StateValue(state->Get("zWrite"), 1.0f);
+            ps.zTest = StateValue(state->Get("zTest"), 4.0f);
+            ps.culling = StateValue(state->Get("culling"), 2.0f);
+            out.passes.push_back(std::move(ps));
+        }
+    }
+    for (const ValuePtr& k : ArrayField(parsed, "m_KeywordNames")) {
+        if (k->AsString()) out.keywordNames.push_back(*k->AsString());
+    }
     return out;
 }
 
