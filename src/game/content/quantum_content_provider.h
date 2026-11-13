@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -74,6 +75,10 @@ public:
 
     // The GUID of the listed asset with this path (UnityDB.GetAssetGuid); invalid if none.
     Quantum::AssetGuid GuidOfPath(const std::string& path) const;
+
+    // The script object holding a listed asset (for engine-side data that isn't part of the
+    // simulation asset, e.g. the view prefab of an EntityView).
+    std::optional<rr::assets::ObjectRef> SourceOf(Quantum::AssetGuid guid);
 
 private:
     struct Entry {
