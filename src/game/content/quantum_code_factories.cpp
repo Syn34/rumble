@@ -315,6 +315,21 @@ void ReadFields(const Value& value, Quantum::EntityGroupSpec& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::FireReactorSpec& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::HealSourceSpec& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::LifetimeSpec& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedAutoJumper& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedGrindRail& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedRailColliderData& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedSpline& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedSplineSample& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedTravolator& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::BlastBallData& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::ClosingPointData& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::ClosingZoneData& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::ControlZoneData& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::SpawnPointData& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::StaticColliderGrindRailPair& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::StaticDroppableData& out, ReaderTag);
+void ReadFields(const Value& value, Quantum::MapCustomData::TutorialData& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::MoveToSpec& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::ParabolaFollowerSpec& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::PowerUpSpec& out, ReaderTag);
@@ -505,21 +520,6 @@ void ReadFields(const Value& value, Quantum::BumperConfig& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::ItemSpawnerConfig& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::LevelButtonConfig& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::LevelButtonGameplayElementConfig& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedAutoJumper& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedGrindRail& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedRailColliderData& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedSpline& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedSplineSample& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedTravolator& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::BlastBallData& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::ClosingPointData& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::ClosingZoneData& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::ControlZoneData& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::SpawnPointData& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::StaticColliderGrindRailPair& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::StaticDroppableData& out, ReaderTag);
-void ReadFields(const Value& value, Quantum::MapCustomData::TutorialData& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::MovingWallConfig& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::ShrinkingZoneSpec& out, ReaderTag);
 void ReadFields(const Value& value, Quantum::StaticColliderConfig& out, ReaderTag);
@@ -2150,6 +2150,105 @@ void ReadFields(const Value& value, Quantum::LifetimeSpec& out, ReaderTag) {
     Read(value, "UseRaycastToSpawnOnDeathLayerMask", out.UseRaycastToSpawnOnDeathLayerMask);
     Read(value, "SpawnOnDeathRaycastDistance", out.SpawnOnDeathRaycastDistance);
     Read(value, "SpawnOnDeathOrientOnNormal", out.SpawnOnDeathOrientOnNormal);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData& out, ReaderTag) {
+    Read(value, "SpawnPoints", out.SpawnPoints);
+    Read(value, "blastBallData", out.blastBallData);
+    Read(value, "ControlZones", out.ControlZones);
+    Read(value, "tutorialData", out.tutorialData);
+    Read(value, "ClosingZones", out.ClosingZones);
+    Read(value, "GoldenBoltSpawnPoints", out.GoldenBoltSpawnPoints);
+    Read(value, "StaticDroppables", out.StaticDroppables);
+    Read(value, "staticJumpers", out.staticJumpers);
+    Read(value, "staticTravolator", out.staticTravolator);
+    Read(value, "bakedGrindRails", out.bakedGrindRails);
+    Read(value, "staticColliderGrindRailPairs", out.staticColliderGrindRailPairs);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedAutoJumper& out, ReaderTag) {
+    Read(value, "staticColliderIndex", out.staticColliderIndex);
+    Read(value, "autoJumperStartParams", out.autoJumperStartParams);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedGrindRail& out, ReaderTag) {
+    Read(value, "spline", out.spline);
+    Read(value, "collidersData", out.collidersData);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedRailColliderData& out, ReaderTag) {
+    Read(value, "staticColliderIndex", out.staticColliderIndex);
+    Read(value, "distance", out.distance);
+    Read(value, "nearbyRailColIndexLeft", out.nearbyRailColIndexLeft);
+    Read(value, "nearbyRailColIndexRight", out.nearbyRailColIndexRight);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedSpline& out, ReaderTag) {
+    Read(value, "samples", out.samples);
+    Read(value, "length", out.length);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedSplineSample& out, ReaderTag) {
+    Read(value, "posWorld", out.posWorld);
+    Read(value, "distance", out.distance);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::BakedTravolator& out, ReaderTag) {
+    Read(value, "staticColliderIndex", out.staticColliderIndex);
+    Read(value, "direction", out.direction);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::BlastBallData& out, ReaderTag) {
+    Read(value, "ballPosition", out.ballPosition);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::ClosingPointData& out, ReaderTag) {
+    Read(value, "targetPosition", out.targetPosition);
+    Read(value, "targetRadius", out.targetRadius);
+    Read(value, "startTime", out.startTime);
+    Read(value, "endTime", out.endTime);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::ClosingZoneData& out, ReaderTag) {
+    Read(value, "startPosition", out.startPosition);
+    Read(value, "startRadius", out.startRadius);
+    Read(value, "closingPoints", out.closingPoints);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::ControlZoneData& out, ReaderTag) {
+    Read(value, "position", out.position);
+    Read(value, "radius", out.radius);
+    Read(value, "id", out.id);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::SpawnPointData& out, ReaderTag) {
+    Read(value, "position", out.position);
+    Read(value, "rotY", out.rotY);
+    Read(value, "options", out.options);
+    Read(value, "teamFlag", out.teamFlag);
+    Read(value, "introTrackId", out.introTrackId);
+    Read(value, "availabilityDuration", out.availabilityDuration);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::StaticColliderGrindRailPair& out, ReaderTag) {
+    Read(value, "staticColliderIndex", out.staticColliderIndex);
+    Read(value, "grindRailIndex", out.grindRailIndex);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::StaticDroppableData& out, ReaderTag) {
+    Read(value, "type", out.type);
+    Read(value, "position", out.position);
+}
+
+void ReadFields(const Value& value, Quantum::MapCustomData::TutorialData& out, ReaderTag) {
+    Read(value, "tutoShootPosition", out.tutoShootPosition);
+    Read(value, "tutoShootRotation", out.tutoShootRotation);
+    Read(value, "tutoMeleePosition", out.tutoMeleePosition);
+    Read(value, "tutoMeleeRotation", out.tutoMeleeRotation);
+    Read(value, "arenaPosition", out.arenaPosition);
+    Read(value, "arenaRotation", out.arenaRotation);
+    Read(value, "ultimatePosition", out.ultimatePosition);
+    Read(value, "ultimateRotation", out.ultimateRotation);
 }
 
 void ReadFields(const Value& value, Quantum::MoveToSpec& out, ReaderTag) {
@@ -3895,105 +3994,6 @@ void ReadFields(const Value& value, Quantum::LevelButtonConfig& out, ReaderTag) 
 }
 
 void ReadFields(const Value&, Quantum::LevelButtonGameplayElementConfig&, ReaderTag) {}
-
-void ReadFields(const Value& value, Quantum::MapCustomData& out, ReaderTag) {
-    Read(value, "SpawnPoints", out.SpawnPoints);
-    Read(value, "blastBallData", out.blastBallData);
-    Read(value, "ControlZones", out.ControlZones);
-    Read(value, "tutorialData", out.tutorialData);
-    Read(value, "ClosingZones", out.ClosingZones);
-    Read(value, "GoldenBoltSpawnPoints", out.GoldenBoltSpawnPoints);
-    Read(value, "StaticDroppables", out.StaticDroppables);
-    Read(value, "staticJumpers", out.staticJumpers);
-    Read(value, "staticTravolator", out.staticTravolator);
-    Read(value, "bakedGrindRails", out.bakedGrindRails);
-    Read(value, "staticColliderGrindRailPairs", out.staticColliderGrindRailPairs);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedAutoJumper& out, ReaderTag) {
-    Read(value, "staticColliderIndex", out.staticColliderIndex);
-    Read(value, "autoJumperStartParams", out.autoJumperStartParams);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedGrindRail& out, ReaderTag) {
-    Read(value, "spline", out.spline);
-    Read(value, "collidersData", out.collidersData);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedRailColliderData& out, ReaderTag) {
-    Read(value, "staticColliderIndex", out.staticColliderIndex);
-    Read(value, "distance", out.distance);
-    Read(value, "nearbyRailColIndexLeft", out.nearbyRailColIndexLeft);
-    Read(value, "nearbyRailColIndexRight", out.nearbyRailColIndexRight);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedSpline& out, ReaderTag) {
-    Read(value, "samples", out.samples);
-    Read(value, "length", out.length);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedSplineSample& out, ReaderTag) {
-    Read(value, "posWorld", out.posWorld);
-    Read(value, "distance", out.distance);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::BakedTravolator& out, ReaderTag) {
-    Read(value, "staticColliderIndex", out.staticColliderIndex);
-    Read(value, "direction", out.direction);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::BlastBallData& out, ReaderTag) {
-    Read(value, "ballPosition", out.ballPosition);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::ClosingPointData& out, ReaderTag) {
-    Read(value, "targetPosition", out.targetPosition);
-    Read(value, "targetRadius", out.targetRadius);
-    Read(value, "startTime", out.startTime);
-    Read(value, "endTime", out.endTime);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::ClosingZoneData& out, ReaderTag) {
-    Read(value, "startPosition", out.startPosition);
-    Read(value, "startRadius", out.startRadius);
-    Read(value, "closingPoints", out.closingPoints);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::ControlZoneData& out, ReaderTag) {
-    Read(value, "position", out.position);
-    Read(value, "radius", out.radius);
-    Read(value, "id", out.id);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::SpawnPointData& out, ReaderTag) {
-    Read(value, "position", out.position);
-    Read(value, "rotY", out.rotY);
-    Read(value, "options", out.options);
-    Read(value, "teamFlag", out.teamFlag);
-    Read(value, "introTrackId", out.introTrackId);
-    Read(value, "availabilityDuration", out.availabilityDuration);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::StaticColliderGrindRailPair& out, ReaderTag) {
-    Read(value, "staticColliderIndex", out.staticColliderIndex);
-    Read(value, "grindRailIndex", out.grindRailIndex);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::StaticDroppableData& out, ReaderTag) {
-    Read(value, "type", out.type);
-    Read(value, "position", out.position);
-}
-
-void ReadFields(const Value& value, Quantum::MapCustomData::TutorialData& out, ReaderTag) {
-    Read(value, "tutoShootPosition", out.tutoShootPosition);
-    Read(value, "tutoShootRotation", out.tutoShootRotation);
-    Read(value, "tutoMeleePosition", out.tutoMeleePosition);
-    Read(value, "tutoMeleeRotation", out.tutoMeleeRotation);
-    Read(value, "arenaPosition", out.arenaPosition);
-    Read(value, "arenaRotation", out.arenaRotation);
-    Read(value, "ultimatePosition", out.ultimatePosition);
-    Read(value, "ultimateRotation", out.ultimateRotation);
-}
 
 void ReadFields(const Value& value, Quantum::MovingWallConfig& out, ReaderTag) {
     Read(value, "StartsLockedInPlace", out.StartsLockedInPlace);

@@ -440,6 +440,10 @@ class WrenchThrowEnhancementSpec;
 class WrenchWeaponSpec;
 class ZoneControlGameModeSpec;
 
+// Stands in for a method that isn't reimplemented yet where code must compile: an
+// overridable base method whose overrides exist already. Throws std::logic_error.
+[[noreturn]] void NotReimplemented(const char* method);
+
 // Quantum.AIFunction<T> and Quantum.EnumEqualsFunction<T> (bot SDK generics; defined in
 // bot_sdk_assets.h). The C++ name of AIFunction<T> carries a T suffix because a class and a
 // class template can't share a name.
@@ -489,6 +493,14 @@ struct ActorStatusTypeSettings {
 
     // 0x7cb92c4
     ActorStatusTypeSettings() = default;
+};
+
+// Original: BATTLE_RESULT (GameClasses.dll, global namespace).
+enum class BATTLE_RESULT : std::int32_t {
+    UNKNOWN = 0,
+    WIN = 1,
+    LOSE = 2,
+    DRAW = 3,
 };
 
 struct BTDataIndex {
@@ -622,7 +634,8 @@ struct HFSMTransition {
     // 0x7b84030
     HFSMTransition() = default;
 
-    // TODO(0x7b838a4, Quantum.HFSMTransition.Setup): void Setup(IResourceManager resourceManager)
+    // 0x7b838a4 - resolves the decision, target state and transition set.
+    void Setup(IResourceManager* resourceManager);
 };
 
 struct HeightRangePercentPair {

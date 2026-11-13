@@ -33,8 +33,8 @@ class AIBlackboard : public AssetObject {
     // 0x7b87624
     AIBlackboard() = default;
 
-    // TODO(0x7b87514, Quantum.AIBlackboard.Loaded): void Loaded(IResourceManager resourceManager,
-    //   Allocator allocator)
+    // 0x7b87514 - Map from each entry's key to its index (a duplicate key throws).
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class AIBlackboardInitializer : public AssetObject {
@@ -205,8 +205,8 @@ class Consideration : public AssetObject {
     //   entity, AIContext aiContext)
     // TODO(0x7b84c14, Quantum.Consideration.OnUpdate): void OnUpdate(FrameThreadSafe frame,
     //   UtilityReasoner* reasoner, EntityRef entity, AIContext aiContext)
-    // TODO(0x7b84d60, Quantum.Consideration.Loaded): void Loaded(IResourceManager resourceManager,
-    //   Allocator allocator)
+    // 0x7b84d60 - resolves the rank and commitment functions, the response curves, the enter/update/exit actions and the next considerations.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class GOAPAction : public AssetObject {
@@ -263,8 +263,8 @@ class GOAPRoot : public AssetObject {
     // 0x7b819bc
     GOAPRoot() = default;
 
-    // TODO(0x7b81608, Quantum.GOAPRoot.Loaded): void Loaded(IResourceManager resourceManager,
-    //   Allocator allocator)
+    // 0x7b81608 - resolves the goals and actions.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class HFSMDecision : public AssetObject {
@@ -291,9 +291,10 @@ class HFSMRoot : public AssetObject {
     // 0x7b83078
     HFSMRoot() = default;
 
-    // TODO(0x7b825fc, Quantum.HFSMRoot.get_InitialState): AssetRefHFSMState get_InitialState()
-    // TODO(0x7b82dd8, Quantum.HFSMRoot.Loaded): void Loaded(IResourceManager resourceManager,
-    //   Allocator allocator)
+    // 0x7b825fc - the first state (none without states).
+    AssetRefHFSMState InitialState() const;
+    // 0x7b82dd8 - registers the event names (ids from 1, in order; a duplicate throws) and resolves the states.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class HFSMState : public AssetObject {
@@ -316,8 +317,8 @@ class HFSMState : public AssetObject {
     // 0x7b84028
     HFSMState() = default;
 
-    // TODO(0x7b83100, Quantum.HFSMState.Loaded): void Loaded(IResourceManager resourceManager,
-    //   Allocator allocator)
+    // 0x7b83100 - resolves the update/enter/exit actions, the children and the parent, and sets up the transitions.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
     // TODO(0x7b827b0, Quantum.HFSMState.UpdateState): bool UpdateState(FrameThreadSafe frame, FP
     //   deltaTime, HFSMData* hfsmData, EntityRef entity, AIContext aiContext)
     // TODO(0x7b829a0, Quantum.HFSMState.Event): bool Event(FrameThreadSafe frame, HFSMData*
@@ -328,7 +329,8 @@ class HFSMState : public AssetObject {
     //   FindChildInHistory(FrameThreadSafe frame, HFSMData* hfsmData)
     // TODO(0x7b82ab4, Quantum.HFSMState.ExitState): void ExitState(HFSMState nextState,
     //   FrameThreadSafe frame, HFSMData* hfsmData, EntityRef entity, AIContext aiContext)
-    // TODO(0x7b83f00, Quantum.HFSMState.IsChildOf): bool IsChildOf(HFSMState state)
+    // 0x7b83f00 - whether `state` is an ancestor of this state.
+    bool IsChildOf(const HFSMState* state) const;
     // TODO(0x7b83f1c, Quantum.HFSMState.IsSiblingOf): bool IsSiblingOf(FrameThreadSafe frame,
     //   HFSMData* hfsmData, HFSMState state)
     // TODO(0x7b83bc4, Quantum.HFSMState.UpdateActions): void UpdateActions(FrameThreadSafe frame,
@@ -348,8 +350,8 @@ class HFSMTransitionSet : public AssetObject {
     // 0x7b841dc
     HFSMTransitionSet() = default;
 
-    // TODO(0x7b84038, Quantum.HFSMTransitionSet.Loaded): void Loaded(IResourceManager
-    //   resourceManager, Allocator allocator)
+    // 0x7b84038 - resolves the prerequisite decision and sets up the transitions.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class UTRoot : public AssetObject {
@@ -360,8 +362,8 @@ class UTRoot : public AssetObject {
     // 0x7b8750c
     UTRoot() = default;
 
-    // TODO(0x7b87308, Quantum.UTRoot.Loaded): void Loaded(IResourceManager resourceManager,
-    //   Allocator allocator)
+    // 0x7b87308 - resolves the considerations (unlike the other graph assets it skips the base call, which does nothing).
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class BTComposite : public BTNode {
@@ -378,8 +380,8 @@ class BTComposite : public BTNode {
     // 0x7b7dc18
     BTComposite() = default;
 
-    // TODO(0x7b7dc30, Quantum.BTComposite.Loaded): void Loaded(IResourceManager resourceManager,
-    //   Allocator allocator)
+    // 0x7b7dc30 - resolves the children (each gets this node as Parent and its index as ParentIndex), the services and the topmost decorator.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class BTDecorator : public BTNode {
@@ -391,8 +393,8 @@ class BTDecorator : public BTNode {
     // 0x7b7e320
     BTDecorator() = default;
 
-    // TODO(0x7b7e188, Quantum.BTDecorator.Loaded): void Loaded(IResourceManager resourceManager,
-    //   Allocator allocator)
+    // 0x7b7e188 - resolves the child, if set, and makes this node its Parent.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class BTLeaf : public BTNode {
@@ -403,8 +405,8 @@ class BTLeaf : public BTNode {
     // 0x7b7e544
     BTLeaf() = default;
 
-    // TODO(0x7b7e328, Quantum.BTLeaf.Loaded): void Loaded(IResourceManager resourceManager,
-    //   Allocator allocator)
+    // 0x7b7e328 - resolves the services.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class CheckBlackboardInt : public HFSMDecision {
@@ -457,8 +459,8 @@ class GOAPDefaultAction : public GOAPAction {
     // 0x7b81070
     GOAPDefaultAction() = default;
 
-    // TODO(0x7b80a8c, Quantum.GOAPDefaultAction.Loaded): void Loaded(IResourceManager
-    //   resourceManager, Allocator allocator)
+    // 0x7b80a8c - resolves the plan-state validation and the activate/update/deactivate actions.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class GOAPDefaultGoal : public GOAPGoal {
@@ -477,8 +479,8 @@ class GOAPDefaultGoal : public GOAPGoal {
     // 0x7b815b0
     GOAPDefaultGoal() = default;
 
-    // TODO(0x7b810b8, Quantum.GOAPDefaultGoal.Loaded): void Loaded(IResourceManager
-    //   resourceManager, Allocator allocator)
+    // 0x7b810b8 - resolves the init-planning/activate/deactivate actions.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class GOAPSingleBackValidation : public GOAPBackValidation {
@@ -493,8 +495,8 @@ class HFSMLogicalDecision : public HFSMDecision {
     // 0x7b81c9c
     HFSMLogicalDecision() = default;
 
-    // TODO(0x7b81a80, Quantum.HFSMLogicalDecision.Loaded): void Loaded(IResourceManager
-    //   resourceManager, Allocator allocator)
+    // 0x7b81a80 - resolves the combined decisions.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 };
 
 class IncreaseBlackboardInt : public AIAction {

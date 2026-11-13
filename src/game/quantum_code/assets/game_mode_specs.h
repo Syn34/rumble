@@ -81,14 +81,14 @@ class GameModeHandlerConfig : public AssetObject {
     // 0x7c9107c
     GameModeHandlerConfig() = default;
 
-    // TODO(0x7c9105c, Quantum.GameModeHandlerConfig.get_DebugRunnerSkipIntroInEditor): bool
-    //   get_DebugRunnerSkipIntroInEditor()
-    // TODO(0x7c91064, Quantum.GameModeHandlerConfig.get_LevelIntroEnabledInEditor): bool
-    //   get_LevelIntroEnabledInEditor()
-    // TODO(0x7c9106c, Quantum.GameModeHandlerConfig.get_CountdownEnabledInEditor): bool
-    //   get_CountdownEnabledInEditor()
-    // TODO(0x7c91074, Quantum.GameModeHandlerConfig.get_LevelLoadingScreenEnabledInEditor): bool
-    //   get_LevelLoadingScreenEnabledInEditor()
+    // 0x7c9105c - editor-only switch; always on in the game.
+    bool DebugRunnerSkipIntroInEditor() const { return true; }
+    // 0x7c91064 - editor-only switch; always on in the game.
+    bool LevelIntroEnabledInEditor() const { return true; }
+    // 0x7c9106c - editor-only switch; always on in the game.
+    bool CountdownEnabledInEditor() const { return true; }
+    // 0x7c91074 - editor-only switch; always on in the game.
+    bool LevelLoadingScreenEnabledInEditor() const { return true; }
 };
 
 class GameModeHandlerLevelConfig : public AssetObject {
@@ -183,13 +183,22 @@ class GameModeSpec : public AssetObject {
     // 0x7c91fa4
     GameModeSpec() = default;
 
-    // TODO(0x7c91124, Quantum.GameModeSpec.GetIntroDuration): FP GetIntroDuration()
-    // TODO(0x7c9112c, Quantum.GameModeSpec.GetOutroDuration): FP GetOutroDuration(Frame frame)
+    // 0x7c91124
+    virtual FP GetIntroDuration() const { return introDuration; }
+    // 0x7c9112c
+    virtual FP GetOutroDuration(Frame* frame) const {
+        (void)frame;
+        return outroDuration;
+    }
     // TODO(0x7c91134, Quantum.GameModeSpec.GetTeamRepartition): Queue<int>>
     //   GetTeamRepartition(Frame frame)
-    // TODO(0x7c91364, Quantum.GameModeSpec.GetBoltsDropMultiplier): FP GetBoltsDropMultiplier(Frame
-    //   frame)
-    // TODO(0x7c9136c, Quantum.GameModeSpec.IsCloseToWin): bool IsCloseToWin(int playerScoreGap)
+    // 0x7c91364 - 1 unless a mode says otherwise.
+    virtual FP GetBoltsDropMultiplier(Frame* frame) const {
+        (void)frame;
+        return FP::FromInt(1);
+    }
+    // 0x7c9136c - whether a player trailing by `playerScoreGap` is within closeToWinScoreGap.
+    virtual bool IsCloseToWin(std::int32_t playerScoreGap) const { return closeToWinScoreGap >= playerScoreGap; }
     // TODO(0x7c9137c, Quantum.GameModeSpec.OnPlayerInitialSpawn): void OnPlayerInitialSpawn(Frame
     //   frame, EntityRef playerEntity, PlayerRef playerRef, int playerIndex)
     // TODO(0x7c913fc, Quantum.GameModeSpec.SetupPlayerMaxSpeedModifier): void
@@ -206,17 +215,33 @@ class GameModeSpec : public AssetObject {
     //   frame, EntityRef playerEntity)
     // TODO(0x7c91de0, Quantum.GameModeSpec.SetupFTUEBotHealthSpec): void
     //   SetupFTUEBotHealthSpec(Frame frame, EntityRef playerEntity)
-    // TODO(0x7c91ecc, Quantum.GameModeSpec.ProvideInitialSpawnPointIndex): int
-    //   ProvideInitialSpawnPointIndex(Frame f, PlayerRef playerRef, int teamId, int playerIndex,
-    //   QList<short> availableSpawnPointsIndices)
-    // TODO(0x7c91ed4, Quantum.GameModeSpec.OnPlayerKilled): void OnPlayerKilled(Frame frame,
-    //   EntityRef killedEntity)
-    // TODO(0x7c91ed8, Quantum.GameModeSpec.GetBotAggroBehaviour): BOT_AGGRO_BEHAVIOUR
-    //   GetBotAggroBehaviour(Frame frame, int customBotIndex)
+    // 0x7c91ecc - the first spawn point unless a mode picks another.
+    virtual std::int32_t ProvideInitialSpawnPointIndex(Frame* f, PlayerRef playerRef, std::int32_t teamId, std::int32_t playerIndex,
+                                               Collections::QList<std::int16_t> availableSpawnPointsIndices) const {
+        (void)f, (void)playerRef, (void)teamId, (void)playerIndex, (void)availableSpawnPointsIndices;
+        return 0;
+    }
+    // Abstract in the original.
+    virtual bool RespawnPointIsValid(Frame* f, EntityRef entityToRespawn, const MapCustomData::SpawnPointData& spData,
+                             const SpawnPointDynamicData& spDynData) const {
+        (void)f, (void)entityToRespawn, (void)spData, (void)spDynData;
+        NotReimplemented("Quantum.GameModeSpec.RespawnPointIsValid");
+    }
+    // 0x7c91ed4 - nothing by default.
+    virtual void OnPlayerKilled(Frame* frame, EntityRef killedEntity) const { (void)frame, (void)killedEntity; }
+    // 0x7c91ed8 - the custom bot's entry of BotAggroBehaviourByIndex, DefaultAggroBehaviour outside it.
+    virtual BOT_AGGRO_BEHAVIOUR GetBotAggroBehaviour(Frame* frame, std::int32_t customBotIndex) const;
     // TODO(0x7c91f08, Quantum.GameModeSpec.CanRespawn): bool CanRespawn(Frame frame, EntityRef
     //   killedEntity, int startFrame)
-    // TODO(0x7c91f9c, Quantum.GameModeSpec.CanAutoShootTarget): bool CanAutoShootTarget(Frame
-    //   frame, EntityRef localPlayerEntityRef, EntityRef targetEntityRef)
+    virtual bool CanRespawn(Frame* frame, EntityRef killedEntity, std::int32_t startFrame) const {
+        (void)frame, (void)killedEntity, (void)startFrame;
+        NotReimplemented("Quantum.GameModeSpec.CanRespawn");
+    }
+    // 0x7c91f9c - autoShootEnabled, whatever the target.
+    virtual bool CanAutoShootTarget(Frame* frame, EntityRef localPlayerEntityRef, EntityRef targetEntityRef) const {
+        (void)frame, (void)localPlayerEntityRef, (void)targetEntityRef;
+        return autoShootEnabled;
+    }
 };
 
 class GameModesTable : public AssetObject {
@@ -375,13 +400,17 @@ class BlastBallGameModeSpec : public GameModeSpec {
     // TODO(0x7cdde88, Quantum.BlastBallGameModeSpec.RespawnPointIsValid): bool
     //   RespawnPointIsValid(Frame frame, EntityRef entityToRespawn, SpawnPointData spData,
     //   SpawnPointDynamicData spDynData)
-    // TODO(0x7cddefc, Quantum.BlastBallGameModeSpec.CanRespawn): bool CanRespawn(Frame frame,
-    //   EntityRef killedEntity, int startFrame)
+    // 0x7cddefc - always.
+    bool CanRespawn(Frame* frame, EntityRef killedEntity, std::int32_t startFrame) const override {
+        (void)frame, (void)killedEntity, (void)startFrame;
+        return true;
+    }
     // TODO(0x7cddf04, Quantum.BlastBallGameModeSpec.ComputeBattleResult): void
     //   ComputeBattleResult(QuantumGame game, EntityRef localPlayerEntityRef, BattleResultInfo
     //   battleResultInfo)
-    // TODO(0x7cde044, Quantum.BlastBallGameModeSpec.GetBattleResult): BATTLE_RESULT
-    //   GetBattleResult(int rank, int nbPlayersInBattle, int localScore, int opponentScore)
+    // 0x7cde044 - win/draw/lose from the local and opposing scores.
+    static BATTLE_RESULT GetBattleResult(std::int32_t rank, std::int32_t nbPlayersInBattle, std::int32_t localScore,
+                                         std::int32_t opponentScore);
     // TODO(0x7cde058, Quantum.BlastBallGameModeSpec.CanAutoShootTarget): bool
     //   CanAutoShootTarget(Frame frame, EntityRef localPlayerEntityRef, EntityRef targetEntityRef)
 };
@@ -414,16 +443,20 @@ class BoltKingGameModeSpec : public GameModeSpec {
     // TODO(0x7ba174c, Quantum.BoltKingGameModeSpec.OnPlayerInitialSpawn): void
     //   OnPlayerInitialSpawn(Frame frame, EntityRef playerEntity, PlayerRef playerRef, int
     //   playerIndex)
-    // TODO(0x7ba19ac, Quantum.BoltKingGameModeSpec.RespawnPointIsValid): bool
-    //   RespawnPointIsValid(Frame f, EntityRef entityToRespawn, SpawnPointData spData,
-    //   SpawnPointDynamicData spDynData)
+    // 0x7ba19ac - every spawn point is.
+    bool RespawnPointIsValid(Frame* f, EntityRef entityToRespawn, const MapCustomData::SpawnPointData& spData,
+                             const SpawnPointDynamicData& spDynData) const override {
+        (void)f, (void)entityToRespawn, (void)spData, (void)spDynData;
+        return true;
+    }
     // TODO(0x7ba19b4, Quantum.BoltKingGameModeSpec.CanRespawn): bool CanRespawn(Frame frame,
     //   EntityRef killedEntity, int startFrame)
     // TODO(0x7ba19fc, Quantum.BoltKingGameModeSpec.ComputeBattleResult): void
     //   ComputeBattleResult(QuantumGame game, EntityRef localPlayerEntityRef, BattleResultInfo
     //   battleResultInfo)
-    // TODO(0x7ba1c4c, Quantum.BoltKingGameModeSpec.GetBattleResult): BATTLE_RESULT
-    //   GetBattleResult(int rank, int nbPlayersInBattle, int localScore, int opponentScore)
+    // 0x7ba1c4c - a win for the better half of the ranking (rank below half the player count), else a loss.
+    static BATTLE_RESULT GetBattleResult(std::int32_t rank, std::int32_t nbPlayersInBattle, std::int32_t localScore,
+                                         std::int32_t opponentScore);
 };
 
 class EliminationGameModeSpec : public GameModeSpec {
@@ -450,9 +483,12 @@ class EliminationGameModeSpec : public GameModeSpec {
     //   playerIndex)
     // TODO(0x7ba2694, Quantum.EliminationGameModeSpec.GetBotAggroBehaviour): BOT_AGGRO_BEHAVIOUR
     //   GetBotAggroBehaviour(Frame frame, int customBotIndex)
-    // TODO(0x7ba2848, Quantum.EliminationGameModeSpec.RespawnPointIsValid): bool
-    //   RespawnPointIsValid(Frame f, EntityRef entityToRespawn, SpawnPointData spData,
-    //   SpawnPointDynamicData spDynData)
+    // 0x7ba2848 - every spawn point is.
+    bool RespawnPointIsValid(Frame* f, EntityRef entityToRespawn, const MapCustomData::SpawnPointData& spData,
+                             const SpawnPointDynamicData& spDynData) const override {
+        (void)f, (void)entityToRespawn, (void)spData, (void)spDynData;
+        return true;
+    }
     // TODO(0x7ba2850, Quantum.EliminationGameModeSpec.ComputeBattleResult): void
     //   ComputeBattleResult(QuantumGame game, EntityRef localPlayerEntityRef, BattleResultInfo
     //   battleResultInfo)
@@ -467,16 +503,23 @@ class FreeForAllGameModeSpec : public GameModeSpec {
 
     // TODO(0x7ba2de0, Quantum.FreeForAllGameModeSpec.Init): void Init(Frame f)
     // TODO(0x7ba2e50, Quantum.FreeForAllGameModeSpec.DeInit): void DeInit(Frame f)
-    // TODO(0x7ba2ec0, Quantum.FreeForAllGameModeSpec.RespawnPointIsValid): bool
-    //   RespawnPointIsValid(Frame f, EntityRef entityToRespawn, SpawnPointData spData,
-    //   SpawnPointDynamicData spDynData)
-    // TODO(0x7ba2ec8, Quantum.FreeForAllGameModeSpec.CanRespawn): bool CanRespawn(Frame frame,
-    //   EntityRef killedEntity, int startFrame)
+    // 0x7ba2ec0 - every spawn point is.
+    bool RespawnPointIsValid(Frame* f, EntityRef entityToRespawn, const MapCustomData::SpawnPointData& spData,
+                             const SpawnPointDynamicData& spDynData) const override {
+        (void)f, (void)entityToRespawn, (void)spData, (void)spDynData;
+        return true;
+    }
+    // 0x7ba2ec8 - always.
+    bool CanRespawn(Frame* frame, EntityRef killedEntity, std::int32_t startFrame) const override {
+        (void)frame, (void)killedEntity, (void)startFrame;
+        return true;
+    }
     // TODO(0x7ba2ed0, Quantum.FreeForAllGameModeSpec.ComputeBattleResult): void
     //   ComputeBattleResult(QuantumGame game, EntityRef localPlayerEntityRef, BattleResultInfo
     //   battleResultInfo)
-    // TODO(0x7ba3120, Quantum.FreeForAllGameModeSpec.GetBattleResult): BATTLE_RESULT
-    //   GetBattleResult(int rank, int nbPlayersInBattle, int localScore, int opponentScore)
+    // 0x7ba3120 - a win for the better half of the ranking (rank below half the player count), else a loss.
+    static BATTLE_RESULT GetBattleResult(std::int32_t rank, std::int32_t nbPlayersInBattle, std::int32_t localScore,
+                                         std::int32_t opponentScore);
 };
 
 class SquadSiegeGameModeSpec : public GameModeSpec {
@@ -493,8 +536,11 @@ class SquadSiegeGameModeSpec : public GameModeSpec {
     // TODO(0x7ba8048, Quantum.SquadSiegeGameModeSpec.RespawnPointIsValid): bool
     //   RespawnPointIsValid(Frame frame, EntityRef entityToRespawn, SpawnPointData spData,
     //   SpawnPointDynamicData spDynData)
-    // TODO(0x7ba80bc, Quantum.SquadSiegeGameModeSpec.CanRespawn): bool CanRespawn(Frame frame,
-    //   EntityRef killedEntity, int startFrame)
+    // 0x7ba80bc - always.
+    bool CanRespawn(Frame* frame, EntityRef killedEntity, std::int32_t startFrame) const override {
+        (void)frame, (void)killedEntity, (void)startFrame;
+        return true;
+    }
     // TODO(0x7ba80c4, Quantum.SquadSiegeGameModeSpec.ComputeBattleResult): void
     //   ComputeBattleResult(QuantumGame game, EntityRef localPlayerEntityRef, BattleResultInfo
     //   battleResultInfo)
@@ -512,10 +558,13 @@ class TeamTotalRumbleGameModeSpec : public GameModeSpec {
     // TODO(0x7baa484, Quantum.TeamTotalRumbleGameModeSpec.ComputeBattleResult): void
     //   ComputeBattleResult(QuantumGame game, EntityRef localPlayerEntityRef, BattleResultInfo
     //   battleResultInfo)
-    // TODO(0x7baa760, Quantum.TeamTotalRumbleGameModeSpec.GetBattleResult): BATTLE_RESULT
-    //   GetBattleResult(int localScore, int opponentScore)
-    // TODO(0x7baa778, Quantum.TeamTotalRumbleGameModeSpec.CanRespawn): bool CanRespawn(Frame frame,
-    //   EntityRef killedEntity, int startFrame)
+    // 0x7baa760 - win/draw/lose from the team scores.
+    static BATTLE_RESULT GetBattleResult(std::int32_t localScore, std::int32_t opponentScore);
+    // 0x7baa778 - always.
+    bool CanRespawn(Frame* frame, EntityRef killedEntity, std::int32_t startFrame) const override {
+        (void)frame, (void)killedEntity, (void)startFrame;
+        return true;
+    }
     // TODO(0x7baa780, Quantum.TeamTotalRumbleGameModeSpec.ProvideInitialSpawnPointIndex): int
     //   ProvideInitialSpawnPointIndex(Frame f, PlayerRef playerRef, int teamId, int playerIndex,
     //   QList<short> availableSpawnPointsIndices)
@@ -532,13 +581,14 @@ class TrainingGameModeSpec : public GameModeSpec {
 
     // TODO(0x7bab430, Quantum.TrainingGameModeSpec.Init): void Init(Frame f)
     // TODO(0x7bab4e0, Quantum.TrainingGameModeSpec.DeInit): void DeInit(Frame f)
-    // TODO(0x7bab598, Quantum.TrainingGameModeSpec.GetIntroDuration): FP GetIntroDuration()
+    // 0x7bab598 - no intro.
+    FP GetIntroDuration() const override { return FP::FromRaw(0); }
     // TODO(0x7bab5a0, Quantum.TrainingGameModeSpec.OnPlayerInitialSpawn): void
     //   OnPlayerInitialSpawn(Frame frame, EntityRef playerEntity, PlayerRef playerRef, int
     //   playerIndex)
-    // TODO(0x7bab630, Quantum.TrainingGameModeSpec.RespawnPointIsValid): bool
-    //   RespawnPointIsValid(Frame f, EntityRef entityToRespawn, SpawnPointData spData,
-    //   SpawnPointDynamicData spDynData)
+    // 0x7bab630 - a spawn point whose dynamic data marks it valid (lowest bit).
+    bool RespawnPointIsValid(Frame* f, EntityRef entityToRespawn, const MapCustomData::SpawnPointData& spData,
+                             const SpawnPointDynamicData& spDynData) const override;
     // TODO(0x7bab63c, Quantum.TrainingGameModeSpec.ComputeBattleResult): void
     //   ComputeBattleResult(QuantumGame game, EntityRef localPlayerEntityRef, BattleResultInfo
     //   battleResultInfo)
@@ -566,18 +616,25 @@ class TutorialGameModeSpec : public GameModeSpec {
 
     // TODO(0x7bab904, Quantum.TutorialGameModeSpec.Init): void Init(Frame f)
     // TODO(0x7bab954, Quantum.TutorialGameModeSpec.DeInit): void DeInit(Frame f)
-    // TODO(0x7bab9a4, Quantum.TutorialGameModeSpec.GetIntroDuration): FP GetIntroDuration()
+    // 0x7bab9a4 - no intro.
+    FP GetIntroDuration() const override { return FP::FromRaw(0); }
     // TODO(0x7bab9ac, Quantum.TutorialGameModeSpec.OnPlayerInitialSpawn): void
     //   OnPlayerInitialSpawn(Frame frame, EntityRef playerEntity, PlayerRef playerRef, int
     //   playerIndex)
     // TODO(0x7babc8c, Quantum.TutorialGameModeSpec.ProvideInitialSpawnPointIndex): int
     //   ProvideInitialSpawnPointIndex(Frame frame, PlayerRef playerRef, int teamId, int
     //   playerIndex, QList<short> availableSpawnPointsIndices)
-    // TODO(0x7babdf4, Quantum.TutorialGameModeSpec.CanRespawn): bool CanRespawn(Frame frame,
-    //   EntityRef killedEntity, int startFrame)
-    // TODO(0x7babdfc, Quantum.TutorialGameModeSpec.RespawnPointIsValid): bool
-    //   RespawnPointIsValid(Frame f, EntityRef entityToRespawn, SpawnPointData spData,
-    //   SpawnPointDynamicData spDynData)
+    // 0x7babdf4 - always.
+    bool CanRespawn(Frame* frame, EntityRef killedEntity, std::int32_t startFrame) const override {
+        (void)frame, (void)killedEntity, (void)startFrame;
+        return true;
+    }
+    // 0x7babdfc - every spawn point is.
+    bool RespawnPointIsValid(Frame* f, EntityRef entityToRespawn, const MapCustomData::SpawnPointData& spData,
+                             const SpawnPointDynamicData& spDynData) const override {
+        (void)f, (void)entityToRespawn, (void)spData, (void)spDynData;
+        return true;
+    }
     // TODO(0x7babe04, Quantum.TutorialGameModeSpec.ComputeBattleResult): void
     //   ComputeBattleResult(QuantumGame game, EntityRef localPlayerEntityRef, BattleResultInfo
     //   battleResultInfo)
@@ -608,10 +665,14 @@ class WeaponShowcaseGameModeSpec : public GameModeSpec {
 
     // TODO(0x7bae37c, Quantum.WeaponShowcaseGameModeSpec.Init): void Init(Frame f)
     // TODO(0x7bae3cc, Quantum.WeaponShowcaseGameModeSpec.DeInit): void DeInit(Frame f)
-    // TODO(0x7bae41c, Quantum.WeaponShowcaseGameModeSpec.GetIntroDuration): FP GetIntroDuration()
-    // TODO(0x7bae424, Quantum.WeaponShowcaseGameModeSpec.RespawnPointIsValid): bool
-    //   RespawnPointIsValid(Frame f, EntityRef entityToRespawn, SpawnPointData spData,
-    //   SpawnPointDynamicData spDynData)
+    // 0x7bae41c - no intro.
+    FP GetIntroDuration() const override { return FP::FromRaw(0); }
+    // 0x7bae424 - every spawn point is.
+    bool RespawnPointIsValid(Frame* f, EntityRef entityToRespawn, const MapCustomData::SpawnPointData& spData,
+                             const SpawnPointDynamicData& spDynData) const override {
+        (void)f, (void)entityToRespawn, (void)spData, (void)spDynData;
+        return true;
+    }
     // TODO(0x7bae42c, Quantum.WeaponShowcaseGameModeSpec.ComputeBattleResult): void
     //   ComputeBattleResult(QuantumGame game, EntityRef localPlayerEntityRef, BattleResultInfo
     //   battleResultInfo)
@@ -644,8 +705,8 @@ class ZoneControlGameModeSpec : public GameModeSpec {
     // TODO(0x7baf848, Quantum.ZoneControlGameModeSpec.ProvideInitialSpawnPointIndex): int
     //   ProvideInitialSpawnPointIndex(Frame f, PlayerRef playerRef, int teamId, int playerIndex,
     //   QList<short> availableSpawnPointsIndices)
-    // TODO(0x7baf99c, Quantum.ZoneControlGameModeSpec.GetZoneLoadingTime): FP
-    //   GetZoneLoadingTime(Frame f, ZoneControlGameMode gameMode)
+    // 0x7baf99c
+    FP GetZoneLoadingTime(Frame* f, const ZoneControlGameMode& gameMode) const;
 };
 
 } // namespace Quantum

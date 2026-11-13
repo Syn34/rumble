@@ -138,9 +138,10 @@ class BlastBallSpec : public AssetObject {
     // 0x7c8df70
     BlastBallSpec() = default;
 
-    // TODO(0x7c8df50, Quantum.BlastBallSpec.get_maxSpeedSqr): FP get_maxSpeedSqr()
-    // TODO(0x7c8df60, Quantum.BlastBallSpec.get_SettledSpeedThresholdSqr): FP
-    //   get_SettledSpeedThresholdSqr()
+    // 0x7c8df50
+    FP maxSpeedSqr() const { return maxSpeed * maxSpeed; }
+    // 0x7c8df60
+    FP SettledSpeedThresholdSqr() const { return settledSpeedThreshold * settledSpeedThreshold; }
 };
 
 class BombardierDroneSpec : public AssetObject {
@@ -168,10 +169,14 @@ class BombardierDroneSpec : public AssetObject {
     // 0x7c8e04c
     BombardierDroneSpec() = default;
 
-    // TODO(0x7c8dfe4, Quantum.BombardierDroneSpec.get_TakeOffDuration): FP get_TakeOffDuration()
-    // TODO(0x7c8dff4, Quantum.BombardierDroneSpec.get_FlightDuration): FP get_FlightDuration()
-    // TODO(0x7c8e008, Quantum.BombardierDroneSpec.get_MaxLifetime): FP get_MaxLifetime()
-    // TODO(0x7c8e030, Quantum.BombardierDroneSpec.get_TotalRange): FP get_TotalRange()
+    // 0x7c8dfe4 - time to climb TakeOffHeight at MoveSpeed.
+    FP TakeOffDuration() const;
+    // 0x7c8dff4 - time to cover FlightDistance at MoveSpeed.
+    FP FlightDuration() const;
+    // 0x7c8e008 - take-off, flight and the longest bombing run.
+    FP MaxLifetime() const;
+    // 0x7c8e030 - how far the drone can get: take-off height and flight distance plus the bombing run at MoveSpeed.
+    FP TotalRange() const;
 };
 
 class BombardierWeaponAutoTargetSpec : public AssetObject {
@@ -499,10 +504,10 @@ class EntityDropperSpec : public AssetObject {
 
     // TODO(0x7c904e8, Quantum.EntityDropperSpec.GetDropCountOnDeath): ushort
     //   GetDropCountOnDeath(Frame frame, EntityRef entity)
-    // TODO(0x7c905cc, Quantum.EntityDropperSpec.DroppedOnDeath): void DroppedOnDeath(Frame frame,
-    //   EntityRef entity, FPVector3 position, ushort dropCount)
-    // TODO(0x7c905d0, Quantum.EntityDropperSpec.GetDropCountOnHealthDecreased): ushort
-    //   GetDropCountOnHealthDecreased()
+    // 0x7c905cc - nothing by default.
+    virtual void DroppedOnDeath(Frame* frame, EntityRef entity, FPVector3 position, std::uint16_t dropCount) const { (void)frame, (void)entity, (void)position, (void)dropCount; }
+    // 0x7c905d0
+    virtual std::uint16_t GetDropCountOnHealthDecreased() const { return DropCountOnHealthDecreased; }
 };
 
 class EntityGroupSpec : public AssetObject {
@@ -558,6 +563,123 @@ class LifetimeSpec : public AssetObject {
     LifetimeSpec() = default;
 };
 
+class MapCustomData : public AssetObject {
+  public:
+    struct BakedAutoJumper {
+        std::int32_t staticColliderIndex{};
+        AutoJumperStartParams autoJumperStartParams;
+    };
+
+    struct BakedRailColliderData {
+        std::int32_t staticColliderIndex{};
+        FP distance{};
+        std::int32_t nearbyRailColIndexLeft{};
+        std::int32_t nearbyRailColIndexRight{};
+    };
+
+    struct BakedSplineSample {
+        FPVector3 posWorld;
+        FP distance{};
+    };
+
+    struct BakedSpline {
+        std::vector<MapCustomData::BakedSplineSample> samples;
+        FP length{};
+
+        // TODO(0x7c92f48, Quantum.MapCustomData.BakedSpline.GetTangent): FPVector3 GetTangent(int
+        //   i)
+        // TODO(0x7c93104, Quantum.MapCustomData.BakedSpline.GetSampleAtDistance): void
+        //   GetSampleAtDistance(FP d, FPVector3 pos, FPVector3 tangent)
+    };
+
+    struct BakedGrindRail {
+        MapCustomData::BakedSpline spline;
+        std::vector<MapCustomData::BakedRailColliderData> collidersData;
+    };
+
+    struct BakedTravolator {
+        std::int32_t staticColliderIndex{};
+        FPVector3 direction;
+    };
+
+    struct BlastBallData {
+        FPVector3 ballPosition;
+    };
+
+    struct ClosingPointData {
+        FPVector3 targetPosition;
+        FP targetRadius{};
+        FP startTime{};
+        FP endTime{};
+    };
+
+    struct ClosingZoneData {
+        FPVector3 startPosition;
+        FP startRadius{};
+        std::vector<MapCustomData::ClosingPointData> closingPoints;
+    };
+
+    struct ControlZoneData {
+        FPVector3 position;
+        FP radius{};
+        std::int32_t id{};
+
+        // TODO(0x7c92f08, Quantum.MapCustomData.ControlZoneData.GetIdAsString): string
+        //   GetIdAsString()
+    };
+
+    struct SpawnPointData {
+        FPVector3 position;
+        FP rotY{};
+        SpawnPointOptions options{};
+        TeamFlag teamFlag{};
+        std::uint16_t introTrackId{};
+        FP availabilityDuration{};
+    };
+
+    struct StaticColliderGrindRailPair {
+        std::int32_t staticColliderIndex{};
+        std::int32_t grindRailIndex{};
+    };
+
+    struct StaticDroppableData {
+        DroppableType type{};
+        FPVector3 position;
+    };
+
+    struct TutorialData {
+        FPVector3 tutoShootPosition;
+        FPQuaternion tutoShootRotation;
+        FPVector3 tutoMeleePosition;
+        FPQuaternion tutoMeleeRotation;
+        FPVector3 arenaPosition;
+        FPQuaternion arenaRotation;
+        FPVector3 ultimatePosition;
+        FPQuaternion ultimateRotation;
+    };
+
+    std::vector<MapCustomData::SpawnPointData> SpawnPoints;
+    MapCustomData::BlastBallData blastBallData;
+    std::vector<MapCustomData::ControlZoneData> ControlZones;
+    MapCustomData::TutorialData tutorialData;
+    std::vector<MapCustomData::ClosingZoneData> ClosingZones;
+    std::vector<FPVector3> GoldenBoltSpawnPoints;
+    std::vector<MapCustomData::StaticDroppableData> StaticDroppables;
+    std::vector<MapCustomData::BakedAutoJumper> staticJumpers;
+    std::vector<MapCustomData::BakedTravolator> staticTravolator;
+    std::vector<MapCustomData::BakedGrindRail> bakedGrindRails;
+    std::vector<MapCustomData::StaticColliderGrindRailPair> staticColliderGrindRailPairs;
+    std::unordered_map<std::int32_t, std::int32_t> _staticColliderToGrindRailIndex; // not stored; filled by Loaded
+
+    // 0x7c92e2c
+    MapCustomData() = default;
+
+    // 0x7c92c34 - the grind rail the static collider belongs to.
+    bool TryGetStaticColliderToGrindRailIndex(std::int32_t staticColliderIndex, std::int32_t& grindRailIndex) const;
+    // 0x7c92c9c - rebuilds the static collider -> grind rail index table from staticColliderGrindRailPairs (a duplicate collider throws).
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
+};
+
 class MoveToSpec : public AssetObject {
   public:
     MoveToSpecMoveModes moveMode{};
@@ -609,6 +731,18 @@ class PowerUpSpec : public AssetObject {
     // 0x7c93b5c
     PowerUpSpec() = default;
 
+    // Abstract in the original.
+    virtual PowerUpType GetPowerUpType() const = 0;
+    // Abstract in the original.
+    virtual void OnStarted(Frame* f, EntityRef userEntity) const {
+        (void)f, (void)userEntity;
+        NotReimplemented("Quantum.PowerUpSpec.OnStarted");
+    }
+    // Abstract in the original.
+    virtual void OnFinished(Frame* f, EntityRef userEntity) const {
+        (void)f, (void)userEntity;
+        NotReimplemented("Quantum.PowerUpSpec.OnFinished");
+    }
     // TODO(0x7c9388c, Quantum.PowerUpSpec.Start): void Start(Frame f, EntityRef userEntity)
     // TODO(0x7c93b08, Quantum.PowerUpSpec.Finish): void Finish(Frame f, EntityRef userEntity, int
     //   stackIndex)
@@ -697,7 +831,8 @@ class ProjectileSpec : public AssetObject {
     // 0x7c93f9c
     ProjectileSpec() = default;
 
-    // TODO(0x7c93ba8, Quantum.ProjectileSpec.get_HasAcceleration): bool get_HasAcceleration()
+    // 0x7c93ba8 - only linear projectiles accelerate.
+    bool HasAcceleration() const;
     // TODO(0x7c93bc8, Quantum.ProjectileSpec.GetSurroundingTrajectories): void
     //   GetSurroundingTrajectories(FP angle, TrajectoryCurveData> lowerTrajectory,
     //   TrajectoryCurveData> higherTrajectory)
@@ -937,11 +1072,12 @@ class EnergyCellPowerUpSpec : public PowerUpSpec {
     // 0x7bc798c
     EnergyCellPowerUpSpec() = default;
 
-    // TODO(0x7bc7968, Quantum.EnergyCellPowerUpSpec.get_PowerUpType): PowerUpType get_PowerUpType()
+    // 0x7bc7968
+    PowerUpType GetPowerUpType() const override { return PowerUpType::EnergyCell; }
     // TODO(0x7bc7970, Quantum.EnergyCellPowerUpSpec.OnStarted): void OnStarted(Frame f, EntityRef
     //   userEntity)
-    // TODO(0x7bc7988, Quantum.EnergyCellPowerUpSpec.OnFinished): void OnFinished(Frame f, EntityRef
-    //   userEntity)
+    // 0x7bc7988 - nothing.
+    void OnFinished(Frame* f, EntityRef userEntity) const override { (void)f, (void)userEntity; }
 };
 
 class ExtraDamagePowerUpSpec : public PowerUpSpec {
@@ -951,12 +1087,12 @@ class ExtraDamagePowerUpSpec : public PowerUpSpec {
     // 0x7bc79a4
     ExtraDamagePowerUpSpec() = default;
 
-    // TODO(0x7bc7994, Quantum.ExtraDamagePowerUpSpec.get_PowerUpType): PowerUpType
-    //   get_PowerUpType()
-    // TODO(0x7bc799c, Quantum.ExtraDamagePowerUpSpec.OnStarted): void OnStarted(Frame f, EntityRef
-    //   userEntity)
-    // TODO(0x7bc79a0, Quantum.ExtraDamagePowerUpSpec.OnFinished): void OnFinished(Frame f,
-    //   EntityRef userEntity)
+    // 0x7bc7994
+    PowerUpType GetPowerUpType() const override { return PowerUpType::ExtraDamage; }
+    // 0x7bc799c - nothing (the extra damage is applied where damage is computed).
+    void OnStarted(Frame* f, EntityRef userEntity) const override { (void)f, (void)userEntity; }
+    // 0x7bc79a0 - nothing.
+    void OnFinished(Frame* f, EntityRef userEntity) const override { (void)f, (void)userEntity; }
 };
 
 class OverhealthPowerUpSpec : public PowerUpSpec {
@@ -980,7 +1116,8 @@ class OverhealthPowerUpSpec : public PowerUpSpec {
     // 0x7bc7d68
     OverhealthPowerUpSpec() = default;
 
-    // TODO(0x7bc79ac, Quantum.OverhealthPowerUpSpec.get_PowerUpType): PowerUpType get_PowerUpType()
+    // 0x7bc79ac
+    PowerUpType GetPowerUpType() const override { return PowerUpType::Overhealth; }
     // TODO(0x7bc79b4, Quantum.OverhealthPowerUpSpec.OnStarted): void OnStarted(Frame f, EntityRef
     //   userEntity)
     // TODO(0x7bc7cac, Quantum.OverhealthPowerUpSpec.OnFinished): void OnFinished(Frame f, EntityRef
@@ -1003,7 +1140,8 @@ class SpeedBoostPowerUpSpec : public PowerUpSpec {
     // 0x7bc7f50
     SpeedBoostPowerUpSpec() = default;
 
-    // TODO(0x7bc7dcc, Quantum.SpeedBoostPowerUpSpec.get_PowerUpType): PowerUpType get_PowerUpType()
+    // 0x7bc7dcc
+    PowerUpType GetPowerUpType() const override { return PowerUpType::SpeedBoost; }
     // TODO(0x7bc7dd4, Quantum.SpeedBoostPowerUpSpec.OnStarted): void OnStarted(Frame f, EntityRef
     //   userEntity)
     // TODO(0x7bc7ea4, Quantum.SpeedBoostPowerUpSpec.OnFinished): void OnFinished(Frame f, EntityRef

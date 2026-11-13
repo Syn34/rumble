@@ -39,6 +39,12 @@ class ActorComponentSpecBase : public AssetObject {
 
     // 0x7c93884
     ActorComponentSpecBase() = default;
+
+    // Abstract in the original.
+    virtual void Shutdown(Frame* f, EntityRef e) const {
+        (void)f, (void)e;
+        NotReimplemented("Quantum.ActorComponentSpecBase.Shutdown");
+    }
 };
 
 class ActorManagerConfig : public AssetObject {
@@ -57,8 +63,8 @@ class ActorManagerConfig : public AssetObject {
     // 0x7c8dcc8
     ActorManagerConfig() = default;
 
-    // TODO(0x7c8dca0, Quantum.ActorManagerConfig.GetTotalRespawnDuration): FP
-    //   GetTotalRespawnDuration(bool isBot)
+    // 0x7c8dca0 - pending duration (the bots' own one if they use it) plus the respawn itself.
+    FP GetTotalRespawnDuration(bool isBot) const;
 };
 
 class ActorStatusModifierSpec : public AssetObject {
@@ -114,7 +120,8 @@ class ChargeAttackSpec : public AssetObject {
     // 0x7c8e214
     ChargeAttackSpec() = default;
 
-    // TODO(0x7c8e204, Quantum.ChargeAttackSpec.get_MaxTravelDistSqr): FP get_MaxTravelDistSqr()
+    // 0x7c8e204
+    FP MaxTravelDistSqr() const { return maxTravelDistance * maxTravelDistance; }
 };
 
 class ColliderResizeSpec : public AssetObject {
@@ -528,7 +535,8 @@ class ActorPhysicsSpec : public ActorComponentSpecBase {
     ActorPhysicsSpec() = default;
 
     // TODO(0x7cb88a8, Quantum.ActorPhysicsSpec.Init): void Init(Frame f, EntityRef e)
-    // TODO(0x7cb8b74, Quantum.ActorPhysicsSpec.Shutdown): void Shutdown(Frame f, EntityRef e)
+    // 0x7cb8b74 - nothing to undo.
+    void Shutdown(Frame* f, EntityRef e) const override { (void)f, (void)e; }
 };
 
 class ActorSheepedSpec : public ActorComponentSpecBase {

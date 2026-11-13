@@ -27,6 +27,11 @@ class GadgetSpec : public AssetObject {
     // 0x7c90e24
     GadgetSpec() = default;
 
+    // Abstract in the original.
+    virtual void Init(Frame* frame, EntityRef actorEntity) const {
+        (void)frame, (void)actorEntity;
+        NotReimplemented("Quantum.GadgetSpec.Init");
+    }
     // TODO(0x7c90690, Quantum.GadgetSpec.Activate): void Activate(Frame frame, EntityRef entity,
     //   GadgetUser* user)
     // TODO(0x7c908c4, Quantum.GadgetSpec.IsOnCooldown): bool IsOnCooldown(Frame frame, EntityRef
@@ -35,14 +40,22 @@ class GadgetSpec : public AssetObject {
     //   entity, GadgetUser* user)
     // TODO(0x7c90918, Quantum.GadgetSpec.Update): void Update(Frame frame, EntityRef entity,
     //   GadgetUser* user)
+    // Abstract in the original.
+    virtual void OnGadgetUpdated(Frame* frame, EntityRef entity, GadgetUser* user) const {
+        (void)frame, (void)entity, (void)user;
+        NotReimplemented("Quantum.GadgetSpec.OnGadgetUpdated");
+    }
     // TODO(0x7c907ac, Quantum.GadgetSpec.Deactivate): void Deactivate(Frame frame, EntityRef
     //   entity, GadgetUser* user, bool setCooldown)
     // TODO(0x7c909e8, Quantum.GadgetSpec.OnWeaponReload): void OnWeaponReload(Frame frame,
     //   EntityRef weaponEntity, Weapon weapon, EntityRef gagdetUserEntity, GadgetUser* gadgetUser)
     // TODO(0x7c90a04, Quantum.GadgetSpec.OnWeaponUnEquip): void OnWeaponUnEquip(Frame frame,
     //   EntityRef weaponEntity, EntityRef gagdetUserEntity, GadgetUser* gadgetUser)
-    // TODO(0x7c90ad4, Quantum.GadgetSpec.GetActivationRange): FP GetActivationRange(Frame frame,
-    //   EntityRef entity)
+    // 0x7c90ad4 - no range limit (zero) unless a gadget has one.
+    virtual FP GetActivationRange(Frame* frame, EntityRef entity) const {
+        (void)frame, (void)entity;
+        return FP::FromRaw(0);
+    }
     // TODO(0x7c90adc, Quantum.GadgetSpec.OnPlayerActorStunned): void OnPlayerActorStunned(Frame
     //   frame, EntityRef entity, GadgetUser* gadgetUser)
     // TODO(0x7c90ae4, Quantum.GadgetSpec.GetPowerAtLevel): int GetPowerAtLevel(int level)
@@ -66,8 +79,8 @@ class SimulationGadgetTable : public AssetObject {
 
     // TODO(0x7c90ed8, Quantum.SimulationGadgetTable.TryGetGadget): bool
     //   TryGetGadget(GENERATED_CHARACTER_ID characterID, GadgetDefinition gadgetDefinition)
-    // TODO(0x7c90fc4, Quantum.SimulationGadgetTable.GetDefaultGadget): AssetRefGadgetSpec
-    //   GetDefaultGadget()
+    // 0x7c90fc4
+    AssetRefGadgetSpec GetDefaultGadget() const { return defaultGadgetSpec; }
 };
 
 class SimulationMeleeWeaponsTable : public AssetObject {
@@ -104,8 +117,8 @@ class SimulationUltimateTable : public AssetObject {
 
     // TODO(0x7c94b54, Quantum.SimulationUltimateTable.TryGetUltimate): bool
     //   TryGetUltimate(GENERATED_CHARACTER_ID characterID, UltimateDefinition ultimateDefinition)
-    // TODO(0x7c94c20, Quantum.SimulationUltimateTable.GetDefaultUltimate):
-    //   AssetRefUltimateAbilitySpec GetDefaultUltimate()
+    // 0x7c94c20
+    AssetRefUltimateAbilitySpec GetDefaultUltimate() const { return defaultUltimateSpec; }
 };
 
 class SimulationWeaponTable : public AssetObject {
@@ -177,9 +190,13 @@ class UltimateAbilitySpec : public AssetObject {
     // 0x7c94a70
     UltimateAbilitySpec() = default;
 
-    // TODO(0x7c9471c, Quantum.UltimateAbilitySpec.Init): void Init(Frame f, EntityRef entity)
-    // TODO(0x7c94720, Quantum.UltimateAbilitySpec.CanUseWeapon): bool CanUseWeapon(Frame f,
-    //   EntityRef entity)
+    // 0x7c9471c - nothing by default.
+    virtual void Init(Frame* f, EntityRef entity) const { (void)f, (void)entity; }
+    // 0x7c94720 - always, unless an ability says otherwise.
+    virtual bool CanUseWeapon(Frame* f, EntityRef entity) const {
+        (void)f, (void)entity;
+        return true;
+    }
     // TODO(0x7c94728, Quantum.UltimateAbilitySpec.GetPowerAtLevel): int GetPowerAtLevel(int level)
     // TODO(0x7c948cc, Quantum.UltimateAbilitySpec.GetFullChargeAtLevel): int
     //   GetFullChargeAtLevel(int level)
@@ -287,15 +304,22 @@ class WeaponSpec : public AssetObject {
     // 0x7c959c8
     WeaponSpec() = default;
 
-    // TODO(0x7c94eb8, Quantum.WeaponSpec.CanUseWeapon): bool CanUseWeapon(Frame frame, EntityRef
-    //   weaponEntity)
+    // 0x7c94eb8 - always; weapons with conditions override it.
+    virtual bool CanUseWeapon(Frame* frame, EntityRef weaponEntity) const {
+        (void)frame, (void)weaponEntity;
+        return true;
+    }
     // TODO(0x7c94ec0, Quantum.WeaponSpec.CanStopUseWeapon): bool CanStopUseWeapon(Frame frame,
     //   EntityRef weaponEntity, Weapon* weapon)
-    // TODO(0x7c94ee0, Quantum.WeaponSpec.CanFireWeapon): bool CanFireWeapon(Frame frame, EntityRef
-    //   weaponEntity)
+    // 0x7c94ee0 - whether the weapon has ammunition to spawn.
+    virtual bool CanFireWeapon(Frame* frame, EntityRef weaponEntity) const {
+        (void)frame, (void)weaponEntity;
+        return AmmunitionAsset.Id.IsValid();
+    }
     // TODO(0x7c94f08, Quantum.WeaponSpec.FireWeapon): void FireWeapon(Frame frame, Filter filter,
     //   WeaponType> overrideWeaponType)
-    // TODO(0x7c955e4, Quantum.WeaponSpec.HasTag): bool HasTag(WeaponTag tag)
+    // 0x7c955e4
+    bool HasTag(WeaponTag tag) const { return (static_cast<std::int32_t>(Tags) & static_cast<std::int32_t>(tag)) != 0; }
     // TODO(0x7c955f4, Quantum.WeaponSpec.GetWeaponPowerAtLevel): int GetWeaponPowerAtLevel(int
     //   level)
     // TODO(0x7c95798, Quantum.WeaponSpec.GetWeaponLevelAtPower): byte GetWeaponLevelAtPower(FP
@@ -325,8 +349,11 @@ class AddForceOnUltimateSpec : public UltimateAbilitySpec {
     AddForceOnUltimateSpec() = default;
 
     // TODO(0x7be58d4, Quantum.AddForceOnUltimateSpec.Init): void Init(Frame f, EntityRef entity)
-    // TODO(0x7be592c, Quantum.AddForceOnUltimateSpec.CanUseWeapon): bool CanUseWeapon(Frame f,
-    //   EntityRef entity)
+    // 0x7be592c - always.
+    bool CanUseWeapon(Frame* f, EntityRef entity) const override {
+        (void)f, (void)entity;
+        return true;
+    }
 };
 
 class DrillDashGadgetSpec : public GadgetSpec {
@@ -357,18 +384,23 @@ class DrillDashGadgetSpec : public GadgetSpec {
     // 0x7cdb7a0
     DrillDashGadgetSpec() = default;
 
-    // TODO(0x7cdb010, Quantum.DrillDashGadgetSpec.get_TotalDuration): FP get_TotalDuration()
-    // TODO(0x7cdb028, Quantum.DrillDashGadgetSpec.get_WeaponID): GENERATED_WEAPON_ID get_WeaponID()
+    // 0x7cdb010 - anticipation, dash and attack together.
+    FP TotalDuration() const { return AnticipationDuration + DashDuration + AttackDuration; }
+    // 0x7cdb028 - the drill dash's own weapon id.
+    virtual GENERATED_WEAPON_ID WeaponID() const { return static_cast<GENERATED_WEAPON_ID>(51); }
     // TODO(0x7cdb030, Quantum.DrillDashGadgetSpec.Init): void Init(Frame frame, EntityRef
     //   actorEntity)
     // TODO(0x7cdb088, Quantum.DrillDashGadgetSpec.OnGadgetActivatedImpl): void
     //   OnGadgetActivatedImpl(Frame frame, EntityRef entity, GadgetUser* user)
     // TODO(0x7cdb1b8, Quantum.DrillDashGadgetSpec.OnGadgetDeactivated): void
     //   OnGadgetDeactivated(Frame frame, EntityRef entity, GadgetUser* user)
-    // TODO(0x7cdb4c4, Quantum.DrillDashGadgetSpec.OnGadgetUpdated): void OnGadgetUpdated(Frame
-    //   frame, EntityRef entity, GadgetUser* user)
-    // TODO(0x7cdb4c8, Quantum.DrillDashGadgetSpec.GetActivationRange): FP GetActivationRange(Frame
-    //   frame, EntityRef entity)
+    // 0x7cdb4c4 - nothing per frame.
+    void OnGadgetUpdated(Frame* frame, EntityRef entity, GadgetUser* user) const override { (void)frame, (void)entity, (void)user; }
+    // 0x7cdb4c8 - the dash distance.
+    FP GetActivationRange(Frame* frame, EntityRef entity) const override {
+        (void)frame, (void)entity;
+        return DashMaxDistance;
+    }
     // TODO(0x7cdb2f8, Quantum.DrillDashGadgetSpec.Cleanup): void Cleanup(Frame f, EntityRef entity,
     //   DrillDash* pDrillDash)
     // TODO(0x7cdb698, Quantum.DrillDashGadgetSpec.TryToOverrideTargetFinderSpec): bool
@@ -385,8 +417,10 @@ class GadgetWeaponSpec : public GadgetSpec {
     // 0x7c01f7c
     GadgetWeaponSpec() = default;
 
-    // TODO(0x7c01b98, Quantum.GadgetWeaponSpec.get_WeaponID): GENERATED_WEAPON_ID get_WeaponID()
-    // TODO(0x7c01ba0, Quantum.GadgetWeaponSpec.Init): void Init(Frame frame, EntityRef actorEntity)
+    // 0x7c01b98 - the weapon this ability fires.
+    virtual GENERATED_WEAPON_ID WeaponID() const { return weaponID; }
+    // 0x7c01ba0 - nothing to set up.
+    void Init(Frame* frame, EntityRef actorEntity) const override { (void)frame, (void)actorEntity; }
     // TODO(0x7c01ba4, Quantum.GadgetWeaponSpec.OnGadgetActivatedImpl): void
     //   OnGadgetActivatedImpl(Frame frame, EntityRef entity, GadgetUser* user)
     // TODO(0x7c01db0, Quantum.GadgetWeaponSpec.OnGadgetDeactivated): void OnGadgetDeactivated(Frame
@@ -508,8 +542,11 @@ class UltimateEvolutionSpec : public UltimateAbilitySpec {
     UltimateEvolutionSpec() = default;
 
     // TODO(0x7be3d0c, Quantum.UltimateEvolutionSpec.Init): void Init(Frame f, EntityRef entity)
-    // TODO(0x7be3d64, Quantum.UltimateEvolutionSpec.CanUseWeapon): bool CanUseWeapon(Frame f,
-    //   EntityRef entity)
+    // 0x7be3d64 - never through the weapon input (the ability triggers itself).
+    bool CanUseWeapon(Frame* f, EntityRef entity) const override {
+        (void)f, (void)entity;
+        return false;
+    }
 };
 
 class UltimateSlamSpec : public UltimateAbilitySpec {
@@ -532,8 +569,11 @@ class UltimateSlamSpec : public UltimateAbilitySpec {
     UltimateSlamSpec() = default;
 
     // TODO(0x7be425c, Quantum.UltimateSlamSpec.Init): void Init(Frame f, EntityRef entity)
-    // TODO(0x7be42b4, Quantum.UltimateSlamSpec.CanUseWeapon): bool CanUseWeapon(Frame f, EntityRef
-    //   entity)
+    // 0x7be42b4 - never through the weapon input (the ability triggers itself).
+    bool CanUseWeapon(Frame* f, EntityRef entity) const override {
+        (void)f, (void)entity;
+        return false;
+    }
 };
 
 class UltimateTankSpec : public UltimateAbilitySpec {
@@ -547,7 +587,8 @@ class UltimateTankSpec : public UltimateAbilitySpec {
     // 0x7be5c58
     UltimateTankSpec() = default;
 
-    // TODO(0x7be5c50, Quantum.UltimateTankSpec.get_WeaponID): GENERATED_WEAPON_ID get_WeaponID()
+    // 0x7be5c50 - the weapon this ability fires.
+    virtual GENERATED_WEAPON_ID WeaponID() const { return weaponID; }
 };
 
 class UltimateWeaponSpec : public UltimateAbilitySpec {
@@ -583,7 +624,8 @@ class UltimateWeaponSpec : public UltimateAbilitySpec {
     // 0x7be6c64
     UltimateWeaponSpec() = default;
 
-    // TODO(0x7be6c5c, Quantum.UltimateWeaponSpec.get_WeaponID): GENERATED_WEAPON_ID get_WeaponID()
+    // 0x7be6c5c - the weapon this ability fires.
+    virtual GENERATED_WEAPON_ID WeaponID() const { return weaponID; }
 };
 
 class VoidRepulserWeaponSpec : public WeaponSpec {

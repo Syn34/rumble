@@ -8,6 +8,7 @@
 #pragma once
 
 #include "quantum_code/assets/game_mode_specs.h"
+#include "quantum_core/physics3d/scene3d.h"
 
 namespace Quantum {
 
@@ -73,127 +74,10 @@ class LevelButtonGameplayElementConfig : public AssetObject {
     // 0x7c92ae8
     LevelButtonGameplayElementConfig() = default;
 
-    // TODO(0x7c92ae0, Quantum.LevelButtonGameplayElementConfig.OnSwitchOn): void OnSwitchOn(Frame
-    //   f, EntityRef entity, EntityRef pusherActor)
-    // TODO(0x7c92ae4, Quantum.LevelButtonGameplayElementConfig.OnSwitchOff): void OnSwitchOff(Frame
-    //   f, EntityRef entity)
-};
-
-class MapCustomData : public AssetObject {
-  public:
-    struct BakedAutoJumper {
-        std::int32_t staticColliderIndex{};
-        AutoJumperStartParams autoJumperStartParams;
-    };
-
-    struct BakedRailColliderData {
-        std::int32_t staticColliderIndex{};
-        FP distance{};
-        std::int32_t nearbyRailColIndexLeft{};
-        std::int32_t nearbyRailColIndexRight{};
-    };
-
-    struct BakedSplineSample {
-        FPVector3 posWorld;
-        FP distance{};
-    };
-
-    struct BakedSpline {
-        std::vector<MapCustomData::BakedSplineSample> samples;
-        FP length{};
-
-        // TODO(0x7c92f48, Quantum.MapCustomData.BakedSpline.GetTangent): FPVector3 GetTangent(int
-        //   i)
-        // TODO(0x7c93104, Quantum.MapCustomData.BakedSpline.GetSampleAtDistance): void
-        //   GetSampleAtDistance(FP d, FPVector3 pos, FPVector3 tangent)
-    };
-
-    struct BakedGrindRail {
-        MapCustomData::BakedSpline spline;
-        std::vector<MapCustomData::BakedRailColliderData> collidersData;
-    };
-
-    struct BakedTravolator {
-        std::int32_t staticColliderIndex{};
-        FPVector3 direction;
-    };
-
-    struct BlastBallData {
-        FPVector3 ballPosition;
-    };
-
-    struct ClosingPointData {
-        FPVector3 targetPosition;
-        FP targetRadius{};
-        FP startTime{};
-        FP endTime{};
-    };
-
-    struct ClosingZoneData {
-        FPVector3 startPosition;
-        FP startRadius{};
-        std::vector<MapCustomData::ClosingPointData> closingPoints;
-    };
-
-    struct ControlZoneData {
-        FPVector3 position;
-        FP radius{};
-        std::int32_t id{};
-
-        // TODO(0x7c92f08, Quantum.MapCustomData.ControlZoneData.GetIdAsString): string
-        //   GetIdAsString()
-    };
-
-    struct SpawnPointData {
-        FPVector3 position;
-        FP rotY{};
-        SpawnPointOptions options{};
-        TeamFlag teamFlag{};
-        std::uint16_t introTrackId{};
-        FP availabilityDuration{};
-    };
-
-    struct StaticColliderGrindRailPair {
-        std::int32_t staticColliderIndex{};
-        std::int32_t grindRailIndex{};
-    };
-
-    struct StaticDroppableData {
-        DroppableType type{};
-        FPVector3 position;
-    };
-
-    struct TutorialData {
-        FPVector3 tutoShootPosition;
-        FPQuaternion tutoShootRotation;
-        FPVector3 tutoMeleePosition;
-        FPQuaternion tutoMeleeRotation;
-        FPVector3 arenaPosition;
-        FPQuaternion arenaRotation;
-        FPVector3 ultimatePosition;
-        FPQuaternion ultimateRotation;
-    };
-
-    std::vector<MapCustomData::SpawnPointData> SpawnPoints;
-    MapCustomData::BlastBallData blastBallData;
-    std::vector<MapCustomData::ControlZoneData> ControlZones;
-    MapCustomData::TutorialData tutorialData;
-    std::vector<MapCustomData::ClosingZoneData> ClosingZones;
-    std::vector<FPVector3> GoldenBoltSpawnPoints;
-    std::vector<MapCustomData::StaticDroppableData> StaticDroppables;
-    std::vector<MapCustomData::BakedAutoJumper> staticJumpers;
-    std::vector<MapCustomData::BakedTravolator> staticTravolator;
-    std::vector<MapCustomData::BakedGrindRail> bakedGrindRails;
-    std::vector<MapCustomData::StaticColliderGrindRailPair> staticColliderGrindRailPairs;
-    std::unordered_map<std::int32_t, std::int32_t> _staticColliderToGrindRailIndex; // not stored; filled by Loaded
-
-    // 0x7c92e2c
-    MapCustomData() = default;
-
-    // TODO(0x7c92c34, Quantum.MapCustomData.TryGetStaticColliderToGrindRailIndex): bool
-    //   TryGetStaticColliderToGrindRailIndex(int staticColliderIndex, int grindRailIndex)
-    // TODO(0x7c92c9c, Quantum.MapCustomData.Loaded): void Loaded(IResourceManager resourceManager,
-    //   Allocator allocator)
+    // 0x7c92ae0 - nothing by default.
+    virtual void OnSwitchOn(Frame* f, EntityRef entity, EntityRef pusherActor) const { (void)f, (void)entity, (void)pusherActor; }
+    // 0x7c92ae4 - nothing by default.
+    virtual void OnSwitchOff(Frame* f, EntityRef entity) const { (void)f, (void)entity; }
 };
 
 class MovingWallConfig : public AssetObject {
@@ -234,12 +118,12 @@ class StaticTriggerConfig : public AssetObject {
     // 0x7c928e8
     StaticTriggerConfig() = default;
 
-    // TODO(0x7c928dc, Quantum.StaticTriggerConfig.OnTriggerEnter): void OnTriggerEnter(Frame f,
-    //   TriggerInfo3D info)
-    // TODO(0x7c928e0, Quantum.StaticTriggerConfig.OnTrigger): void OnTrigger(Frame f, TriggerInfo3D
-    //   info)
-    // TODO(0x7c928e4, Quantum.StaticTriggerConfig.OnTriggerExit): void OnTriggerExit(Frame f,
-    //   ExitInfo3D info)
+    // 0x7c928dc - nothing by default.
+    virtual void OnTriggerEnter(Frame* f, const Physics3D::TriggerInfo3D& info) const { (void)f, (void)info; }
+    // 0x7c928e0 - nothing by default.
+    virtual void OnTrigger(Frame* f, const Physics3D::TriggerInfo3D& info) const { (void)f, (void)info; }
+    // 0x7c928e4 - nothing by default.
+    virtual void OnTriggerExit(Frame* f, const Physics3D::ExitInfo3D& info) const { (void)f, (void)info; }
 };
 
 class ArenaCannonConfig : public LevelButtonGameplayElementConfig {

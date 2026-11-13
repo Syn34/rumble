@@ -25,8 +25,13 @@ class ImprovementSpec : public AssetObject {
     // 0x7c92704
     ImprovementSpec() = default;
 
-    // TODO(0x7c92700, Quantum.ImprovementSpec.OnInit): void OnInit(Frame f, EntityRef heroEntity,
-    //   EntityRef weaponEntity)
+    // Abstract in the original.
+    virtual void OnInit(Frame* f, EntityRef heroEntity) const {
+        (void)f, (void)heroEntity;
+        NotReimplemented("Quantum.ImprovementSpec.OnInit");
+    }
+    // 0x7c92700 - nothing by default.
+    virtual void OnInit(Frame* f, EntityRef heroEntity, EntityRef weaponEntity) const { (void)f, (void)heroEntity, (void)weaponEntity; }
 };
 
 class CompoundHeroImprovementSpec : public ImprovementSpec {
@@ -92,8 +97,8 @@ class JumpAttackHeroImprovementSpec : public ImprovementSpec {
     // 0x7bd4008
     JumpAttackHeroImprovementSpec() = default;
 
-    // TODO(0x7bd3e0c, Quantum.JumpAttackHeroImprovementSpec.OnInit): void OnInit(Frame f, EntityRef
-    //   heroEntity)
+    // 0x7bd3e0c - nothing at hero creation (the improvement is read where it applies).
+    void OnInit(Frame* f, EntityRef heroEntity) const override { (void)f, (void)heroEntity; }
     // TODO(0x7bd3e10, Quantum.JumpAttackHeroImprovementSpec.OnInit): void OnInit(Frame f, EntityRef
     //   heroEntity, EntityRef weaponEntity)
 };
@@ -126,8 +131,8 @@ class PlaceholderHeroImprovementSpec : public ImprovementSpec {
     // 0x7bd41bc
     PlaceholderHeroImprovementSpec() = default;
 
-    // TODO(0x7bd41b8, Quantum.PlaceholderHeroImprovementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef heroEntity)
+    // 0x7bd41b8 - nothing at hero creation (the improvement is read where it applies).
+    void OnInit(Frame* f, EntityRef heroEntity) const override { (void)f, (void)heroEntity; }
 };
 
 class ReplaceHealthSpecHeroImprovementSpec : public ImprovementSpec {
@@ -137,8 +142,8 @@ class ReplaceHealthSpecHeroImprovementSpec : public ImprovementSpec {
     // 0x7bd41c8
     ReplaceHealthSpecHeroImprovementSpec() = default;
 
-    // TODO(0x7bd41c4, Quantum.ReplaceHealthSpecHeroImprovementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef heroEntity)
+    // 0x7bd41c4 - nothing at hero creation (the improvement is read where it applies).
+    void OnInit(Frame* f, EntityRef heroEntity) const override { (void)f, (void)heroEntity; }
 };
 
 class WeaponEnhancementSpec : public EnhancementSpec {
@@ -169,8 +174,8 @@ class WeaponStatsModifierHeroImprovementSpec : public ImprovementSpec {
 
     // TODO(0x7bd41d0, Quantum.WeaponStatsModifierHeroImprovementSpec.OnInit): void OnInit(Frame f,
     //   EntityRef heroEntity, EntityRef weaponEntity)
-    // TODO(0x7bd4498, Quantum.WeaponStatsModifierHeroImprovementSpec.OnInit): void OnInit(Frame f,
-    //   EntityRef heroEntity)
+    // 0x7bd4498 - nothing at hero creation (the improvement is read where it applies).
+    void OnInit(Frame* f, EntityRef heroEntity) const override { (void)f, (void)heroEntity; }
 };
 
 class AddDamageIncreaseOnTargetedEffectSpec : public WeaponEnhancementSpec {
