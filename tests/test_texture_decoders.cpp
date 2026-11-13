@@ -80,7 +80,21 @@ TEST_CASE("astc: void-extent block is a solid colour") {
     CHECK(astc::DecodeBlock(dim.data(), 4, 4, astc::Profile::Linear, small.data()));
     CHECK(AllTexels(small, {7, 200, 18, 9}));
     CHECK(astc::DecodeBlock(dim.data(), 4, 4, astc::Profile::Srgb, small.data()));
-    CHECK(AllTexels(small, {7, 200, 0x12, 9})); // sRGB colour keeps the top byte; alpha stays linear
+    CHECK(AllTexels(small, {7, 200, 0x12, 9})); // 8-bit output is the top byte of each 16-bit value
+}
+
+TEST_CASE("astc: void-extent block with a malformed extent is an error") {
+    auto block = VoidExtentBlock(0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF);
+    PutBits(block, 12, 13, 100); // S min
+    PutBits(block, 25, 13, 50);  // S max below S min
+    PutBits(block, 38, 13, 0);
+    PutBits(block, 51, 13, 10);
+    std::vector<std::uint8_t> out(4 * 4 * 4);
+    CHECK(!astc::DecodeBlock(block.data(), 4, 4, astc::Profile::Linear, out.data()));
+    CHECK(AllTexels(out, {255, 0, 255, 255}));
+    PutBits(block, 25, 13, 200); // now well formed
+    CHECK(astc::DecodeBlock(block.data(), 4, 4, astc::Profile::Linear, out.data()));
+    CHECK(AllTexels(out, {255, 255, 255, 255}));
 }
 
 TEST_CASE("astc: HDR void-extent and reserved block modes give the error colour") {
@@ -162,8 +176,8 @@ TEST_CASE("astc: trit-encoded weights") {
     std::vector<std::uint8_t> out(4 * 4 * 4);
     CHECK(astc::DecodeBlock(block.data(), 4, 4, astc::Profile::Linear, out.data()));
     // Weights (trit, bit) -> 0..64: (1,0)=12, (1,1)=52, (0,0)=0, (1,1)=52, (0,1)=64.
-    // Luminance 0..255 interpolated: 255 * 257 * w / 64, then to 8 bits.
-    auto lum = [](int w) { return ((255 * 257 * w + 32) / 64 * 255 + 32767) / 65535; };
+    // Luminance endpoints 0 and 255 expand to 0 and 0xFFFF; output is the top byte.
+    auto lum = [](int w) { return ((0xFFFF * w + 32) / 64) >> 8; };
     const int weights[5] = {12, 52, 0, 52, 64};
     for (int i = 0; i < 5; ++i) CHECK(out[static_cast<std::size_t>(i * 4)] == lum(weights[i]));
 }

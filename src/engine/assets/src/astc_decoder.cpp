@@ -494,13 +494,12 @@ void DecodeEndpoints(int cem, const int* v, Rgba& e0, Rgba& e1) {
 
 // --- output ------------------------------------------------------------------------
 
-// Converts a 16-bit decoded component to 8 bits. sRGB colour channels keep the
-// top byte (their endpoints were expanded with 0x80 so this rounds); everything
-// else is UNORM16 -> UNORM8 with rounding.
-std::uint8_t ToUnorm8(int value16, bool srgbChannel) {
-    if (srgbChannel) return static_cast<std::uint8_t>(value16 >> 8);
-    return static_cast<std::uint8_t>((value16 * 255 + 32767) / 65535);
-}
+// Converts a 16-bit decoded component to 8 bits: the top byte, as in the
+// specification's 8-bit (UNORM8) decode. In the sRGB profile the endpoints were
+// expanded to 16 bits as (e << 8) | 0x80 (all four channels), so taking the top
+// byte rounds. Confirmed bit-exact against an independent GPU-driver decoder on
+// random blocks (tools/meshview --astc-selftest).
+std::uint8_t ToUnorm8(int value16) { return static_cast<std::uint8_t>(value16 >> 8); }
 
 void FillError(std::uint8_t* out, int texels) {
     for (int i = 0; i < texels; ++i) {
@@ -511,18 +510,25 @@ void FillError(std::uint8_t* out, int texels) {
     }
 }
 
-bool DecodeVoidExtent(const std::uint8_t* block, int texels, Profile profile, std::uint8_t* out) {
+bool DecodeVoidExtent(const std::uint8_t* block, int texels, std::uint8_t* out) {
     const bool hdr = ReadBits(block, 9, 1) != 0;
     if (hdr || ReadBits(block, 10, 2) != 3) {
         FillError(out, texels);
         return false;
     }
-    // The extent coordinates (bits 12-63) only help encoders; the colour applies
-    // to the whole block either way.
+    // The extent coordinates (bits 12-63) only help encoders, but they must be
+    // well formed: either all ones, or minimum below maximum on both axes.
+    const std::uint32_t sMin = ReadBits(block, 12, 13), sMax = ReadBits(block, 25, 13);
+    const std::uint32_t tMin = ReadBits(block, 38, 13), tMax = ReadBits(block, 51, 13);
+    const bool noExtent = sMin == 0x1FFF && sMax == 0x1FFF && tMin == 0x1FFF && tMax == 0x1FFF;
+    if (!noExtent && (sMin >= sMax || tMin >= tMax)) {
+        FillError(out, texels);
+        return false;
+    }
     std::uint8_t rgba[4];
     for (int c = 0; c < 4; ++c) {
         const auto value = static_cast<int>(ReadBits(block, 64 + 16 * c, 16));
-        rgba[c] = ToUnorm8(value, profile == Profile::Srgb && c < 3);
+        rgba[c] = ToUnorm8(value);
     }
     for (int i = 0; i < texels; ++i) std::memcpy(out + i * 4, rgba, 4);
     return true;
@@ -562,7 +568,7 @@ bool DecodeBlock(const std::uint8_t* block, int blockWidth, int blockHeight, Pro
     if (blockWidth < 4 || blockHeight < 4 || blockWidth > 12 || blockHeight > 12) return false;
 
     const std::uint32_t mode = ReadBits(block, 0, 11);
-    if ((mode & 0x1FF) == 0x1FC) return DecodeVoidExtent(block, texels, profile, out);
+    if ((mode & 0x1FF) == 0x1FC) return DecodeVoidExtent(block, texels, out);
 
     BlockMode bm;
     if (!DecodeBlockMode(mode, bm) || bm.gridWidth > blockWidth || bm.gridHeight > blockHeight) {
@@ -615,13 +621,7 @@ bool DecodeBlock(const std::uint8_t* block, int blockWidth, int blockHeight, Pro
     }
 
     int colorValueCount = 0;
-    for (int i = 0; i < partitions; ++i) {
-        if (IsHdrMode(cems[i])) {
-            FillError(out, texels);
-            return false;
-        }
-        colorValueCount += ((cems[i] >> 2) + 1) * 2;
-    }
+    for (int i = 0; i < partitions; ++i) colorValueCount += ((cems[i] >> 2) + 1) * 2;
     const int colorBits = belowWeights - colorStart;
     if (colorValueCount > kMaxColorValues || colorBits <= 0) {
         FillError(out, texels);
@@ -648,7 +648,7 @@ bool DecodeBlock(const std::uint8_t* block, int blockWidth, int blockHeight, Pro
 
     Rgba endpoints[4][2];
     for (int i = 0, offset = 0; i < partitions; ++i) {
-        DecodeEndpoints(cems[i], colorValues + offset, endpoints[i][0], endpoints[i][1]);
+        if (!IsHdrMode(cems[i])) DecodeEndpoints(cems[i], colorValues + offset, endpoints[i][0], endpoints[i][1]);
         offset += ((cems[i] >> 2) + 1) * 2;
     }
 
@@ -677,15 +677,18 @@ bool DecodeBlock(const std::uint8_t* block, int blockWidth, int blockHeight, Pro
         for (int x = 0; x < blockWidth; ++x) {
             const int texel = y * blockWidth + x;
             const int part = partitions > 1 ? SelectPartition(partitionSeed, x, y, partitions, smallBlock) : 0;
+            if (IsHdrMode(cems[part])) { // HDR endpoints aren't part of the LDR profile
+                FillError(out + texel * 4, 1);
+                continue;
+            }
             const Rgba& e0 = endpoints[part][0];
             const Rgba& e1 = endpoints[part][1];
             for (int c = 0; c < 4; ++c) {
-                const bool srgbChannel = srgb && c < 3;
-                const int c0 = srgbChannel ? (e0.c[c] << 8) | 0x80 : e0.c[c] * 257;
-                const int c1 = srgbChannel ? (e1.c[c] << 8) | 0x80 : e1.c[c] * 257;
+                const int c0 = srgb ? (e0.c[c] << 8) | 0x80 : e0.c[c] * 257;
+                const int c1 = srgb ? (e1.c[c] << 8) | 0x80 : e1.c[c] * 257;
                 const int w = planeWeights[c == planeComponent ? 1 : 0][texel];
                 const int value = (c0 * (64 - w) + c1 * w + 32) >> 6;
-                out[texel * 4 + c] = ToUnorm8(value, srgbChannel);
+                out[texel * 4 + c] = ToUnorm8(value);
             }
         }
     }
