@@ -678,3 +678,44 @@ TEST_CASE("quantum.code systems: spawn points and the respawn loop") {
     actorManager->SetActiveCheckpoint(&f, player, checkpoint);
     CHECK(f.ResolveList(actorManager->get_activeCheckpoints()).get_Count() == 1);
 }
+
+TEST_CASE("quantum.code systems: KCC modifier lists") {
+    SystemsSimulation sim(MakeSystems<HealthSystem>());
+    Frame& f = *sim.frame;
+    StartSystems(&f);
+    f.Number = 60; // one second in
+    const EntityRef actor = f.Create();
+    f.Add<KccExtension>(actor);
+    KccExtension* kcc = f.GetPointer<KccExtension>(actor);
+    // A zero duration adds nothing; a timed slow and a permanent boost add up.
+    kcc->AddModifier_MoveSpeed(&f, MOD_ORIGIN::SHIELD, FP::FromRaw(-16384), FP{}, FP{}, false);
+    CHECK(!kcc->HasModifier_MoveSpeed(&f, MOD_ORIGIN::SHIELD));
+    kcc->AddModifier_MoveSpeed(&f, MOD_ORIGIN::SHIELD, FP::FromRaw(-16384), FP::One(), FP{}, false);
+    kcc->AddModifier_MoveSpeed(&f, static_cast<MOD_ORIGIN>(0), FP::FromRaw(32768), FP::FromRaw(-65536), FP{}, false);
+    CHECK(kcc->HasModifier_MoveSpeed(&f, MOD_ORIGIN::SHIELD));
+    CHECK(kcc->ComputeModifiers(&f, kcc->get_speedModifiers()) == FP::FromRaw(81920)); // 1 - 0.25 + 0.5
+    CHECK(kcc->ComputeModifiersOfType_Additive(&f, kcc->get_speedModifiers(), MOD_ORIGIN::SHIELD) == FP::FromRaw(-16384));
+    // Replacing by origin keeps one entry.
+    kcc->AddModifier_MoveSpeed(&f, MOD_ORIGIN::SHIELD, FP::FromRaw(-32768), FP::One(), FP{}, true);
+    CHECK(f.ResolveList(kcc->get_speedModifiers()).get_Count() == 2);
+    // After the slow's second it lapses; the permanent one stays.
+    f.Number += 61;
+    kcc->RemoveExpiredModifiers(&f);
+    CHECK(f.ResolveList(kcc->get_speedModifiers()).get_Count() == 1);
+    CHECK(kcc->ComputeModifiers(&f, kcc->get_speedModifiers()) == FP::FromRaw(98304));
+    kcc->ClearModifiersOfType(&f, static_cast<MOD_ORIGIN>(0));
+    CHECK(kcc->ComputeModifiers(&f, kcc->get_speedModifiers()) == FP::One());
+    // A falloff fades the value over the end of its life.
+    ModInfo fading{};
+    fading.date = FP{};
+    fading.duration = FP::FromInt(2);
+    fading.falloffDuration = FP::One();
+    fading.value = FP::One();
+    CHECK(fading.GetValueAtTime(FP::FromRaw(32768)) == FP::One());
+    CHECK(fading.GetValueAtTime(FP::FromRaw(98304)) == FP::FromRaw(32768));
+    // Forced input blends in and counts down.
+    kcc->SetForceInput(FPVector2(FP::One(), FP{}), FP::One(), FP::One(), FP{}, true);
+    kcc->UpdateForceInput(&f);
+    CHECK(kcc->forceInputBlend == FP::One());
+    CHECK(kcc->forceInputCounter == FP::One() - f.get_DeltaTime());
+}

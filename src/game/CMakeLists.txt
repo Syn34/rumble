@@ -79,3 +79,8 @@ target_sources(rr_game PRIVATE
     quantum_code/prototypes/component_prototype_visitor.cpp
     quantum_code/prototypes/flat_entity_prototype_container.cpp
 )
+
+# quantum.code systems: kinematic character extension (modifier lists)
+target_sources(rr_game PRIVATE
+    quantum_code/systems/kcc_extension.cpp
+)
