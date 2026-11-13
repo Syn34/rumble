@@ -366,14 +366,16 @@ void PathFinder::SetClosed(int triangle) {
 // 0x7d2a618
 ActiveVertex* PathFinder::GetActiveVertexFromIndex(int index) {
     const int blockSize = NavigationConstants::ActiveVertexDefaultSize;
-    return &verticesBlocks_.at(static_cast<std::size_t>(index / blockSize))[static_cast<std::size_t>(index % blockSize)];
+    return &verticesBlocks_.at(
+        static_cast<std::size_t>(index / blockSize))[static_cast<std::size_t>(index % blockSize)];
 }
 
 // 0x7d28b24
 ActiveVertex* PathFinder::GetNextActiveVertex() {
     const int blockSize = NavigationConstants::ActiveVertexDefaultSize;
     if (verticesCount_ == blockSize * static_cast<int>(verticesBlocks_.size())) {
-        verticesBlocks_.push_back(std::make_unique<ActiveVertex[]>(static_cast<std::size_t>(blockSize)));
+        verticesBlocks_.push_back(
+            std::make_unique<ActiveVertex[]>(static_cast<std::size_t>(blockSize)));
     }
     const int index = verticesCount_++;
     ActiveVertex* vertex = GetActiveVertexFromIndex(index);
@@ -406,9 +408,10 @@ void PathFinder::CreateOrUpdateVertex(int triangleIndex, ActiveVertex* current,
     ActiveVertex*& slot = Element(active_, triangleIndex);
     if (slot != nullptr) {
         ActiveVertex* existing = slot;
-        const FPVector3 pivot =
-            ActiveVertex::CreatePivot(triangleIndex, -1, -1, posStart_, posEnd_, current, quality, *navmesh_);
-        const std::int64_t g = ActiveVertex::CalculateCost(posStart_, pivot, current, quality, cost);
+        const FPVector3 pivot = ActiveVertex::CreatePivot(triangleIndex, -1, -1, posStart_, posEnd_,
+                                                          current, quality, *navmesh_);
+        const std::int64_t g =
+            ActiveVertex::CalculateCost(posStart_, pivot, current, quality, cost);
         if (g < existing->G) {
             existing->Index = triangleIndex;
             existing->Link = -1;
@@ -427,8 +430,8 @@ void PathFinder::CreateOrUpdateVertex(int triangleIndex, ActiveVertex* current,
 
     ActiveVertex* vertex = GetNextActiveVertex();
     slot = vertex;
-    const FPVector3 pivot =
-        ActiveVertex::CreatePivot(triangleIndex, -1, -1, posStart_, posEnd_, current, quality, *navmesh_);
+    const FPVector3 pivot = ActiveVertex::CreatePivot(triangleIndex, -1, -1, posStart_, posEnd_,
+                                                      current, quality, *navmesh_);
     vertex->Index = triangleIndex;
     vertex->Pivot = current->Pivot;
     vertex->Link = -1;
@@ -475,8 +478,10 @@ FindPathResult PathFinder::FindPath(MailboxSet8* mailbox, FPVector3 start, FPVec
     open_.Clear();
 
     // The start is always searched with at least a quarter unit of tolerance.
-    const FP startRadius = FP::FromRaw(std::max<std::int64_t>(FP::_0_25().RawValue(), endRadius.RawValue()));
-    if (!navmesh_->FindClosestTriangle(start, startRadius, regionMask, triStart_, posStart_, mailbox)) {
+    const FP startRadius =
+        FP::FromRaw(std::max<std::int64_t>(FP::_0_25().RawValue(), endRadius.RawValue()));
+    if (!navmesh_->FindClosestTriangle(start, startRadius, regionMask, triStart_, posStart_,
+                                       mailbox)) {
         return FindPathResult::CreateError(FindPathResult::Code::InvalidStartPosition);
     }
     if (!navmesh_->FindClosestTriangle(end, endRadius, regionMask, triEnd_, posEnd_, mailbox)) {
@@ -558,7 +563,8 @@ bool PathFinder::PathFindComplete(PathQuality quality, NavMeshRegionMask regionM
                 bool fits = true;
                 for (ActiveVertex* vertex = current; vertex != nullptr && fits;
                      vertex = vertex->Parent) {
-                    PushRawPath(PathVertex{vertex->Index, vertex->Pivot, FPVector3::Zero(), vertex->Link});
+                    PushRawPath(
+                        PathVertex{vertex->Index, vertex->Pivot, FPVector3::Zero(), vertex->Link});
                     if (vertex->Link >= 0 && vertex->Parent != nullptr) {
                         // The link's start point, in the triangle the link leaves from.
                         if (!advanceRawPath()) {
@@ -638,7 +644,8 @@ bool PathFinder::PathFindComplete(PathQuality quality, NavMeshRegionMask regionM
                 vertex->Link = -1;
                 vertex->PortalLeft = -1;
                 vertex->PortalRight = -1;
-                vertex->G = ActiveVertex::CalculateCost(posStart_, pivot, current, quality, triangle.Cost);
+                vertex->G =
+                    ActiveVertex::CalculateCost(posStart_, pivot, current, quality, triangle.Cost);
                 vertex->H = ActiveVertex::Distance(posEnd_, pivot, quality);
                 vertex->F = WrapAdd(vertex->G, vertex->H);
                 open_.Push(vertex);
@@ -666,8 +673,10 @@ bool PathFinder::PathFindComplete(PathQuality quality, NavMeshRegionMask regionM
                 vertex->Parent = current;
                 vertex->Pivot = link.End;
                 vertex->Link = linkIndex;
-                const FP costFactor = link.CostOverride < FP::Zero() ? triangle.Cost : link.CostOverride;
-                vertex->G = ActiveVertex::CalculateCost(posStart_, link.End, current, quality, costFactor);
+                const FP costFactor =
+                    link.CostOverride < FP::Zero() ? triangle.Cost : link.CostOverride;
+                vertex->G =
+                    ActiveVertex::CalculateCost(posStart_, link.End, current, quality, costFactor);
                 vertex->H = ActiveVertex::Distance(posEnd_, vertex->Pivot, quality);
                 vertex->F = WrapAdd(vertex->G, vertex->H);
                 open_.Push(vertex);
@@ -727,9 +736,9 @@ void PathFinder::Funnel(const FPVector3& start, const FPVector3& end, NavMeshReg
             continue;
         }
         const int nextTriangle = Element(rawPath_, i + 1).Index;
-        const auto portal =
-            std::find_if(triangle.Neighbors.begin(), triangle.Neighbors.end(),
-                         [nextTriangle](const NavMeshPortal& p) { return p.Neighbor == nextTriangle; });
+        const auto portal = std::find_if(
+            triangle.Neighbors.begin(), triangle.Neighbors.end(),
+            [nextTriangle](const NavMeshPortal& p) { return p.Neighbor == nextTriangle; });
         if (portal == triangle.Neighbors.end()) {
             continue;
         }
@@ -798,7 +807,8 @@ void PathFinder::FillFunneledPath(FPVector3 apex, int& nextFunnelNode, int start
     const int portalCount = funnelIndex_;
 
     // Emits a funnel corner: the point with the raw path entry's triangle and link.
-    const auto emitCorner = [this, &nextFunnelNode](const FPVector3& point, const FunnelNode& node) {
+    const auto emitCorner = [this, &nextFunnelNode](const FPVector3& point,
+                                                    const FunnelNode& node) {
         const PathVertex& raw = Element(rawPath_, node.RawPathIndex);
         Element(funnel_, nextFunnelNode) = PathVertex{raw.Index, point, node.Normal, raw.Link};
         ++nextFunnelNode;

@@ -1,5 +1,5 @@
-#include "test_framework.h"
 #include "math_tables.h"
+#include "test_framework.h"
 
 #include "photon_deterministic/fp_math.h"
 #include "photon_deterministic/rng_session.h"
@@ -20,10 +20,18 @@ using Photon::Deterministic::FPMath::Abs;
 
 namespace {
 
-FP F(int v) { return FP::FromInt(v); }
-FP Half(int v) { return FP::FromRaw(static_cast<std::int64_t>(v) * FP::RAW_ONE / 2); }
-FPVector3 V3(FP x, FP y, FP z) { return {x, y, z}; }
-bool Near(FP a, FP b, int tolerance = 16) { return Abs(a - b) <= FP::FromRaw(tolerance); }
+FP F(int v) {
+    return FP::FromInt(v);
+}
+FP Half(int v) {
+    return FP::FromRaw(static_cast<std::int64_t>(v) * FP::RAW_ONE / 2);
+}
+FPVector3 V3(FP x, FP y, FP z) {
+    return {x, y, z};
+}
+bool Near(FP a, FP b, int tolerance = 16) {
+    return Abs(a - b) <= FP::FromRaw(tolerance);
+}
 bool Near(const FPVector3& a, const FPVector3& b, int tolerance = 16) {
     return Near(a.X, b.X, tolerance) && Near(a.Y, b.Y, tolerance) && Near(a.Z, b.Z, tolerance);
 }
@@ -32,8 +40,8 @@ bool Near(const FPVector3& a, const FPVector3& b, int tolerance = 16) {
 // left/right as seen when walking into the neighbour (right = clockwise side, X right,
 // Z up), borders on unshared edges with inward normals, and grids of `gridSize` x
 // `gridSize` unit cells centred on the origin.
-NavMesh BuildNavMesh(const std::vector<FPVector3>& points, const std::vector<std::array<int, 3>>& tris,
-                     int gridSize) {
+NavMesh BuildNavMesh(const std::vector<FPVector3>& points,
+                     const std::vector<std::array<int, 3>>& tris, int gridSize) {
     NavMesh mesh;
     mesh.Name = "test";
     mesh.GridSizeX = gridSize;
@@ -119,8 +127,10 @@ NavMesh BuildNavMesh(const std::vector<FPVector3>& points, const std::vector<std
         for (int z = z0; z <= z1; ++z) {
             for (int x = x0; x <= x1; ++x) {
                 const auto cell = static_cast<std::size_t>(z * gridSize + x);
-                if (triGrid) (*triGrid)[cell].Triangles.push_back(index);
-                if (borderGrid) (*borderGrid)[cell].Borders.push_back(index);
+                if (triGrid)
+                    (*triGrid)[cell].Triangles.push_back(index);
+                if (borderGrid)
+                    (*borderGrid)[cell].Borders.push_back(index);
             }
         }
     };
@@ -156,8 +166,10 @@ NavMesh CorridorMesh() {
         return index[key];
     };
     std::vector<std::array<int, 3>> tris;
-    for (const auto& [x, z] : std::vector<std::pair<int, int>>{{0, 0}, {1, 0}, {2, 0}, {2, 1}, {2, 2}}) {
-        const int a = vertex(x, z), b = vertex(x + 1, z), c = vertex(x + 1, z + 1), d = vertex(x, z + 1);
+    for (const auto& [x, z] :
+         std::vector<std::pair<int, int>>{{0, 0}, {1, 0}, {2, 0}, {2, 1}, {2, 2}}) {
+        const int a = vertex(x, z), b = vertex(x + 1, z), c = vertex(x + 1, z + 1),
+                  d = vertex(x, z + 1);
         tris.push_back({a, b, c});
         tris.push_back({a, c, d});
     }
@@ -251,10 +263,10 @@ TEST_CASE("NavMesh grid helpers") {
     mesh.ClampToGrid(p);
     CHECK(p.X == F(4) && p.Y == F(5) && p.Z == F(-4));
     // Plane y = x / 2 through the origin (normal (-1, 2, 0) / sqrt 5, any length works).
-    CHECK(NavMesh::GetHeightAtTriangleRaw(V3(F(2), F(9), F(7)), V3(F(-1), F(2), F(0)), FPVector3::Zero()) ==
-          F(1).RawValue());
-    CHECK(NavMesh::GetHeightAtTriangleRaw(V3(F(2), F(9), F(7)), V3(F(1), F(0), F(0)), FPVector3::Zero()) ==
-          F(9).RawValue());
+    CHECK(NavMesh::GetHeightAtTriangleRaw(V3(F(2), F(9), F(7)), V3(F(-1), F(2), F(0)),
+                                          FPVector3::Zero()) == F(1).RawValue());
+    CHECK(NavMesh::GetHeightAtTriangleRaw(V3(F(2), F(9), F(7)), V3(F(1), F(0), F(0)),
+                                          FPVector3::Zero()) == F(9).RawValue());
 }
 
 TEST_CASE("NavMesh triangle lookups") {
@@ -270,16 +282,19 @@ TEST_CASE("NavMesh triangle lookups") {
     MailboxSet8 mailbox(mesh.BorderCount());
     int triangle = -1;
     FPVector3 closest;
-    CHECK(mesh.FindClosestTriangle(V3(Half(1), F(0), Half(-3)), FP::Zero(), all, triangle, closest, &mailbox));
+    CHECK(mesh.FindClosestTriangle(V3(Half(1), F(0), Half(-3)), FP::Zero(), all, triangle, closest,
+                                   &mailbox));
     CHECK(triangle == 0 && closest == V3(Half(1), F(0), Half(-3)));
     // Too high above the triangle it is over, so that one is skipped; the other triangle
     // is still taken as "closest" (the distance branch has no radius limit).
     CHECK(mesh.FindClosestTriangle(V3(F(1), F(3), F(-1)), F(1), all, triangle, closest, &mailbox));
     CHECK(triangle == 1);
     // Outside the square: snapped onto the nearest edge.
-    CHECK(mesh.FindClosestTriangle(V3(Half(5), F(0), F(0)), F(2), all, triangle, closest, &mailbox));
+    CHECK(
+        mesh.FindClosestTriangle(V3(Half(5), F(0), F(0)), F(2), all, triangle, closest, &mailbox));
     CHECK(triangle == 0 && Near(closest, V3(F(2), F(0), F(0)), 64));
-    CHECK(!mesh.FindClosestTriangle(V3(F(3), F(0), F(0)), FP::Zero(), all, triangle, closest, &mailbox));
+    CHECK(!mesh.FindClosestTriangle(V3(F(3), F(0), F(0)), FP::Zero(), all, triangle, closest,
+                                    &mailbox));
     // Region filtering.
     NavMesh gated = SquareMesh();
     gated.Triangles[0].Regions.ToggleRegion(1, true);
@@ -295,7 +310,8 @@ TEST_CASE("NavMesh random points stay on the mesh") {
         FPVector3 point;
         CHECK(mesh.FindRandomPointOnTriangle(1, &rng, point));
         CHECK(mesh.FindTriangle2D(point, NavMeshRegionMask::Default(), true) >= 0);
-        CHECK(mesh.FindRandomPointOnNavmesh(FPVector3::Zero(), Half(3), &rng, NavMeshRegionMask::Default(), point));
+        CHECK(mesh.FindRandomPointOnNavmesh(FPVector3::Zero(), Half(3), &rng,
+                                            NavMeshRegionMask::Default(), point));
         CHECK(Abs(point.X) <= Half(3) && Abs(point.Z) <= Half(3));
     }
     FPVector3 point = V3(F(1), F(1), F(1));
@@ -306,9 +322,12 @@ TEST_CASE("NavMesh random points stay on the mesh") {
 TEST_CASE("NavMesh line of sight, raycast and position correction") {
     const NavMesh corridor = CorridorMesh();
     const NavMeshRegionMask all = NavMeshRegionMask::Default();
-    CHECK(corridor.LineOfSight(V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(1)), all, -1, -1, false));
-    CHECK(!corridor.LineOfSight(V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(5)), all, -1, -1, false));
-    CHECK(corridor.LineOfSight(V3(Half(5), F(0), Half(1)), V3(Half(5), F(0), Half(5)), all, -1, -1, true));
+    CHECK(corridor.LineOfSight(V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(1)), all, -1, -1,
+                               false));
+    CHECK(!corridor.LineOfSight(V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(5)), all, -1, -1,
+                                false));
+    CHECK(corridor.LineOfSight(V3(Half(5), F(0), Half(1)), V3(Half(5), F(0), Half(5)), all, -1, -1,
+                               true));
 
     MailboxSet8 mailbox(corridor.BorderCount());
     FPVector2 hit;
@@ -318,14 +337,14 @@ TEST_CASE("NavMesh line of sight, raycast and position correction") {
     CHECK(!corridor.Raycast2D({Half(1), Half(1)}, {F(1), F(0)}, Half(1), all, &mailbox, hit));
 
     // Moving through the wall is pulled back onto it.
-    const FPVector2 corrected = corridor.MovePositionIntoNavmesh({Half(1), Half(1)}, {Half(1), Half(3)},
-                                                                 F(1), all, &mailbox);
+    const FPVector2 corrected = corridor.MovePositionIntoNavmesh(
+        {Half(1), Half(1)}, {Half(1), Half(3)}, F(1), all, &mailbox);
     CHECK(corrected.X == Half(1) && corrected.Y == F(1));
-    const FPVector2 inside = corridor.MovePositionIntoNavmesh({Half(1), Half(1)}, {FP::FromRaw(81920), Half(1)},
-                                                              F(1), all, &mailbox);
+    const FPVector2 inside = corridor.MovePositionIntoNavmesh(
+        {Half(1), Half(1)}, {FP::FromRaw(81920), Half(1)}, F(1), all, &mailbox);
     CHECK(inside.X == FP::FromRaw(81920) && inside.Y == Half(1));
-    const FPVector2 partial = corridor.MovePositionIntoNavmesh({Half(1), Half(1)}, {Half(1), Half(3)},
-                                                               Half(1), all, &mailbox);
+    const FPVector2 partial = corridor.MovePositionIntoNavmesh(
+        {Half(1), Half(1)}, {Half(1), Half(3)}, Half(1), all, &mailbox);
     CHECK(partial.X == Half(1) && partial.Y == FP::FromRaw(FP::RAW_ONE * 5 / 4));
 }
 
@@ -348,17 +367,19 @@ TEST_CASE("NavMesh serialisation round trip") {
     CHECK(loaded.Vertices.size() == mesh.Vertices.size());
     CHECK(loaded.Borders.size() == mesh.Borders.size());
     CHECK(loaded.TrianglesGrid.size() == mesh.TrianglesGrid.size());
-    CHECK(loaded.Links.size() == 1 && loaded.Links[0].Name == "jump" && loaded.Links[0].Triangle == 9);
+    CHECK(loaded.Links.size() == 1 && loaded.Links[0].Name == "jump" &&
+          loaded.Links[0].Triangle == 9);
     bool same = true;
     for (std::size_t t = 0; t < mesh.Triangles.size(); ++t) {
         const NavMeshTriangle& a = mesh.Triangles[t];
         const NavMeshTriangle& b = loaded.Triangles[t];
         same = same && a.Vertex0 == b.Vertex0 && a.Vertex2 == b.Vertex2 && a.Center == b.Center &&
-               a.Normal == b.Normal && a.Neighbors.size() == b.Neighbors.size() && a.Cost == b.Cost &&
-               a.Borders == b.Borders;
+               a.Normal == b.Normal && a.Neighbors.size() == b.Neighbors.size() &&
+               a.Cost == b.Cost && a.Borders == b.Borders;
     }
     CHECK(same);
-    CHECK(loaded.Borders[0].V1 == mesh.Borders[0].V1 && loaded.Borders[0].Normal == mesh.Borders[0].Normal);
+    CHECK(loaded.Borders[0].V1 == mesh.Borders[0].V1 &&
+          loaded.Borders[0].Normal == mesh.Borders[0].Normal);
 }
 
 TEST_CASE("ActiveHeap pops lowest F first") {
@@ -398,7 +419,8 @@ TEST_CASE("ActiveVertex geometry helpers") {
 TEST_CASE("PathFinder finds and funnels a path around a corner") {
     rr::test::InstallMathDerivedTables();
     const NavMesh corridor = CorridorMesh();
-    MailboxSet8 mailbox(std::max(corridor.BorderCount(), static_cast<int>(corridor.Triangles.size())));
+    MailboxSet8 mailbox(
+        std::max(corridor.BorderCount(), static_cast<int>(corridor.Triangles.size())));
     for (PathQuality quality : {PathQuality::Fast, PathQuality::Good, PathQuality::Best}) {
         PathFinder finder(1024, 256, RawPathAllocationStrategy::Fixed);
         const FindPathResult result =
@@ -417,16 +439,18 @@ TEST_CASE("PathFinder finds and funnels a path around a corner") {
 
     PathFinder finder(1024, 256, RawPathAllocationStrategy::Fixed);
     // Same triangle: straight line, no search.
-    FindPathResult result = finder.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(FP::FromRaw(40000), F(0), FP::FromRaw(30000)),
-                                            false, FP::Zero(), NavMeshRegionMask::Default(), PathQuality::Good, &corridor);
+    FindPathResult result = finder.FindPath(
+        &mailbox, V3(Half(1), F(0), Half(1)), V3(FP::FromRaw(40000), F(0), FP::FromRaw(30000)),
+        false, FP::Zero(), NavMeshRegionMask::Default(), PathQuality::Good, &corridor);
     CHECK(result.Result == FindPathResult::Code::Success && finder.PathSize() == 2);
     // Off the mesh without target correction.
-    result = finder.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(F(-3), F(0), F(-3)), false, FP::Zero(),
-                             NavMeshRegionMask::Default(), PathQuality::Good, &corridor);
+    result =
+        finder.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(F(-3), F(0), F(-3)), false,
+                        FP::Zero(), NavMeshRegionMask::Default(), PathQuality::Good, &corridor);
     CHECK(result.Result == FindPathResult::Code::InvalidEndPosition);
     // With correction the end snaps onto the mesh.
-    result = finder.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(Half(7), F(0), Half(5)), true, F(1),
-                             NavMeshRegionMask::Default(), PathQuality::Good, &corridor);
+    result = finder.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(Half(7), F(0), Half(5)), true,
+                             F(1), NavMeshRegionMask::Default(), PathQuality::Good, &corridor);
     CHECK(result.Result == FindPathResult::Code::Success);
     CHECK(Near(result.CorrectedEndPosition, V3(F(3), F(0), Half(5)), 64));
     // Unreachable region.
@@ -434,11 +458,11 @@ TEST_CASE("PathFinder finds and funnels a path around a corner") {
     for (int t = 6; t < 10; ++t) {
         gated.Triangles[static_cast<std::size_t>(t)].Regions.ToggleRegion(0, true);
     }
-    result = finder.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(1)), false, FP::Zero(),
-                             NavMeshRegionMask(0), PathQuality::Good, &gated);
+    result = finder.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(1)),
+                             false, FP::Zero(), NavMeshRegionMask(0), PathQuality::Good, &gated);
     CHECK(result.Result == FindPathResult::Code::Success);
-    result = finder.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(5)), false, FP::Zero(),
-                             NavMeshRegionMask(0), PathQuality::Good, &gated);
+    result = finder.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(5)),
+                             false, FP::Zero(), NavMeshRegionMask(0), PathQuality::Good, &gated);
     CHECK(result.Result == FindPathResult::Code::InvalidEndPosition);
 }
 
@@ -446,18 +470,20 @@ TEST_CASE("PathFinder uses off-mesh links") {
     rr::test::InstallMathDerivedTables();
     NavMesh mesh = CorridorMesh();
     // A cheap link from the first cell straight into the last one.
-    const int startTriangle = mesh.FindTriangle2D(V3(Half(1), F(0), FP::FromRaw(20000)), NavMeshRegionMask::Default(), true);
-    const int endTriangle = mesh.FindTriangle2D(V3(Half(5), F(0), Half(5)), NavMeshRegionMask::Default(), true);
+    const int startTriangle = mesh.FindTriangle2D(V3(Half(1), F(0), FP::FromRaw(20000)),
+                                                  NavMeshRegionMask::Default(), true);
+    const int endTriangle =
+        mesh.FindTriangle2D(V3(Half(5), F(0), Half(5)), NavMeshRegionMask::Default(), true);
     CHECK(startTriangle >= 0 && endTriangle >= 0);
-    mesh.Links.push_back({V3(Half(1), F(0), FP::FromRaw(20000)), V3(Half(5), F(0), Half(5)), endTriangle,
-                          FP::_0_10(), NavMeshRegionMask(0), "shortcut"});
+    mesh.Links.push_back({V3(Half(1), F(0), FP::FromRaw(20000)), V3(Half(5), F(0), Half(5)),
+                          endTriangle, FP::_0_10(), NavMeshRegionMask(0), "shortcut"});
     mesh.Triangles[static_cast<std::size_t>(startTriangle)].Links.push_back(0);
 
     MailboxSet8 mailbox(64);
     PathFinder finder(1024, 256, RawPathAllocationStrategy::Fixed);
-    const FindPathResult result =
-        finder.FindPath(&mailbox, V3(Half(1), F(0), FP::FromRaw(20000)), V3(Half(5), F(0), FP::FromRaw(170000)),
-                        false, FP::Zero(), NavMeshRegionMask::Default(), PathQuality::Good, &mesh);
+    const FindPathResult result = finder.FindPath(
+        &mailbox, V3(Half(1), F(0), FP::FromRaw(20000)), V3(Half(5), F(0), FP::FromRaw(170000)),
+        false, FP::Zero(), NavMeshRegionMask::Default(), PathQuality::Good, &mesh);
     CHECK(result.Result == FindPathResult::Code::Success);
     bool usesLink = false;
     for (int i = 0; i < finder.PathSize(); ++i) {
@@ -471,11 +497,13 @@ TEST_CASE("PathFinder reports a full fixed raw path") {
     const NavMesh corridor = CorridorMesh();
     MailboxSet8 mailbox(64);
     PathFinder small(1024, 3, RawPathAllocationStrategy::Fixed);
-    FindPathResult result = small.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(5)), false,
-                                           FP::Zero(), NavMeshRegionMask::Default(), PathQuality::Good, &corridor);
+    FindPathResult result =
+        small.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(5)), false,
+                       FP::Zero(), NavMeshRegionMask::Default(), PathQuality::Good, &corridor);
     CHECK(result.Result == FindPathResult::Code::PathTooLong);
     PathFinder growing(1024, 3, RawPathAllocationStrategy::Allocating);
-    result = growing.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(5)), false, FP::Zero(),
-                              NavMeshRegionMask::Default(), PathQuality::Good, &corridor);
+    result =
+        growing.FindPath(&mailbox, V3(Half(1), F(0), Half(1)), V3(Half(5), F(0), Half(5)), false,
+                         FP::Zero(), NavMeshRegionMask::Default(), PathQuality::Good, &corridor);
     CHECK(result.Result == FindPathResult::Code::Success && growing.PathSize() == 3);
 }

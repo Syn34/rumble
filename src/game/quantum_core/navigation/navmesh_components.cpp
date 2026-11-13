@@ -68,4 +68,89 @@ void NavMeshAvoidanceObstacle::Serialize(void* ptr, IDeterministicFrameSerialize
     FPVector2::Serialize(&obstacle->_velocity, serializer);
 }
 
+// 0x7cf826c
+NavMeshPathfinder::WaypointList NavMeshPathfinder::GetWaypoints(const IFrameHeap& heap) const {
+    WaypointList list;
+    if (_waypointCapacity == 0) {
+        return list;
+    }
+    auto* block = static_cast<std::uint8_t*>(heap.Void(_waypoints));
+    list.Count = _waypointCount;
+    list.Capacity = _waypointCapacity;
+    list.Points = reinterpret_cast<FPVector3*>(block);
+    list.Flags = block + static_cast<std::size_t>(_waypointCapacity) * sizeof(FPVector3);
+    list.Links = reinterpret_cast<std::int16_t*>(list.Flags + _waypointCapacity);
+    return list;
+}
+
+// 0x7cf8114
+bool NavMeshPathfinder::CurrentWaypointHasFlag(const IFrameHeap& heap,
+                                               WaypointFlag waypointFlag) const {
+    if (_active != 1 || _waypointIndex >= _waypointCount) {
+        return false;
+    }
+    const WaypointList list = GetWaypoints(heap);
+    const std::uint8_t flags = list.Count > _waypointIndex ? list.Flags[_waypointIndex] : 0;
+    return (flags & static_cast<std::uint8_t>(waypointFlag)) != 0;
+}
+
+// 0x7cf81c8
+FPVector3 NavMeshPathfinder::GetWaypoint(const IFrameHeap& heap, int index) const {
+    const WaypointList list = GetWaypoints(heap);
+    return list.Count > index ? list.Points[index] : FPVector3::Zero();
+}
+
+// 0x7cf818c
+std::uint8_t NavMeshPathfinder::GetWaypointFlags(const IFrameHeap& heap, int index) const {
+    const WaypointList list = GetWaypoints(heap);
+    return list.Count > index ? list.Flags[index] : std::uint8_t{0};
+}
+
+// 0x7cf82d4
+int NavMeshPathfinder::GetWaypointLink(const IFrameHeap& heap, int index) const {
+    const WaypointList list = GetWaypoints(heap);
+    return list.Count > index ? list.Links[index] : -1;
+}
+
+// 0x7cf87e8
+void NavMeshPathfinder::AddWaypoint(const IFrameHeap& heap, const FPVector3& position,
+                                    std::uint8_t flags, int link) {
+    const WaypointList list = GetWaypoints(heap);
+    list.Points[_waypointCount] = position;
+    list.Flags[_waypointCount] = flags;
+    list.Links[_waypointCount] = static_cast<std::int16_t>(link);
+    ++_waypointCount;
+}
+
+// 0x7cf8310
+bool NavMeshPathfinder::SetWaypointsCapacity(IFrameHeap& heap, std::uint8_t newCapacity) {
+    const std::uint8_t oldCapacity = _waypointCapacity;
+    if (oldCapacity == newCapacity) {
+        return false;
+    }
+    _waypointCount = 0;
+    _waypointCapacity = newCapacity;
+    if (_waypoints != Ptr::Null()) {
+        heap.Free(_waypoints);
+        _waypoints = Ptr::Null();
+    }
+    if (_waypointCapacity != 0) {
+        // Uncertain: the generic allocation helper is assumed to clear the block.
+        _waypoints = heap.AllocateAndClearPtr(_waypointCapacity * 27);
+    }
+    return true;
+}
+
+// 0x7cf8868
+void NavMeshPathfinder::Clear(const FPVector3& entryPosition, NavMeshSteeringAgent* steeringAgent) {
+    _inputTarget = entryPosition;
+    _active = 0;
+    _waypointIndex = 0;
+    _waypointCount = 0;
+    _internalTarget = entryPosition;
+    if (steeringAgent != nullptr) {
+        steeringAgent->Clear();
+    }
+}
+
 } // namespace Quantum

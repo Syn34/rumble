@@ -25,6 +25,7 @@ add_library(rr_quantum_core
     navigation/path_finder.cpp
     navigation/navmesh_components.cpp
     navigation/navigation.cpp
+    path_utils.cpp
     entity_ref.cpp
     component_set.cpp
     component_type_id.cpp

@@ -96,10 +96,9 @@ struct ActiveVertex {
     // 0x7d29de0 - where the path crosses into `index`: the triangle centre (Fast, or no
     // portal), the point on the portal closest to the parent (Good), or where the
     // parent->goal line crosses the portal / the portal end nearer the goal (Best).
-    static FPVector3 CreatePivot(int index, int portalLeft, int portalRight,
-                                 const FPVector3& start, const FPVector3& goal,
-                                 const ActiveVertex* parent, PathQuality quality,
-                                 const NavMesh& navmesh);
+    static FPVector3 CreatePivot(int index, int portalLeft, int portalRight, const FPVector3& start,
+                                 const FPVector3& goal, const ActiveVertex* parent,
+                                 PathQuality quality, const NavMesh& navmesh);
 
     // 0x7d2a398 - G of a vertex: parent's G plus the distance to it, scaled by
     // `costFactor` unless that is <= 0 or exactly 1.
@@ -119,7 +118,7 @@ struct ActiveVertex {
 
 // Binary min-heap of ActiveVertex by F, 1-based (slot 0 unused).
 class ActiveHeap {
-public:
+  public:
     // 0x7d28240
     explicit ActiveHeap(int capacity);
 
@@ -139,7 +138,7 @@ public:
     // 0x7d284a4
     void Free();
 
-private:
+  private:
     void SiftUp(ActiveVertex* node, int slot);
 
     int size_ = 1;                    // _size: next free slot
@@ -148,7 +147,7 @@ private:
 };
 
 class PathFinder {
-public:
+  public:
     // 0x7d28034
     PathFinder(int openNodesSize, int rawPathSize,
                RawPathAllocationStrategy rawPathAllocationStrategy);
@@ -182,7 +181,7 @@ public:
     static std::int64_t CalculateTriangleArea(const FPVector3& a, const FPVector3& b,
                                               const FPVector3& c);
 
-private:
+  private:
     // 0x7d267d8
     void Funnel(const FPVector3& start, const FPVector3& end, NavMeshRegionMask regionMask,
                 bool calculateNormals);
@@ -206,27 +205,27 @@ private:
     void SetClosed(int triangle);
     void PushRawPath(const PathVertex& vertex);
 
-    std::vector<FunnelNode> funnelLeft_;  // _funnelLeft
-    std::vector<FunnelNode> funnelRight_; // _funnelRight
-    int funnelIndex_ = 0;                 // _funnelIndex
-    std::vector<PathVertex> funnel_;      // _funnel
-    int funneledPathSize_ = 0;            // _funneledPathSize
-    ActiveHeap open_;                     // _open
-    std::vector<ActiveVertex*> active_;   // _active: vertex per triangle
+    std::vector<FunnelNode> funnelLeft_;                          // _funnelLeft
+    std::vector<FunnelNode> funnelRight_;                         // _funnelRight
+    int funnelIndex_ = 0;                                         // _funnelIndex
+    std::vector<PathVertex> funnel_;                              // _funnel
+    int funneledPathSize_ = 0;                                    // _funneledPathSize
+    ActiveHeap open_;                                             // _open
+    std::vector<ActiveVertex*> active_;                           // _active: vertex per triangle
     std::vector<std::unique_ptr<ActiveVertex[]>> verticesBlocks_; // _verticesBlocks
-    int verticesCount_ = 0;               // _verticesCount
+    int verticesCount_ = 0;                                       // _verticesCount
     std::vector<std::uint8_t> closedSet_; // _closedSet: one bit per triangle
     int rawPathSize_ = 0;                 // _rawPathSize
     std::vector<PathVertex> rawPath_;     // _rawPath
     RawPathAllocationStrategy rawPathAllocationStrategy_;
-    FPVector3 posStart_; // pos_start
-    FPVector3 posEnd_;   // pos_end
-    int triStart_ = 0;   // tri_start
-    int triEnd_ = 0;     // tri_end
+    FPVector3 posStart_;                  // pos_start
+    FPVector3 posEnd_;                    // pos_end
+    int triStart_ = 0;                    // tri_start
+    int triEnd_ = 0;                      // tri_end
     ActiveVertex* vertexStart_ = nullptr; // vertex_start
     ActiveVertex* vertexEnd_ = nullptr;   // vertex_end
-    bool popEnd_ = false;   // pop_end
-    bool findDone_ = false; // find_done
+    bool popEnd_ = false;                 // pop_end
+    bool findDone_ = false;               // find_done
     const NavMesh* navmesh_ = nullptr;
 };
 

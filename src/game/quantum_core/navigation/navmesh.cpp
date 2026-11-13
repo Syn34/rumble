@@ -64,8 +64,9 @@ void NavMesh::Loaded(const NavMeshBinaryData* dataAsset) {
     }
     // BinaryData.CreateByteStream: decompress if needed, then read.
     std::vector<std::uint8_t> bytes =
-        dataAsset->IsCompressed ? Photon::Deterministic::ByteUtils::GZipDecompressBytes(dataAsset->Data)
-                                : dataAsset->Data;
+        dataAsset->IsCompressed
+            ? Photon::Deterministic::ByteUtils::GZipDecompressBytes(dataAsset->Data)
+            : dataAsset->Data;
     try {
         ByteStream stream(&bytes);
         Serialize(stream, false);
@@ -300,7 +301,8 @@ bool NavMesh::LineOfSight(const FPVector3& positionStart, const FPVector3& posit
         int next = -1;
         for (const NavMeshPortal& portal : Element(Triangles, current).Neighbors) {
             const int neighbor = portal.Neighbor;
-            if (!Element(Triangles, neighbor).Regions.IsSubset(regionMask) || neighbor == previous) {
+            if (!Element(Triangles, neighbor).Regions.IsSubset(regionMask) ||
+                neighbor == previous) {
                 continue;
             }
             if (considerCost && Element(Triangles, neighbor).Cost != startCost) {
@@ -346,7 +348,9 @@ bool NavMesh::Raycast2D(FPVector2 origin, FPVector2 direction, FP distance,
     }
     const FPVector2 end{origin.X + direction.X * distance, origin.Y + direction.Y * distance};
 
-    const auto cellOf = [this](FP value, FP offset) { return ((value - offset) / GridNodeSize).AsInt(); };
+    const auto cellOf = [this](FP value, FP offset) {
+        return ((value - offset) / GridNodeSize).AsInt();
+    };
     const int startX = cellOf(origin.X, WorldOffset.X);
     const int startY = cellOf(origin.Y, WorldOffset.Y);
     const int endX = cellOf(end.X, WorldOffset.X);
@@ -375,7 +379,8 @@ bool NavMesh::Raycast2D(FPVector2 origin, FPVector2 direction, FP distance,
                 FP normalizedDistance;
                 // The hit point is written straight into `hit` (as the original does), so a
                 // miss leaves it as the last test's output.
-                if (FPCollision::LineIntersectsLine(origin, end, FPVector2(border.V0.X, border.V0.Z),
+                if (FPCollision::LineIntersectsLine(origin, end,
+                                                    FPVector2(border.V0.X, border.V0.Z),
                                                     FPVector2(border.V1.X, border.V1.Z), hit,
                                                     hitDistance, normalizedDistance)) {
                     const FP distanceSqr = (hit - origin).SqrMagnitude();
@@ -455,7 +460,8 @@ FPVector2 NavMesh::MovePositionIntoNavmesh(FPVector2 position, FPVector2 newPosi
                     continue;
                 }
                 const FPVector2 onBorder = FPCollision::ClosestPointOnSegment(
-                    newPosition, FPVector2(border.V0.X, border.V0.Z), FPVector2(border.V1.X, border.V1.Z));
+                    newPosition, FPVector2(border.V0.X, border.V0.Z),
+                    FPVector2(border.V1.X, border.V1.Z));
                 const FPVector2 offset = onBorder - newPosition;
                 const FP distanceSqr = offset.SqrMagnitude();
                 if (distanceSqr < closestDistanceSqr) {

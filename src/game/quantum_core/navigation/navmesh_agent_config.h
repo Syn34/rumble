@@ -30,7 +30,7 @@ enum class VerticalPositioningType : std::uint8_t { None = 0, Navmesh = 1, Physi
 enum class RawPathAllocationStrategy : std::uint8_t { Fixed = 0, Allocating = 1 };
 
 class NavMeshAgentConfig {
-public:
+  public:
     // GUID of the built-in default config asset.
     static constexpr std::int64_t DEFAULT_ID = 2;
 

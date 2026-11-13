@@ -77,6 +77,12 @@ local no-ops with documented behaviour.
   Native allocator/utility interfaces. Online-only parts (DeterministicNetwork,
   DeterministicTickInputDecoder, snapshot/checksum-error handling, Protocol wire format) are
   TODO stubs
+- `quantum.core` navigation (176 methods): NavMesh (queries, line of sight, raycast, random
+  points, position correction, ByteStream data format), navmesh data types and region masks,
+  NavMeshAgentConfig, PathFinder (A* over triangles/links with ActiveHeap, funnel string
+  pulling), Navigation avoidance maths (HRVO, velocity candidates, agent avoidance),
+  navigation components' field layouts/accessors and frame-heap waypoints, ByteStream,
+  MailboxSet8, PathUtils. Update loop (Updater/tasks), entity movement and prototypes are TODO
 - Inventory tool with method → address mapping
 - Desktop platform backend; renderer selection (CLI, settings file, automatic fallback)
 - OpenGL and Vulkan backends rendering an identical placeholder scene; frame capture;

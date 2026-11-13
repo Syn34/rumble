@@ -12,6 +12,7 @@
 #include "photon_deterministic/fp.h"
 #include "photon_deterministic/fp_vector2.h"
 #include "photon_deterministic/fp_vector3.h"
+#include "quantum_core/entity_ref.h"
 #include "quantum_core/mailbox_set8.h"
 #include "quantum_core/navigation/navmesh_agent_config.h"
 #include "quantum_core/navigation/navmesh_components.h"
@@ -37,9 +38,9 @@ struct PhysicsBody3D;
 struct CharacterController3D;
 
 class Navigation {
-public:
+  public:
     static constexpr std::int64_t AngularSpeedInstantRotationThreshold = 13107200; // 200
-    static constexpr std::int64_t Epsilon = 65;                                     // FP.EN3
+    static constexpr std::int64_t Epsilon = 65;                                    // FP.EN3
     static constexpr std::int64_t FP_0_25 = 16384;
     static constexpr std::int64_t FP_0_50 = 32768;
     static constexpr std::int64_t FP_0_75 = 49152;
@@ -102,8 +103,7 @@ public:
     // Per-agent working record of a navigation update. Component pointers are null when
     // the entity lacks that component.
     struct Entry {
-        std::int32_t EntityIndex = 0;   // Quantum.EntityRef Entity (Index, Version)
-        std::int32_t EntityVersion = 0;
+        EntityRef Entity;
         FPVector3 Position;
         FP Rotation;
         std::int32_t EntryIndex = 0;
@@ -144,7 +144,7 @@ public:
 
     // Search state owned by one simulation thread.
     class ThreadLocal {
-    public:
+      public:
         // 0x7d2a6ac - a PathFinder sized by Constants.PathFinderSize. (The allocator
         // argument is replaced by owned storage.)
         ThreadLocal(int rawPathSize, Quantum::RawPathAllocationStrategy rawPathAllocationStrategy);
@@ -181,8 +181,8 @@ public:
 
     // 0x7cf993c - NavMesh::LineOfSight without cost restriction.
     static bool LineOfSight(const FPVector3& positionStart, const FPVector3& positionDestination,
-                            NavMeshRegionMask regionMask, const NavMesh& navmesh,
-                            int triangleStart, int triangleDestination);
+                            NavMeshRegionMask regionMask, const NavMesh& navmesh, int triangleStart,
+                            int triangleDestination);
 
     // 0x7cf99cc - NavMesh::Raycast2D in the XZ plane with the thread's mailbox. The
     // original takes a FrameThreadSafe and only uses its thread index.
@@ -281,7 +281,7 @@ public:
     // TODO(0x7cff474, Navigation.Updater.Task_CreateAvoidanceData): ComputeHRVO per pair.
     // TODO(0x7cff600, Navigation.Updater.Task_PreUpdateAgents)
 
-private:
+  private:
     Config config_;
     std::vector<std::unique_ptr<ThreadLocal>> threadLocals_; // Updater.ThreadLocals
 };

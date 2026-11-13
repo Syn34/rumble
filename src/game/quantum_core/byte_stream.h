@@ -21,7 +21,7 @@
 namespace Quantum {
 
 class ByteStream {
-public:
+  public:
     // 0x7d3e5a0 - wraps `buffer` (shared, not copied); position starts at 0.
     explicit ByteStream(std::vector<std::uint8_t>* buffer);
 
@@ -48,7 +48,7 @@ public:
     int Position() const { return position_; }
     int Length() const { return length_; }
 
-private:
+  private:
     std::uint8_t& At(int index);
 
     int position_ = 0; // _position

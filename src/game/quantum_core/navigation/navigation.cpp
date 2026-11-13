@@ -41,7 +41,8 @@ bool LayerVisible(std::int32_t layer, std::int32_t mask) {
 
 void AddCandidate(std::vector<Navigation::VelocityCandidate>& candidates, int& candidateIndex,
                   std::int32_t index1, std::int32_t index2, FP correction, FPVector2 velocity) {
-    candidates.at(static_cast<std::size_t>(candidateIndex)) = {index1, index2, correction, velocity};
+    candidates.at(static_cast<std::size_t>(candidateIndex)) = {index1, index2, correction,
+                                                               velocity};
     ++candidateIndex;
 }
 
@@ -88,7 +89,8 @@ Navigation::ThreadLocal::ThreadLocal(int rawPathSize,
 
 // 0x7d2a780
 void Navigation::ThreadLocal::AllocateMailboxBuffer(const NavMesh& navmesh) {
-    const int capacity = std::max(navmesh.BorderCount(), static_cast<int>(navmesh.Triangles.size()));
+    const int capacity =
+        std::max(navmesh.BorderCount(), static_cast<int>(navmesh.Triangles.size()));
     if (Mailbox == nullptr) {
         Mailbox = std::make_unique<MailboxSet8>(capacity);
     } else if (Mailbox->Capacity() < capacity) {
@@ -146,7 +148,8 @@ bool Navigation::Raycast2D(int threadIndex, const FPVector3& origin, const FPVec
 }
 
 // 0x7cfb3f8
-FPVector3 Navigation::ToVector3(FPVector2 position, const Transform2DVertical& transform2DVertical) {
+FPVector3 Navigation::ToVector3(FPVector2 position,
+                                const Transform2DVertical& transform2DVertical) {
     return {position.X, transform2DVertical.Position, position.Y};
 }
 
@@ -167,7 +170,8 @@ void Navigation::UpdateDesiredVelocity(Entry& entry) {
     if (distance.RawValue() != 0) {
         entry.DesiredDirection = {toWaypointX / distance, toWaypointZ / distance};
         const FP maxSpeed = steering.MaxSpeed();
-        entry.DesiredVelocity = {maxSpeed * entry.DesiredDirection.X, maxSpeed * entry.DesiredDirection.Y};
+        entry.DesiredVelocity = {maxSpeed * entry.DesiredDirection.X,
+                                 maxSpeed * entry.DesiredDirection.Y};
         entry.DesiredSpeed = maxSpeed;
     } else {
         entry.DesiredVelocity = steering._velocity;
@@ -347,12 +351,14 @@ void Navigation::ComputeHRVO(const Entry& a, const Entry& b, std::int64_t radius
     if (relX * desiredDeltaY > relZ * desiredDeltaX) {
         const FP s = (hrvoA.Left.Y * velocityDeltaX - hrvoA.Left.X * velocityDeltaY) * weightA;
         hrvoA.Apex = {bVelocity.X + s * hrvoA.Right.X, bVelocity.Y + s * hrvoA.Right.Y};
-        const FP t = ((-velocityDeltaX) * hrvoB.Left.Y - (-velocityDeltaY) * hrvoB.Left.X) * weightB;
+        const FP t =
+            ((-velocityDeltaX) * hrvoB.Left.Y - (-velocityDeltaY) * hrvoB.Left.X) * weightB;
         hrvoB.Apex = {aVelocity.X + t * hrvoB.Right.X, aVelocity.Y + t * hrvoB.Right.Y};
     } else {
         const FP s = (hrvoA.Right.Y * velocityDeltaX - hrvoA.Right.X * velocityDeltaY) * weightA;
         hrvoA.Apex = {bVelocity.X + s * hrvoA.Left.X, bVelocity.Y + s * hrvoA.Left.Y};
-        const FP t = ((-velocityDeltaX) * hrvoB.Right.Y - (-velocityDeltaY) * hrvoB.Right.X) * weightB;
+        const FP t =
+            ((-velocityDeltaX) * hrvoB.Right.Y - (-velocityDeltaY) * hrvoB.Right.X) * weightB;
         hrvoB.Apex = {aVelocity.X + t * hrvoB.Left.X, aVelocity.Y + t * hrvoB.Left.Y};
     }
 }
@@ -364,11 +370,13 @@ void Navigation::Quicksort(std::vector<VelocityCandidate>& candidates, int lo, i
         int store = lo;
         for (int i = lo; i < hi; ++i) {
             if (candidates.at(static_cast<std::size_t>(i)).Correction < pivot) {
-                std::swap(candidates[static_cast<std::size_t>(store)], candidates[static_cast<std::size_t>(i)]);
+                std::swap(candidates[static_cast<std::size_t>(store)],
+                          candidates[static_cast<std::size_t>(i)]);
                 ++store;
             }
         }
-        std::swap(candidates.at(static_cast<std::size_t>(store)), candidates[static_cast<std::size_t>(hi)]);
+        std::swap(candidates.at(static_cast<std::size_t>(store)),
+                  candidates[static_cast<std::size_t>(hi)]);
         Quicksort(candidates, lo, store - 1);
         lo = store + 1;
     }
@@ -376,9 +384,9 @@ void Navigation::Quicksort(std::vector<VelocityCandidate>& candidates, int lo, i
 
 // 0x7d2a910
 void Navigation::GetCandidates0(FPVector2 preferredVelocity, FP preferredSpeed,
-                                FP /*preferredDistanceSqr*/, int voIndex, const VelocityObstacle& vo,
-                                int& candidateIndex, std::vector<VelocityCandidate>& candidates,
-                                int maxCandidates) {
+                                FP /*preferredDistanceSqr*/, int voIndex,
+                                const VelocityObstacle& vo, int& candidateIndex,
+                                std::vector<VelocityCandidate>& candidates, int maxCandidates) {
     if (candidateIndex >= maxCandidates) {
         return;
     }
@@ -404,7 +412,8 @@ void Navigation::GetCandidates0(FPVector2 preferredVelocity, FP preferredSpeed,
     const FP reach = preferredSpeed * 5;
     const FPVector2 legEnd{apex.X + leg.X * reach, apex.Y + leg.Y * reach};
     FPVector2 point;
-    if (!FPCollision::LineIntersectsLine(FPVector2::Zero(), preferredVelocity, apex, legEnd, point)) {
+    if (!FPCollision::LineIntersectsLine(FPVector2::Zero(), preferredVelocity, apex, legEnd,
+                                         point)) {
         return;
     }
     if (candidateIndex >= maxCandidates) {
@@ -533,9 +542,10 @@ bool Navigation::CalculateAgentAvoidance(ThreadLocal& threadLocal, const Entry& 
     if (config.AvoidanceQuality >= Quantum::AvoidanceQuality::Good) {
         if (config.AvoidanceCanReduceSpeed) {
             voIndex = 0;
-            for (const VelocityObstacle* vo = entry.VoStart; vo != nullptr; vo = vo->Next, ++voIndex) {
-                GetCandidates0(preferredVelocity, preferredSpeed, preferredDistanceSqr, voIndex, *vo,
-                               count, candidates, maxCandidates());
+            for (const VelocityObstacle* vo = entry.VoStart; vo != nullptr;
+                 vo = vo->Next, ++voIndex) {
+                GetCandidates0(preferredVelocity, preferredSpeed, preferredDistanceSqr, voIndex,
+                               *vo, count, candidates, maxCandidates());
             }
         }
         voIndex = 0;
@@ -545,11 +555,13 @@ bool Navigation::CalculateAgentAvoidance(ThreadLocal& threadLocal, const Entry& 
         }
         if (config.AvoidanceQuality >= Quantum::AvoidanceQuality::Best) {
             voIndex = 0;
-            for (const VelocityObstacle* vo1 = entry.VoStart; vo1 != nullptr; vo1 = vo1->Next, ++voIndex) {
+            for (const VelocityObstacle* vo1 = entry.VoStart; vo1 != nullptr;
+                 vo1 = vo1->Next, ++voIndex) {
                 int otherIndex = 0;
-                for (const VelocityObstacle* vo2 = vo1->Next; vo2 != nullptr; vo2 = vo2->Next, ++otherIndex) {
-                    GetCandidates3(preferredVelocity, preferredDistanceSqr, voIndex, *vo1, otherIndex,
-                                   *vo2, count, candidates, maxCandidates());
+                for (const VelocityObstacle* vo2 = vo1->Next; vo2 != nullptr;
+                     vo2 = vo2->Next, ++otherIndex) {
+                    GetCandidates3(preferredVelocity, preferredDistanceSqr, voIndex, *vo1,
+                                   otherIndex, *vo2, count, candidates, maxCandidates());
                 }
             }
         }
@@ -618,8 +630,10 @@ FPVector2 Navigation::RunAvoidanceOnAgent(ThreadLocal& threadLocal, const Entry&
     // Close to the waypoint, blend back towards the unavoided velocity so agents can
     // still reach it.
     if (config.ReduceAvoidanceAtWaypoints && config.ReduceAvoidanceFactor > FP::Zero()) {
-        const FP toWaypointX = (entry.Position.X - waypoint.X) + entry.DesiredVelocity.X * deltaTime;
-        const FP toWaypointZ = (entry.Position.Z - waypoint.Z) + entry.DesiredVelocity.Y * deltaTime;
+        const FP toWaypointX =
+            (entry.Position.X - waypoint.X) + entry.DesiredVelocity.X * deltaTime;
+        const FP toWaypointZ =
+            (entry.Position.Z - waypoint.Z) + entry.DesiredVelocity.Y * deltaTime;
         const FP distanceSqr = toWaypointZ * toWaypointZ + toWaypointX * toWaypointX;
         const FP reduceRadius =
             config.ReduceAvoidanceFactor * FPMath::Max(FP::Zero(), config.AvoidanceRadius);
@@ -630,8 +644,9 @@ FPVector2 Navigation::RunAvoidanceOnAgent(ThreadLocal& threadLocal, const Entry&
             if (t < deltaTime) {
                 blend = deltaTime;
             }
-            newVelocity = {entry.DesiredVelocity.X + (newVelocity.X - entry.DesiredVelocity.X) * blend,
-                           entry.DesiredVelocity.Y + (newVelocity.Y - entry.DesiredVelocity.Y) * blend};
+            newVelocity = {
+                entry.DesiredVelocity.X + (newVelocity.X - entry.DesiredVelocity.X) * blend,
+                entry.DesiredVelocity.Y + (newVelocity.Y - entry.DesiredVelocity.Y) * blend};
         }
     }
 

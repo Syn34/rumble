@@ -26,7 +26,8 @@ FPVector3 NavMeshVertex::CalculateNormal(int vertexIndex, const NavMesh& navmesh
                                          NavMeshRegionMask regionMask) {
     FPVector3 sum = FPVector3::Zero();
     int activeBorders = 0;
-    for (const std::int32_t border : navmesh.Vertices.at(static_cast<std::size_t>(vertexIndex)).Borders) {
+    for (const std::int32_t border :
+         navmesh.Vertices.at(static_cast<std::size_t>(vertexIndex)).Borders) {
         if (navmesh.IsBorderActive(border, regionMask)) {
             sum = sum + navmesh.Borders.at(static_cast<std::size_t>(border)).Normal;
             ++activeBorders;

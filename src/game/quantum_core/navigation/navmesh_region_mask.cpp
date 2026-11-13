@@ -20,8 +20,8 @@ std::string NavMeshRegionMask::ToString() const {
 }
 
 // 0x7d30c80
-void NavMeshRegionMask::Serialize(void* ptr,
-                                  Photon::Deterministic::IDeterministicFrameSerializer* serializer) {
+void NavMeshRegionMask::Serialize(
+    void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer) {
     auto* mask = static_cast<NavMeshRegionMask*>(ptr);
     serializer->Stream().Serialize(&mask->_regions);
 }

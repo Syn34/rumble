@@ -46,10 +46,14 @@ struct NavMeshRegionMask {
     }
 
     // 0x7d30d80
-    constexpr bool IsRegionEnabled(int region) const { return ((_regions >> (region & 63)) & 1) != 0; }
+    constexpr bool IsRegionEnabled(int region) const {
+        return ((_regions >> (region & 63)) & 1) != 0;
+    }
 
     // 0x7d30d90 - every region of this mask is also in `other`.
-    constexpr bool IsSubset(NavMeshRegionMask other) const { return (_regions & ~other._regions) == 0; }
+    constexpr bool IsSubset(NavMeshRegionMask other) const {
+        return (_regions & ~other._regions) == 0;
+    }
 
     // 0x7d30da0 - note: "clear" re-enables every region.
     constexpr void Clear() { _regions = ~std::uint64_t{0}; }
@@ -64,7 +68,8 @@ struct NavMeshRegionMask {
     std::string ToString() const;
 
     // 0x7d30c80 - frame serialisation: the 64-bit mask through the BitStream.
-    static void Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer);
+    static void Serialize(void* ptr,
+                          Photon::Deterministic::IDeterministicFrameSerializer* serializer);
 
     // 0x7d30e54 - asset data serialisation (ulong).
     void Serialize(ByteStream& stream, bool write);

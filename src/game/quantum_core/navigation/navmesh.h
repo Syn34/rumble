@@ -50,7 +50,7 @@ struct NavMeshBinaryData {
 };
 
 class NavMesh {
-public:
+  public:
     // AssetObject part (Quantum.AssetObject.Identifier): the asset's GUID and path.
     AssetGuid Guid;
     std::string Path;
@@ -137,8 +137,8 @@ public:
                      bool considerCost) const;
 
     // 0x7ce48f4 - first active border hit by the ray (XZ, as FPVector2 X/Y).
-    bool Raycast2D(FPVector2 origin, FPVector2 direction, FP distance,
-                   NavMeshRegionMask regionMask, MailboxSet8* mailbox, FPVector2& hit) const;
+    bool Raycast2D(FPVector2 origin, FPVector2 direction, FP distance, NavMeshRegionMask regionMask,
+                   MailboxSet8* mailbox, FPVector2& hit) const;
 
     // 0x7ce4c18 - if `newPosition` is off the mesh, pulls it towards the closest active
     // border point (fully when correction >= 1, else lerped by `correction`).

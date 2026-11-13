@@ -13,6 +13,7 @@
 #include "photon_deterministic/fp_vector3.h"
 #include "photon_deterministic/nullable_fp.h"
 #include "quantum_core/asset_guid.h"
+#include "quantum_core/frame_heap.h"
 #include "quantum_core/navigation/navmesh_region_mask.h"
 #include "quantum_core/ptr.h"
 
@@ -24,6 +25,7 @@ class IDeterministicFrameSerializer;
 
 namespace Quantum {
 
+using Allocator::IFrameHeap;
 using Photon::Deterministic::FP;
 using Photon::Deterministic::FPVector2;
 using Photon::Deterministic::FPVector3;
@@ -72,7 +74,8 @@ struct NavMeshSteeringAgent {
     void Clear() { _velocity = FPVector2::Zero(); }
 
     // 0x7d30ae0 - _maxSpeed, _acceleration, _velocity.
-    static void Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer);
+    static void Serialize(void* ptr,
+                          Photon::Deterministic::IDeterministicFrameSerializer* serializer);
 
     // TODO(0x7d30b28, Quantum.NavMeshSteeringAgent.OnAdded): component callback; checks the
     // entity has a pathfinder and logs otherwise; needs FrameBase.
@@ -115,7 +118,8 @@ struct NavMeshAvoidanceAgent {
 
     // 0x7cf8cd0 - _priority, _avoidanceLayer, _avoidanceMask, _desiredDirection (the
     // initialised flags and the desired speed are not serialised).
-    static void Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer);
+    static void Serialize(void* ptr,
+                          Photon::Deterministic::IDeterministicFrameSerializer* serializer);
 
     // TODO(0x7cf8e6c, Quantum.NavMeshAvoidanceAgent.OnAdded): component callback; applies the
     // pathfinder's config and checks for a steering agent; needs FrameBase.
@@ -142,7 +146,8 @@ struct NavMeshAvoidanceObstacle {
     void SetRadius(FP value) { _radius = value; }
 
     // 0x7cf7c3c - _disabled, _avoidanceLayer, _radius, _velocity.
-    static void Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer);
+    static void Serialize(void* ptr,
+                          Photon::Deterministic::IDeterministicFrameSerializer* serializer);
 
     // TODO(0x7cf7d80, Quantum.NavMeshAvoidanceObstacle.OnAdded): component callback; checks the
     // entity has a transform; needs FrameBase.
@@ -178,30 +183,61 @@ struct NavMeshPathfinder {
     // 0x7cf7e2c
     void SetWaypointDetectionDistanceSqr(FP value) { _waypointDetectionDistanceSqr = value; }
 
+    // The waypoint arrays in the frame heap (Navigation.WaypointList). The heap block
+    // holds Capacity points, then Capacity flags, then Capacity links (27 bytes each).
+    struct WaypointList {
+        std::uint8_t Count = 0;
+        std::uint8_t Capacity = 0;
+        std::uint8_t* Flags = nullptr;
+        FPVector3* Points = nullptr;
+        std::int16_t* Links = nullptr;
+    };
+
+    // Waypoint access goes through the frame's heap; the original takes the frame and
+    // uses its heap, callers here pass that heap.
+
+    // 0x7cf826c - empty list (all null) while no buffer is allocated.
+    WaypointList GetWaypoints(const IFrameHeap& heap) const;
+    // 0x7cf8114 - false when inactive or past the last waypoint.
+    bool CurrentWaypointHasFlag(const IFrameHeap& heap, WaypointFlag waypointFlag) const;
+    // 0x7cf810c
+    bool IsOnLink(const IFrameHeap& heap) const {
+        return CurrentWaypointHasFlag(heap, WaypointFlag::LinkEnd);
+    }
+    // 0x7cf81c8 - zero for an index past the count.
+    FPVector3 GetWaypoint(const IFrameHeap& heap, int index) const;
+    // 0x7cf818c - 0 for an index past the count.
+    std::uint8_t GetWaypointFlags(const IFrameHeap& heap, int index) const;
+    // 0x7cf82d4 - -1 for an index past the count.
+    int GetWaypointLink(const IFrameHeap& heap, int index) const;
+    // 0x7cf8714
+    void ResetWaypoints() {
+        _waypointIndex = 0;
+        _waypointCount = 0;
+    }
+    // 0x7cf87e8 - appends without a capacity check (as the original).
+    void AddWaypoint(const IFrameHeap& heap, const FPVector3& position, std::uint8_t flags,
+                     int link);
+    // 0x7cf8310 - reallocates the buffer (dropping the waypoints); true if it changed.
+    bool SetWaypointsCapacity(IFrameHeap& heap, std::uint8_t newCapacity);
+    // 0x7cf8868 - stops at the entry's position (both targets) and clears the steering
+    // agent's velocity. The original takes the navigation Entry; the two values it reads
+    // from it are passed directly.
+    void Clear(const FPVector3& entryPosition, NavMeshSteeringAgent* steeringAgent);
+
     // TODO(0x7cf7e34, Quantum.NavMeshPathfinder.Create): builds a cleared component with
-    // targets at FP.UseableMin, applies SetConfig and the default region mask; needs FrameBase.
-    // TODO(0x7cf810c, Quantum.NavMeshPathfinder.IsOnLink): CurrentWaypointHasFlag(LinkEnd).
-    // TODO(0x7cf8114, Quantum.NavMeshPathfinder.CurrentWaypointHasFlag): flag of the current
-    // waypoint (false when inactive or past the last); needs the frame heap waypoint list.
-    // TODO(0x7cf81c8, Quantum.NavMeshPathfinder.GetWaypoint): waypoint position or zero.
-    // TODO(0x7cf818c, Quantum.NavMeshPathfinder.GetWaypointFlags): waypoint flags or 0.
-    // TODO(0x7cf82d4, Quantum.NavMeshPathfinder.GetWaypointLink): waypoint link or -1.
+    // targets at FP.UseableMin, applies SetConfig and the default region mask; needs the
+    // asset database (FrameBase.FindAsset is not available yet).
     // TODO(0x7cf7f2c, Quantum.NavMeshPathfinder.SetConfig): stores the config GUID, resizes the
-    // waypoint buffer to CachedWaypointCount and forwards to the steering/avoidance agents of
-    // the entity; needs FrameBase.
+    // waypoint buffer to CachedWaypointCount and forwards to the entity's steering/avoidance
+    // agents; needs FrameBase.FindAsset.
     // TODO(0x7cf8510, Quantum.NavMeshPathfinder.SetTarget): records the target and navmesh and
-    // schedules a path search; needs FrameBase.
+    // schedules a path search; needs FrameBase.FindAsset for the config.
     // TODO(0x7cf871c, Quantum.NavMeshPathfinder.Stop): deactivates and optionally zeroes the
-    // entity's velocity; needs FrameBase.
-    // TODO(0x7cf8714, Quantum.NavMeshPathfinder.ResetWaypoints): clears count and index.
-    // TODO(0x7cf87e8, Quantum.NavMeshPathfinder.AddWaypoint): appends to the heap waypoint list.
-    // TODO(0x7cf8868, Quantum.NavMeshPathfinder.Clear): frees the waypoint buffer.
-    // TODO(0x7cf826c, Quantum.NavMeshPathfinder.GetWaypoints): resolves the heap block into
-    // a WaypointList (count, capacity, flags, points, links); needs the frame heap.
-    // TODO(0x7cf8310, Quantum.NavMeshPathfinder.SetWaypointsCapacity): reallocates the heap block.
+    // entity's velocity; needs the physics body components.
     // TODO(0x7cf88b0, Quantum.NavMeshPathfinder.Serialize): byte fields, the heap pointer
     // with its waypoint arrays, then the FP/GUID/mask/vector fields; needs FrameSerializer
-    // pointer serialisation.
+    // pointer serialisation of raw blocks.
     // TODO(0x7cf8c80, Quantum.NavMeshPathfinder.OnAdded): component callback.
     // TODO(0x7cf8c84, Quantum.NavMeshPathfinder.OnRemoved): frees the waypoint buffer.
 };

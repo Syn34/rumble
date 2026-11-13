@@ -68,7 +68,7 @@ struct NavMeshTriangle {
 struct NavMeshBorder {
     FPVector3 V0;
     FPVector3 V1;
-    FPVector3 Normal; // points into the walkable area
+    FPVector3 Normal;                 // points into the walkable area
     NavMeshRegionMask Regions;        // regions of the triangle the border belongs to
     NavMeshRegionMask RegionsOffmesh; // regions on the other side of the border
 

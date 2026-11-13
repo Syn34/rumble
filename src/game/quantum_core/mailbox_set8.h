@@ -15,7 +15,7 @@
 namespace Quantum {
 
 class MailboxSet8 {
-public:
+  public:
     // 0x7d307b8 - `capacity` stamps, all clear; key 0.
     explicit MailboxSet8(int capacity);
 
@@ -38,7 +38,7 @@ public:
     // 0x7d3094c - the opposite of AlreadyChecked (and marks the same way).
     bool ShouldCheck(int index);
 
-private:
+  private:
     std::uint8_t key_ = 0;          // _key
     std::vector<std::uint8_t> set_; // _set
     int capacity_ = 0;              // _capacity
