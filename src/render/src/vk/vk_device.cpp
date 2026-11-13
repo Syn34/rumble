@@ -117,6 +117,7 @@ struct FrameResources {
     VkFence inFlight = VK_NULL_HANDLE;
     std::vector<VkDescriptorPool> descriptorPools; // grown on demand, reset per frame
     std::size_t activePool = 0;
+    std::uint32_t setsInActivePool = 0;
 };
 
 constexpr std::uint32_t kSetsPerPool = 256;
@@ -289,6 +290,7 @@ public:
         vkResetFences(device_, 1, &frame.inFlight);
         for (VkDescriptorPool pool : frame.descriptorPools) vkResetDescriptorPool(device_, pool, 0);
         frame.activePool = 0;
+        frame.setsInActivePool = 0;
         frame.activeChunk = 0;
         frame.chunkOffset = 0;
         uniformOffset_ = 0;
@@ -1208,6 +1210,12 @@ private:
     VkDescriptorSet AllocateTextureSet() {
         FrameResources& frame = frames_[frameIndex_];
         for (;;) {
+            // Move on before the pool is exhausted: allocating from a full pool is
+            // invalid usage on Vulkan 1.0 without VK_KHR_maintenance1.
+            if (frame.setsInActivePool == kSetsPerPool) {
+                ++frame.activePool;
+                frame.setsInActivePool = 0;
+            }
             const bool freshPool = frame.activePool == frame.descriptorPools.size();
             if (freshPool) {
                 const VkDescriptorPoolSize sizes[] = {
@@ -1230,13 +1238,17 @@ private:
             alloc.pSetLayouts = &textureSetLayout_;
             VkDescriptorSet set = VK_NULL_HANDLE;
             const VkResult result = vkAllocateDescriptorSets(device_, &alloc, &set);
-            if (result == VK_SUCCESS) return set;
+            if (result == VK_SUCCESS) {
+                ++frame.setsInActivePool;
+                return set;
+            }
             if (freshPool) { // an empty pool can't be "full": something else is wrong
                 Check(result, "vkAllocateDescriptorSets");
                 return VK_NULL_HANDLE;
             }
             // Full (Vulkan 1.0 drivers may report this with any error code); next pool.
             ++frame.activePool;
+            frame.setsInActivePool = 0;
         }
     }
 

@@ -379,6 +379,9 @@ FrameStats SceneRenderer::Draw(const Scene& scene, const ResourceLibrary& resour
     render::PipelineHandle boundPipeline;
     MeshId boundMesh = kNoResource;
     int skinnedInstance = -1;
+    bool texturesBound = false;
+    render::TextureHandle boundAlbedo, boundNormal;
+    render::SamplerDesc boundAlbedoSampler, boundNormalSampler;
     for (const DrawItem& item : items) {
         const RenderInstance& inst = scene.Instances()[static_cast<std::size_t>(item.instance)];
         const MeshData& mesh = resources.Mesh(inst.mesh);
@@ -408,9 +411,21 @@ FrameStats SceneRenderer::Draw(const Scene& scene, const ResourceLibrary& resour
             device_.BindIndexBuffer(gpu.indices, gpu.indexType);
             boundMesh = inst.mesh;
         }
-        device_.BindTexture(0, albedo ? albedo->handle : render::TextureHandle{},
-                            albedo ? albedo->sampler : render::SamplerDesc{});
-        if (shading == ShadingModel::LitNormalMap) device_.BindTexture(1, normal->handle, normal->sampler);
+        // Rebinding unchanged textures would cost a descriptor set per draw on Vulkan.
+        const render::TextureHandle albedoHandle = albedo ? albedo->handle : render::TextureHandle{};
+        const render::SamplerDesc albedoSampler = albedo ? albedo->sampler : render::SamplerDesc{};
+        if (!texturesBound || albedoHandle.id != boundAlbedo.id || !(albedoSampler == boundAlbedoSampler)) {
+            device_.BindTexture(0, albedoHandle, albedoSampler);
+            boundAlbedo = albedoHandle;
+            boundAlbedoSampler = albedoSampler;
+        }
+        if (shading == ShadingModel::LitNormalMap &&
+            (!texturesBound || normal->handle.id != boundNormal.id || !(normal->sampler == boundNormalSampler))) {
+            device_.BindTexture(1, normal->handle, normal->sampler);
+            boundNormal = normal->handle;
+            boundNormalSampler = normal->sampler;
+        }
+        texturesBound = true;
 
         SceneDrawConstants c{};
         Vec3 lightDir = light.direction;

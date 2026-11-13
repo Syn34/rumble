@@ -444,6 +444,47 @@ int Stats(const Options& o, Content& c, Loaded& loaded) {
                 list.instances, list.visible, list.culled, list.lodRejected, items.size(), list.opaqueItems,
                 list.transparentItems, list.hiddenMaterials);
     (void)c;
+
+    // Skinning consistency: skin every vertex on the CPU with the bone matrices the
+    // renderer would upload (current pose) and compare with the renderer's stored
+    // bounds (m_AABB, relative to the root bone).
+    std::size_t skinnedChecked = 0, skinnedInside = 0, skinnedVertices = 0;
+    double worstOutside = 0.0;
+    for (const scene::RenderInstance& inst : loaded.scene.Instances()) {
+        if (inst.kind != scene::RendererKind::Skinned || inst.mesh == scene::kNoResource || !inst.skinBounds.Valid()) continue;
+        const scene::MeshData& mesh = loaded.resources.Mesh(inst.mesh);
+        if (!mesh.HasSkin() || mesh.bindPoses.empty()) continue;
+        const auto bones = scene::SceneRenderer::BoneMatrices(loaded.scene, inst, mesh);
+        scene::Aabb skinned;
+        for (std::size_t v = 0; v < mesh.vertices.size(); ++v) {
+            scene::Vec3 p;
+            const auto& mv = mesh.vertices[v];
+            for (int k = 0; k < 4; ++k) {
+                const auto b = static_cast<std::size_t>(mesh.skin[v].boneIndices[k]);
+                if (b >= bones.size()) continue;
+                p = p + scene::TransformPoint(bones[b], {mv.position[0], mv.position[1], mv.position[2]}) *
+                            mesh.skin[v].boneWeights[k];
+            }
+            skinned.Add(p);
+        }
+        skinnedVertices += mesh.vertices.size();
+        ++skinnedChecked;
+        const scene::Aabb& box = inst.worldBounds;
+        const float size = std::max(scene::Length(box.Extent()), 1e-3f);
+        const scene::Vec3 over = scene::Max(scene::Max(box.min - skinned.min, skinned.max - box.max), {0, 0, 0});
+        const double outside = scene::Length(over) / size;
+        worstOutside = std::max(worstOutside, outside);
+        if (outside < 0.05) {
+            ++skinnedInside;
+        } else {
+            std::printf("  skinned outside its bounds by %.1f%%: %s (mesh %s, %zu bones, root bone %s)\n", outside * 100.0,
+                        loaded.scene.Path(inst.node).c_str(), mesh.name.c_str(), mesh.bindPoses.size(),
+                        inst.rootBone >= 0 ? "set" : "none");
+        }
+    }
+    std::printf("skinning: %zu skinned instances (%zu vertices) skinned on the CPU at the current pose; %zu within "
+                "5%% of their stored bounds, worst overshoot %.1f%% of the bounds' size\n",
+                skinnedChecked, skinnedVertices, skinnedInside, worstOutside * 100.0);
     if (!o.gpu) return 0;
     auto window = OpenWindow(o);
     if (!window) return 1;
