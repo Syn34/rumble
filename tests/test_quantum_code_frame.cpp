@@ -31,6 +31,7 @@ class ListenerSystem final : public SystemBase,
         ++healthAdded;
         lastHealth = component;
     }
+    void Schedule(Frame*) override {}
     void OnEnabled(Frame*) override { ++enabled; }
     void OnDisabled(Frame*) override { ++disabled; }
 

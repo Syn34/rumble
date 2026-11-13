@@ -50,8 +50,13 @@ class SystemBase {
     // 0x7cafed8
     virtual void OnDisabled(Frame* f) { (void)f; }
 
-    // TODO(0x7ca8624, Quantum.SystemBase.OnSchedule): forwards to the system's scheduling
-    // entry point; needs the task system.
+    // 0x7ca8624 - Forwards to the system's scheduling entry point. The original passes a
+    // task handle through (Quantum.Task); the PC build runs main-thread tasks in the order
+    // they are scheduled, which is the order the original's task graph imposes on them, so
+    // scheduling here runs the work immediately.
+    void OnSchedule(Frame* f) { Schedule(f); }
+    // Quantum.SystemBase.Schedule (abstract in the original).
+    virtual void Schedule(Frame* f) = 0;
 
     // Name used by the profiling sample ("<type>" in the original; here the C++ type).
     const std::string& ScheduleSample() const { return _scheduleSample; }

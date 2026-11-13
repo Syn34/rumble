@@ -29,3 +29,12 @@ add_library(rr::game ALIAS rr_game)
 target_include_directories(rr_game PUBLIC .)
 target_link_libraries(rr_game PUBLIC rr::photon_deterministic rr::quantum_core)
 rr_set_warnings(rr_game)
+
+# quantum.code systems (quantum_code/systems/)
+target_sources(rr_game PRIVATE
+    quantum_code/systems/system_main_thread.cpp
+    quantum_code/systems/core_systems.cpp
+    quantum_code/systems/system_groups.cpp
+    quantum_code/systems/enablers.cpp
+    quantum_code/systems/system_setup.cpp
+)
