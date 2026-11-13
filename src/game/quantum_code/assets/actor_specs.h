@@ -323,8 +323,9 @@ class KccExtensionConfig : public AssetObject {
     // 0x7c92950
     KccExtensionConfig() = default;
 
-    // TODO(0x7c928f0, Quantum.KccExtensionConfig.TryGetWalkingPushMultiplier): bool
-    //   TryGetWalkingPushMultiplier(EntityInfoType type, FP multiplier)
+    // 0x7c928f0 - The multiplier listed for that kind of entity (the first match); zero
+    // and false when it is not listed.
+    bool TryGetWalkingPushMultiplier(EntityInfoType type, FP& multiplier) const;
 };
 
 class KccModifierSpec : public AssetObject {

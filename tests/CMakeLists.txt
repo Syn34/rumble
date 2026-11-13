@@ -49,3 +49,5 @@ target_sources(rr_tests PRIVATE test_scene.cpp)
 target_link_libraries(rr_tests PRIVATE rr::scene)
 # Static triangle meshes: map triangle data, TriangleMesh and the mesh paths of the 3D scene.
 target_sources(rr_tests PRIVATE test_quantum_trimesh.cpp)
+# Character movement (KccExtension, MovementSystem).
+target_sources(rr_tests PRIVATE test_quantum_code_movement.cpp)

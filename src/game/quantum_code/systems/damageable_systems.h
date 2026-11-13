@@ -59,10 +59,9 @@ class DamageableSystem final : public SystemMainThreadFilter<DamageableSystemFil
     void Shield_OnBreaks(Frame* frame, EntityRef entity, EntityRef sourceEntity, const FPVector3& direction) override;
     // 0x7bb9544 - New damageables get the spawn invulnerability.
     void OnAdded(Frame* frame, EntityRef entity, Damageable* damageable) override;
-    // TODO(0x7bb9614, Quantum.DamageableSystem.Damageable_OnBeforeHit): a projectile headshot
-    //   first clears the source's critical-hit multiplier and rebuilds the hit with
-    //   DamageSpec.CreateHitData (not reimplemented yet, so that step is skipped); the
-    //   attacker's boss, shieldless-target and more-bolts damage multipliers are applied.
+    // 0x7bb9614 - A projectile headshot first clears the source's critical-hit multiplier and
+    // rebuilds the hit with DamageSpec.CreateHitData; then the attacker's boss,
+    // shieldless-target and more-bolts damage multipliers are applied.
     void Damageable_OnBeforeHit(Frame* f, EntityRef targetEntity, HitData* hitData) override;
 };
 

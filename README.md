@@ -14,22 +14,22 @@ program never loads or calls into the original binaries.
 ## Status
 
 <!-- progress:start -->
-**Overall: 4.04%** — 6,919 of 171,382 original methods reimplemented
+**Overall: 4.09%** — 7,014 of 171,382 original methods reimplemented
 
 `█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░`
 
 | Part | Done | Methods | Progress |
 |---|---:|---:|---:|
-| Game code | 4,730 | 50,426 | 9.38% |
-| Third-party libraries | 2,189 | 120,956 | 1.81% |
+| Game code | 4,826 | 50,426 | 9.57% |
+| Third-party libraries | 2,188 | 120,956 | 1.81% |
 
 <details><summary>Per assembly (started ones first, then largest)</summary>
 
 | Assembly | Done | Methods | Progress |
 |---|---:|---:|---:|
 | PhotonDeterministic.dll | 686 | 904 | 75.9% |
-| quantum.code.dll | 4,730 | 7,251 | 65.2% |
-| quantum.core.dll | 1,479 | 2,608 | 56.7% |
+| quantum.code.dll | 4,826 | 7,251 | 66.6% |
+| quantum.core.dll | 1,478 | 2,608 | 56.7% |
 | PhotonQuantum.dll | 24 | 3,488 | 0.7% |
 | Assembly-CSharp.dll | 0 | 20,495 | 0.0% |
 | Fidelio-Framework.dll | 0 | 15,081 | 0.0% |

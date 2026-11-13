@@ -330,30 +330,28 @@ class DamageSpec : public AssetObject {
     // 0x7c8f920
     DamageSpec() = default;
 
-    // TODO(0x7c8e2a4, Quantum.DamageSpec.CreateHitData): HitData CreateHitData(Frame frame,
-    //   FPVector3 position, FPVector3 direction, EntityRef sourceEntity, EntityRef targetEntity);
-    //   uses DamageLib.TryGetDamageMultiplier, DamageSpec.CalculateDamages,
-    //   DamageSpec.GetDamageModifier, Ownership.GetOwnershipOrDefault, QBoolean.op_Implicit
-    // TODO(0x7c8e70c, Quantum.DamageSpec.CalculateDamages): FP CalculateDamages(Frame frame,
-    //   HitData hitData, EntityRef targetEntity); uses FPMath.Min, FPVector3.Distance,
-    //   DamageLib.GetTotalDamageMultiplier, DamageSpec.CalculateRawDamages,
-    //   FPAnimationCurve.Evaluate, PowerUpUser.get_ActivePowerUps,
-    //   ProjectileLib.ComputeProjectileDamageMultiplier, Unsafe.TryGetWeaponUser
-    // TODO(0x7c8f030, Quantum.DamageSpec.CalculateRawDamages): FP CalculateRawDamages(Frame frame,
-    //   HitData hitData); uses FPMath.Clamp, FPMath.Lerp, BalancingLib.TryGetHumanHeroesLevelRatio,
-    //   WeaponLib.TryGetWeaponLevel
-    // TODO(0x7c8edc8, Quantum.DamageSpec.GetDamageModifier): void GetDamageModifier(Frame frame,
-    //   Ownership sourceOwnership, DamageModifier> resultDamageModifier); uses
-    //   AssetGuid.get_IsValid, BalancingLib.TryGetHeroSpec,
-    //   DamageSpec.GetDamageModifiersFromHeroImprovements,
-    //   DamageSpec.GetDamageModifiersFromWeaponEnhancement
-    // TODO(0x7c8f4e8, Quantum.DamageSpec.GetDamageModifiersFromWeaponEnhancement): void
-    //   GetDamageModifiersFromWeaponEnhancement(Frame frame, WeaponEnhancementSpec enhancementSpec,
-    //   EntityRef sourceWeapon, DamageModifier> damageModifierList); uses AssetGuid.op_Inequality,
-    //   AssetObject.get_Guid, SimulationWeaponTable.TryGetWeaponId
-    // TODO(0x7c8f2cc, Quantum.DamageSpec.GetDamageModifiersFromHeroImprovements): void
-    //   GetDamageModifiersFromHeroImprovements(Frame frame, ImprovementSpec improvementSpec,
-    //   DamageModifier> damageModifierList); uses AssetGuid.op_Inequality, AssetObject.get_Guid
+    // Damage computation (systems/damage_specs.cpp).
+    // 0x7c8e2a4 - A hit from `sourceEntity` (owner and weapon from its ownership) with this
+    // spec's type, shield and health rules, and the damage from CalculateDamages scaled by
+    // the attacker's hero-talent and weapon-enhancement modifiers for this spec.
+    HitData CreateHitData(Frame* frame, FPVector3 position, FPVector3 direction, EntityRef sourceEntity,
+                          EntityRef targetEntity) const;
+    // 0x7c8e70c - The raw damage times the multipliers: the weapon user's (melee/electric
+    // ones too) or the source's, extra-damage power-ups, projectile headshots and the
+    // ammunition's range curve.
+    FP CalculateDamages(Frame* frame, const HitData& hitData, EntityRef targetEntity) const;
+    // 0x7c8f030 - The base damage for the spec's mode (fixed, scaled by level, PvE...).
+    FP CalculateRawDamages(Frame* frame, const HitData& hitData) const;
+    // 0x7c8edc8 - The modifiers for this spec from the owner hero's unlocked talents.
+    void GetDamageModifier(Frame* frame, const Ownership& sourceOwnership,
+                           std::vector<DamageModifier>& resultDamageModifier) const;
+    // 0x7c8f4e8 - An enhancement for the source weapon adds its modifiers for this spec.
+    void GetDamageModifiersFromWeaponEnhancement(Frame* frame, const WeaponEnhancementSpec* enhancementSpec,
+                                                 EntityRef sourceWeapon,
+                                                 std::vector<DamageModifier>& damageModifierList) const;
+    // 0x7c8f2cc - An improvement adds its modifiers for this spec.
+    void GetDamageModifiersFromHeroImprovements(Frame* frame, const ImprovementSpec* improvementSpec,
+                                                std::vector<DamageModifier>& damageModifierList) const;
 };
 
 class DamageToImpulseConverterSpec : public AssetObject {
@@ -894,9 +892,10 @@ class PusherSpec : public AssetObject {
 
     // 0x7c940c4 - copies the push settings into a push request.
     void SetupPushData(PushData* pushData) const;
-    // TODO(0x7c94160, Quantum.PusherSpec.CalculateImpulse): FPVector3 CalculateImpulse(Frame f,
-    //   FPVector3 forceDirection, FPVector3 hitPoint, EntityRef pusherEntity); uses FPMath.SqrtRaw,
-    //   FPVector3.Normalize, FPVector3.get_Zero, FPAnimationCurve.Evaluate, Transform3D.get_Forward
+    // 0x7c94160 - The push along `forceDirection` (flattened in 2D, where the upward force
+    // replaces the vertical part), scaled by the force curve over the distance to the pusher
+    // relative to its range, reversed when inverse. Implemented in systems/damage_specs.cpp.
+    FPVector3 CalculateImpulse(Frame* f, FPVector3 forceDirection, FPVector3 hitPoint, EntityRef pusherEntity) const;
 };
 
 class RewardSpec : public AssetObject {

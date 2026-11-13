@@ -87,6 +87,8 @@ class BalancingLib {
     // 0x7cda428 - The human players' average weapon level as a 0..1 ratio (levels 0..9);
     // false without a game mode handler.
     static bool TryGetHumanWeaponsLevelRatio(Frame* f, FP& ratio);
+    // 0x7cda36c - The game mode handler's average human hero level ratio, once computed.
+    static bool TryGetHumanHeroesLevelRatio(Frame* f, FP& ratio);
 };
 
 class WeaponLib {
@@ -94,12 +96,57 @@ class WeaponLib {
     // 0x7c10e24 - The level of `weapon` in its owner's loadout; 0 when either entity is
     // gone, the owner has no loadout or the weapon is not in it.
     static std::int32_t GetWeaponLevel(Frame* frame, EntityRef owner, EntityRef weapon);
+    // 0x7c10fa0 - The weapon's level in its owner's loadout (0 when it has no ownership).
+    static bool TryGetWeaponLevel(Frame* frame, EntityRef weapon, std::int32_t& level);
+};
+
+// The game's Quantum.Unsafe helpers.
+class Unsafe {
+  public:
+    // 0x7c041a8 - A weapon user that is not disabled.
+    static bool TryGetWeaponUser(Frame* frame, EntityRef entity, WeaponUser*& weaponUser);
+};
+
+class ProjectileLib {
+  public:
+    // 0x7c095a8 - A projectile's headshot on a precise-hit receiver adds the receiver's
+    // headshot bonus to the multiplier.
+    static void ComputeProjectileDamageMultiplier(Frame* frame, EntityRef projectileEntity, EntityRef targetEntity,
+                                                  FP& damageMultiplier);
 };
 
 class CallbackActionLib {
   public:
     // 0x7cb0ebc - Runs the callback action asset on the entity (if the asset exists).
     static void Execute(AssetRefCallbackAction callbackActionAssetRef, Frame* frame, EntityRef entity);
+};
+
+class PlayerActorInputActionLib {
+  public:
+    // 0x7c0c678
+    static bool FilterContains(PlayerActorInputActionFilter filter, PlayerActorInputAction action) {
+        return ((static_cast<std::uint32_t>(filter) >> static_cast<std::uint32_t>(action)) & 1U) != 0;
+    }
+    // 0x7c04b7c - Neither a running ultimate nor a gadget in use forbids the action.
+    static bool IsInputActionAllowed(Frame* frame, EntityRef entity, PlayerActorInputAction inputAction) {
+        const bool byUltimate = IsAllowedByUltimate(frame, entity, inputAction);
+        const bool byGadget = IsAllowedByGadget(frame, entity, inputAction);
+        return byUltimate && byGadget;
+    }
+    // 0x7c0c684 - While an ultimate is active its spec's allowed actions decide (allowed
+    // when the spec is missing).
+    static bool IsAllowedByUltimate(Frame* frame, EntityRef entity, PlayerActorInputAction inputAction);
+    // 0x7c0c7a8 - Same for a gadget in use.
+    static bool IsAllowedByGadget(Frame* frame, EntityRef entity, PlayerActorInputAction inputAction);
+};
+
+class UnlockedFeaturesLib {
+  public:
+    // 0x7be70dc - The entity's unlocked features; entities without the manager get
+    // `isUnlockedByDefault`.
+    static bool IsFeatureUnlocked(Frame* f, EntityRef entity, UnlockedFeature feature, bool isUnlockedByDefault);
+    // 0x7be7190 - False when the entity has no UnlockedFeaturesManager.
+    static bool TryUnlockFeature(Frame* f, EntityRef entity, UnlockedFeature feature);
 };
 
 class UltimateAbilityLib {
