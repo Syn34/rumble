@@ -224,12 +224,30 @@ struct StaticComponents3D {
     PhysicsCollider3D Collider3D;
 };
 
-// Quantum.Physics3D.CollisionConstraintData: one contact point of a manifold for the
-// solver (ConstraintData.CollisionCst in the original, one 0x228-byte slot each).
+// Quantum.Physics3D.EntrySolverImpulses: the impulses one constraint gives one body in a
+// hybrid solver iteration, chained per body (Entry3D.SolverImpulsesAdr).
+struct EntrySolverImpulses {
+    EntrySolverImpulses* NextAdr = nullptr;
+    FPVector3 Angular; // r x impulse
+    FPVector3 Linear;
+};
+
+// Quantum.Physics3D.ConstraintFlags
+enum ConstraintFlags : std::int32_t {
+    IgnoreVelocitySolver = 1,
+    IgnorePositionSolver = 2,
+    WasSolved = 4,
+    HasDynamicBodyA = 8,
+    HasDynamicBodyB = 16,
+};
+
+// Quantum.Physics3D.ConstraintData with its CollisionConstraintData: one contact point of a
+// manifold for the solvers (one 0x228-byte slot each in the original).
 struct ContactConstraint {
+    std::int32_t Flags = 0; // ConstraintFlags
+    EntrySolverImpulses ImpulsesA;
+    EntrySolverImpulses ImpulsesB;
     CollisionManifold3D* Manifold = nullptr; // ManifoldAdr
-    bool HasDynamicBodyA = false;            // ConstraintFlags.HasDynamicBodyA
-    bool HasDynamicBodyB = false;            // ConstraintFlags.HasDynamicBodyB
     FP NormalMass;                           // perceived mass along the normal
     FPVector3 Ra;                            // contact offset from A's centre of mass
     FPVector3 Rb;
@@ -375,7 +393,13 @@ class Scene3D {
     void TaskPostCallbacksUpdateManifolds();
     Island3D* GetNextIsland();
     void TaskBuildIslands();
+    void TaskCollisionSolverCacheManifolds();
     void TaskCollisionSolverInitLegacyGS(Core::FrameBase* frame);
+    void TaskCollisionSolverInit(Core::FrameBase* frame);
+    void TaskCollisionSolverCompute();
+    void TaskCollisionSolverAggregateContacts();
+    void TaskVelocitySolverAggregate();
+    void TaskVelocitySolverApply();
     void TaskVelocitySolverLegacyGS();
     void AccumulateImpulses(const ContactConstraint* cst, CollisionManifold3D* m, Entry3D* entryA,
                             Entry3D* entryB, bool useRotation,

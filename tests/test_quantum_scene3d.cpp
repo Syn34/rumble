@@ -407,3 +407,30 @@ TEST_CASE("Scene3D: a resting body without contacts falls asleep on its own") {
     CHECK(body->IsSleeping());
     CHECK(body->SleepTime() == FP::Zero());
 }
+
+TEST_CASE("Scene3D: the hybrid solver rests a box and a stack on the floor") {
+    World w;
+    w.frame->settings.SolverType = ConstraintsSolverType::HybridJacobiGaussSeidel;
+    w.frame->settings.SetAllowSleeping(false);
+    w.AddStaticBox(V3(0, -1, 0), V3(10, 1, 10));
+    const Shape3D cube = Shape3D::CreateBox(FPVector3{FP::_0_50(), FP::_0_50(), FP::_0_50()});
+    const EntityRef low = w.AddBody(V3(0, 1, 0), cube, true);
+    const EntityRef high = w.AddBody(V3(0, 2, 0) + FPVector3{FP::Zero(), FP::_0_50(), FP::Zero()}, cube, true);
+    w.engine->Init(w.frame.get(), AssetGuid{});
+    for (int i = 0; i < 240; ++i) {
+        w.Step();
+    }
+    const FP lowY = w.frame->GetPointer<Quantum::Transform3D>(low)->Position.Y;
+    const FP highY = w.frame->GetPointer<Quantum::Transform3D>(high)->Position.Y;
+    // Within a few centimetres of y = 0.5 and 1.5.
+    CHECK(Photon::Deterministic::FPMath::Abs(lowY - FP::_0_50()) < FP::FromRaw(6554));
+    CHECK(Photon::Deterministic::FPMath::Abs(highY - FP::FromRaw(98304)) < FP::FromRaw(6554));
+    // Rotation is frozen but the perceived masses still include the inertia, so each pass
+    // removes only part of the approach speed: the boxes settle with a small steady
+    // downward velocity that penetration correction balances (as in the original).
+    const FP vHigh = w.frame->GetPointer<PhysicsBody3D>(high)->Velocity.Y;
+    CHECK(vHigh < FP::Zero() && vHigh > -FP::_1());
+    const FP before = w.frame->GetPointer<Quantum::Transform3D>(high)->Position.Y;
+    w.Step();
+    CHECK(w.frame->GetPointer<Quantum::Transform3D>(high)->Position.Y == before);
+}

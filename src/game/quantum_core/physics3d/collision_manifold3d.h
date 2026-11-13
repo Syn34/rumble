@@ -237,6 +237,7 @@ struct IntAABB {
 static_assert(sizeof(IntAABB) == 24);
 
 struct Island3D;
+struct EntrySolverImpulses;
 class Scene3D;
 
 // Quantum.Physics3D.Entry3D: one collider in the 3D scene (an entity's collider or a static
@@ -272,7 +273,7 @@ struct Entry3D {
     FPVector3 RotatedCenterOfMass;
     Photon::Deterministic::FPMatrix3x3 WorldInertiaTensorInverse;
     FPVector3 AccumulatedCorrection;
-    std::int64_t SolverImpulsesAdr = 0;
+    EntrySolverImpulses* SolverImpulsesAdr = nullptr; // head of the solver's impulse list
 
     // 0x7d79dd4 - entries of entities (as opposed to static colliders).
     bool IsDynamic() const { return Ref.Raw() != 0; }

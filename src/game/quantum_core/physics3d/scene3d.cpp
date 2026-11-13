@@ -599,7 +599,7 @@ void Scene3D::TaskIntegrateForcesFirstHalf() {
                 const FP::Raw tx = impulse.RawIntX + Mul(Raw(body->_torque.X), halfDt);
                 const FP::Raw ty = impulse.RawIntY + Mul(Raw(body->_torque.Y), halfDt);
                 const FP::Raw tz = impulse.RawIntZ + Mul(Raw(body->_torque.Z), halfDt);
-                const FPMatrix3x3& m = entry->WorldInertiaTensorInverse;
+                const Photon::Deterministic::FPMatrix3x3& m = entry->WorldInertiaTensorInverse;
                 const FP::Raw wx = Mul(Raw(m.M01), ty) + Mul(Raw(m.M00), tx) + Mul(Raw(m.M02), tz);
                 const FP::Raw wy = Mul(Raw(m.M11), ty) + Mul(Raw(m.M10), tx) + Mul(Raw(m.M12), tz);
                 const FP::Raw wz = Mul(Raw(m.M21), ty) + Mul(Raw(m.M20), tx) + Mul(Raw(m.M22), tz);
@@ -1568,44 +1568,61 @@ FP::Raw AngularMassTerm(const Entry3D* entry, const FPVector3& r, FP::Raw dxx, F
 }
 } // namespace
 
-// 0x7d572fc - combined material values and one constraint per contact point (plus one at
-// the average point for multi-point manifolds): offsets from both centres of mass (at the
-// manifold's time of impact) and the perceived mass along the normal. Constraints are made
-// for the island manifolds in island order here (the original slices the cached manifold
-// list over threads, same result).
-void Scene3D::TaskCollisionSolverInitLegacyGS(FrameBase* frame) {
-    _collisionSolverData.clear();
+// 0x7d64de0 - the solver works on the buckets' solver manifolds in bucket order; each gets
+// a constraint slot per contact point (the legacy solver adds one at the average point of a
+// multi-point manifold).
+void Scene3D::TaskCollisionSolverCacheManifolds() {
     _collisionSolverManifolds.clear();
-    for (Island3D& island : _islands) {
-        for (CollisionManifold3D* m : island.CollisionManifolds) {
+    const bool legacy = CachedSettings.SolverType == ConstraintsSolverType::LegacyGaussSeidel;
+    std::int32_t constraints = 0;
+    for (Bucket3D& bucket : _buckets) {
+        for (CollisionManifold3D* m : bucket.SolverManifolds) {
             _collisionSolverManifolds.push_back(m);
+            m->_constraintDataIdx = constraints;
+            constraints += m->_contactPointsCount;
+            if (legacy && m->_contactPointsCount >= 2) {
+                ++constraints;
+            }
         }
     }
+    _collisionSolverData.assign(static_cast<std::size_t>(constraints), ContactConstraint{});
+}
+
+namespace {
+// The combined material values of a pair.
+void CombineMaterials(FrameBase* frame, CollisionManifold3D* m, const Entry3D* entryA, const Entry3D* entryB) {
+    PhysicsMaterial defaults;
+    const PhysicsMaterial* matA = MaterialOf(frame, entryA);
+    const PhysicsMaterial* matB = MaterialOf(frame, entryB);
+    if (matA == nullptr) matA = &defaults;
+    if (matB == nullptr) matB = &defaults;
+    m->CombinedRestitution = Combine(matA->RestitutionCombineFunction, matB->RestitutionCombineFunction,
+                                     matA->Restitution, matB->Restitution);
+    m->CombinedStaticFriction = Combine(matA->FrictionCombineFunction, matB->FrictionCombineFunction,
+                                        matA->FrictionStatic, matB->FrictionStatic);
+    m->CombinedDynamicFriction = Combine(matA->FrictionCombineFunction, matB->FrictionCombineFunction,
+                                         matA->FrictionDynamic, matB->FrictionDynamic);
+}
+} // namespace
+
+// 0x7d572fc - combined material values and one constraint per contact point (plus one at
+// the average point for multi-point manifolds): offsets from both centres of mass (at the
+// manifold's time of impact) and the perceived mass along the normal.
+void Scene3D::TaskCollisionSolverInitLegacyGS(FrameBase* frame) {
     for (CollisionManifold3D* m : _collisionSolverManifolds) {
         Entry3D* entryA = &_entries[static_cast<std::size_t>(m->_m._entryIdxA)];
         Entry3D* entryB = &_entries[static_cast<std::size_t>(m->_m._entryIdxB)];
         Entry3D* rootA = Root(entryA);
         Entry3D* rootB = Root(entryB);
-        PhysicsMaterial defaults;
-        const PhysicsMaterial* matA = MaterialOf(frame, entryA);
-        const PhysicsMaterial* matB = MaterialOf(frame, entryB);
-        if (matA == nullptr) matA = &defaults;
-        if (matB == nullptr) matB = &defaults;
-        m->CombinedRestitution = Combine(matA->RestitutionCombineFunction, matB->RestitutionCombineFunction,
-                                         matA->Restitution, matB->Restitution);
-        m->CombinedStaticFriction = Combine(matA->FrictionCombineFunction, matB->FrictionCombineFunction,
-                                            matA->FrictionStatic, matB->FrictionStatic);
-        m->CombinedDynamicFriction = Combine(matA->FrictionCombineFunction, matB->FrictionCombineFunction,
-                                             matA->FrictionDynamic, matB->FrictionDynamic);
-        const std::int32_t points = m->_contactPointsCount == 1 ? 1 : m->_contactPointsCount + 1;
-        m->_constraintDataIdx = static_cast<std::int32_t>(_collisionSolverData.size());
+        CombineMaterials(frame, m, entryA, entryB);
+        const std::int32_t points = m->_contactPointsCount + (m->_contactPointsCount >= 2 ? 1 : 0);
         const FP::Raw nx = Raw(m->Normal.X), ny = Raw(m->Normal.Y), nz = Raw(m->Normal.Z);
         const FP::Raw nxx = Mul(nx, nx), nyy = Mul(ny, ny), nzz = Mul(nz, nz);
         const FP::Raw nzx = Mul(nz, nx), nyx = Mul(ny, nx), nzy = Mul(nz, ny);
         for (std::int32_t p = 0; p < points; ++p) {
             const FPVector3 contact = p < m->_contactPointsCount ? m->_contactPoints[p]
                                                                  : CollisionManifold3D::GetAverageContactPoint(m);
-            ContactConstraint& c = _collisionSolverData.emplace_back();
+            ContactConstraint& c = _collisionSolverData[static_cast<std::size_t>(m->_constraintDataIdx + p)];
             c.Manifold = m;
             FP::Raw k = 0;
             const auto offset = [&](Entry3D* root) {
@@ -1619,12 +1636,12 @@ void Scene3D::TaskCollisionSolverInitLegacyGS(FrameBase* frame) {
             c.Ra = offset(rootA);
             c.Rb = offset(rootB);
             if (rootA->HasDynamicBody) {
-                c.HasDynamicBodyA = true;
+                c.Flags |= HasDynamicBodyA;
                 k += rootA->Body3D->_massInverseRawInt;
                 k += AngularMassTerm(entryA, c.Ra, nxx, nyy, nzz, nzx, nyx, nzy);
             }
             if (rootB->HasDynamicBody) {
-                c.HasDynamicBodyB = true;
+                c.Flags |= HasDynamicBodyB;
                 k += rootB->Body3D->_massInverseRawInt;
                 k += AngularMassTerm(entryB, c.Rb, nxx, nyy, nzz, nzx, nyx, nzy);
             }
@@ -1826,6 +1843,327 @@ void Scene3D::TaskVelocitySolverLegacyGS() {
     }
 }
 
+// ---------------------------------------------------------------------------------------
+// Hybrid Jacobi/Gauss-Seidel solver: every iteration computes all contact impulses from the
+// same velocities (Compute), averages each multi-point manifold into its first constraint,
+// chains the first constraints' impulses per body (islands with nothing left to solve are
+// dropped from later iterations) and applies each body's chain at once.
+
+namespace {
+// 0x7d67784 - perceived mass of a body for an offset r along a direction d through the full
+// world inverse inertia tensor: d . ((I^-1 (r x d)) x r) (the tensor used transposed, as the
+// original multiplies it).
+FP::Raw ComputePerceivedMassRaw(const Entry3D* entry, const FPVector3& r, const FPVector3& d) {
+    const FP::Raw rx = Raw(r.X), ry = Raw(r.Y), rz = Raw(r.Z);
+    const FP::Raw dx = Raw(d.X), dy = Raw(d.Y), dz = Raw(d.Z);
+    const FP::Raw cx = Mul(dz, ry) - Mul(rz, dy);
+    const FP::Raw cy = Mul(rz, dx) - Mul(dz, rx);
+    const FP::Raw cz = Mul(rx, dy) - Mul(ry, dx);
+    const Photon::Deterministic::FPMatrix3x3& m = entry->WorldInertiaTensorInverse;
+    const FP::Raw wx = Mul(Raw(m.M10), cy) + Mul(cx, Raw(m.M00)) + Mul(Raw(m.M20), cz);
+    const FP::Raw wy = Mul(Raw(m.M11), cy) + Mul(cx, Raw(m.M01)) + Mul(Raw(m.M21), cz);
+    const FP::Raw wz = Mul(Raw(m.M12), cy) + Mul(cx, Raw(m.M02)) + Mul(Raw(m.M22), cz);
+    const FP::Raw tx = Mul(wy, rz) - Mul(wz, ry);
+    const FP::Raw ty = Mul(wz, rx) - Mul(wx, rz);
+    const FP::Raw tz = Mul(wx, ry) - Mul(wy, rx);
+    return Mul(tx, dx) + Mul(tz, dz) + Mul(ty, dy);
+}
+
+// 0x7d67888 - a linear impulse (and optionally an angular one) on the entry's body; wakes it.
+void ApplyImpulse(Entry3D* entry, const FPVector3& linear, const FPVector3* angular) {
+    PhysicsBody3D* body = entry->Body3D;
+    if (body->Status == PhysicsBodyStatus::Asleep) {
+        body->Status = PhysicsBodyStatus::Active;
+        body->_sleepTimeRawInt = 0;
+    }
+    entry->ShouldIntegrateVelocity = true;
+    const FP::Raw massInverse = body->_massInverseRawInt;
+    body->Velocity.X = FP::FromRaw(Raw(body->Velocity.X) + Mul(Raw(linear.X), massInverse));
+    body->Velocity.Y = FP::FromRaw(Raw(body->Velocity.Y) + Mul(Raw(linear.Y), massInverse));
+    body->Velocity.Z = FP::FromRaw(Raw(body->Velocity.Z) + Mul(Raw(linear.Z), massInverse));
+    if (angular == nullptr) {
+        return;
+    }
+    const Photon::Deterministic::FPMatrix3x3& m = entry->WorldInertiaTensorInverse;
+    const FP::Raw ax = Raw(angular->X), ay = Raw(angular->Y), az = Raw(angular->Z);
+    const FP::Raw wx = Mul(Raw(m.M10), ay) + Mul(Raw(m.M00), ax) + Mul(Raw(m.M20), az);
+    const FP::Raw wy = Mul(Raw(m.M11), ay) + Mul(Raw(m.M01), ax) + Mul(Raw(m.M21), az);
+    const FP::Raw wz = Mul(Raw(m.M12), ay) + Mul(Raw(m.M02), ax) + Mul(Raw(m.M22), az);
+    const auto freeze = static_cast<std::uint8_t>(body->RotationFreeze);
+    if ((freeze & 1) == 0) body->AngularVelocity.X = FP::FromRaw(Raw(body->AngularVelocity.X) + wx);
+    if ((freeze & 2) == 0) body->AngularVelocity.Y = FP::FromRaw(Raw(body->AngularVelocity.Y) + wy);
+    if ((freeze & 4) == 0) body->AngularVelocity.Z = FP::FromRaw(Raw(body->AngularVelocity.Z) + wz);
+}
+} // namespace
+
+// 0x7d65098 - materials as the legacy solver; per contact point the offsets from the roots'
+// positions, moved to the centres of mass (at the time of impact) for dynamic roots, and
+// the perceived mass along the normal through the full inertia tensor.
+void Scene3D::TaskCollisionSolverInit(FrameBase* frame) {
+    for (CollisionManifold3D* m : _collisionSolverManifolds) {
+        Entry3D* rootA = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxA)]);
+        Entry3D* rootB = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxB)]);
+        CombineMaterials(frame, m, rootA, rootB);
+        const auto offsetFromCentre = [m](const Entry3D* root, FPVector3 r) {
+            FP::Raw cx = Raw(root->RotatedCenterOfMass.X);
+            FP::Raw cy = Raw(root->RotatedCenterOfMass.Y);
+            FP::Raw cz = Raw(root->RotatedCenterOfMass.Z);
+            const FP::Raw toi = Raw(m->_m.TimeOfImpact) - Raw(root->_firstTimeOfImpact);
+            if (toi != 0) {
+                const FPVector3& v = root->Body3D->Velocity;
+                cx += Mul(Raw(v.X), toi);
+                cy += Mul(Raw(v.Y), toi);
+                cz += Mul(Raw(v.Z), toi);
+            }
+            return FPVector3{FP::FromRaw(Raw(r.X) - cx), FP::FromRaw(Raw(r.Y) - cy), FP::FromRaw(Raw(r.Z) - cz)};
+        };
+        for (std::int32_t p = 0; p < m->_contactPointsCount; ++p) {
+            ContactConstraint& c = _collisionSolverData[static_cast<std::size_t>(m->_constraintDataIdx + p)];
+            c.Manifold = m;
+            const FPVector3& contact = m->_contactPoints[p];
+            FPVector3 ra = contact - rootA->Transform3D->Position;
+            FPVector3 rb = contact - rootB->Transform3D->Position;
+            FP::Raw k = 0;
+            if (rootA->HasDynamicBody) {
+                c.Flags |= HasDynamicBodyA;
+                ra = offsetFromCentre(rootA, ra);
+                k = rootA->Body3D->_massInverseRawInt + ComputePerceivedMassRaw(rootA, ra, m->Normal);
+            }
+            if (rootB->HasDynamicBody) {
+                c.Flags |= HasDynamicBodyB;
+                rb = offsetFromCentre(rootB, rb);
+                k = k + rootB->Body3D->_massInverseRawInt + ComputePerceivedMassRaw(rootB, rb, m->Normal);
+            }
+            c.NormalMass = FP::FromRaw(k);
+            c.Ra = ra;
+            c.Rb = rb;
+        }
+    }
+}
+
+// 0x7d65a64 - per contact constraint still in play: relative velocity at the contact (every
+// body counts); a separating or resting contact (vn >= 0) is solved. Otherwise the normal
+// impulse (restitution dropped below the resting speed, which here only counts gravity's X
+// and Y) plus friction along the tangent (the whole tangential speed within the static
+// coefficient, else dynamic friction * the normal impulse), stored as impulses on both
+// bodies (linear, and with rotation r x impulse for the dynamic sides).
+void Scene3D::TaskCollisionSolverCompute() {
+    const bool useRotation = CachedSettings.UseAngularVelocityEnabled();
+    const FPVector3& g = CachedSettings.Gravity;
+    const FP::Raw restingSpeedSq = Mul(Mul(Raw(g.X), Raw(g.X)) + Mul(Raw(g.Y), Raw(g.Y)), Raw(_deltaTime)) + 0x41;
+    for (ContactConstraint& c : _collisionSolverData) {
+        if ((c.Flags & IgnoreVelocitySolver) != 0) {
+            c.Flags |= WasSolved;
+            continue;
+        }
+        c.ImpulsesA = EntrySolverImpulses{};
+        c.ImpulsesB = EntrySolverImpulses{};
+        const CollisionManifold3D* m = c.Manifold;
+        const Entry3D* entryA = &_entries[static_cast<std::size_t>(m->_m._entryIdxA)];
+        const Entry3D* entryB = &_entries[static_cast<std::size_t>(m->_m._entryIdxB)];
+        const FPVector3& ra = c.Ra;
+        const FPVector3& rb = c.Rb;
+        const FP::Raw nx = Raw(m->Normal.X), ny = Raw(m->Normal.Y), nz = Raw(m->Normal.Z);
+        const PhysicsBody3D* bodyA = entryA->Body3D;
+        const PhysicsBody3D* bodyB = entryB->Body3D;
+        FP::Raw vx = 0, vy = 0, vz = 0;
+        if (bodyA != nullptr) {
+            const FPVector3& v = bodyA->Velocity;
+            if (useRotation) {
+                const FPVector3& w = bodyA->AngularVelocity;
+                vx = Mul(Raw(ra.Y), Raw(w.Z)) - (Raw(v.X) + Mul(Raw(ra.Z), Raw(w.Y)));
+                vy = Mul(Raw(ra.Z), Raw(w.X)) - (Raw(v.Y) + Mul(Raw(ra.X), Raw(w.Z)));
+                vz = Mul(Raw(ra.X), Raw(w.Y)) - (Raw(v.Z) + Mul(Raw(ra.Y), Raw(w.X)));
+            } else {
+                vx = -Raw(v.X);
+                vy = -Raw(v.Y);
+                vz = -Raw(v.Z);
+            }
+        }
+        if (bodyB != nullptr) {
+            const FPVector3& v = bodyB->Velocity;
+            vx += Raw(v.X);
+            vy += Raw(v.Y);
+            vz += Raw(v.Z);
+            if (useRotation) {
+                const FPVector3& w = bodyB->AngularVelocity;
+                vx = vx + Mul(Raw(rb.Z), Raw(w.Y)) - Mul(Raw(rb.Y), Raw(w.Z));
+                vy = vy - Mul(Raw(rb.Z), Raw(w.X)) + Mul(Raw(rb.X), Raw(w.Z));
+                vz = vz + Mul(Raw(rb.Y), Raw(w.X)) - Mul(Raw(rb.X), Raw(w.Y));
+            }
+        }
+        const FP::Raw vn = Mul(vy, ny) + Mul(vx, nx) + Mul(vz, nz);
+        if (vn >= 0) {
+            c.Flags |= WasSolved;
+            continue;
+        }
+        const FP::Raw speedSq = Mul(vy, vy) + Mul(vx, vx) + Mul(vz, vz);
+        const FP::Raw factor = speedSq < restingSpeedSq ? -(FP::Raw{1} << 16)
+                                                        : -(FP::Raw{1} << 16) - Raw(m->CombinedRestitution);
+        const FP::Raw jn = Divide(factor * vn, Raw(c.NormalMass));
+        FP::Raw tx = vx - Mul(vn, nx);
+        FP::Raw ty = vy - Mul(vn, ny);
+        FP::Raw tz = vz - Mul(vn, nz);
+        const FP::Raw tangentSq = Mul(ty, ty) + Mul(tx, tx) + Mul(tz, tz);
+        c.Flags &= ~WasSolved;
+        FP::Raw jx = Mul(jn, nx), jy = Mul(jn, ny), jz = Mul(jn, nz);
+        if (tangentSq >= 7) {
+            const FP::Raw tangentSpeed = Photon::Deterministic::FPMath::SqrtRaw(tangentSq);
+            const FP::Raw inverse = (FP::Raw{1} << 32) / tangentSpeed;
+            tx = Mul(tx, inverse);
+            ty = Mul(ty, inverse);
+            tz = Mul(tz, inverse);
+            const FPVector3 tangent{FP::FromRaw(tx), FP::FromRaw(ty), FP::FromRaw(tz)};
+            FP::Raw tangentMass = 0;
+            if ((c.Flags & HasDynamicBodyA) != 0) {
+                tangentMass = ComputePerceivedMassRaw(entryA, ra, tangent) + bodyA->_massInverseRawInt;
+            }
+            if ((c.Flags & HasDynamicBodyB) != 0) {
+                tangentMass = tangentMass + bodyB->_massInverseRawInt + ComputePerceivedMassRaw(entryB, rb, tangent);
+            }
+            const FP::Raw jt = Divide(-(tangentSpeed << 16), tangentMass);
+            FP::Raw scale = jt;
+            if ((jt < 0 ? -jt : jt) >= Mul(Raw(m->CombinedStaticFriction), jn)) {
+                scale = (-(jn * Raw(m->CombinedDynamicFriction))) >> 16;
+            }
+            jx += Mul(tx, scale);
+            jy += Mul(ty, scale);
+            jz += Mul(tz, scale);
+        }
+        c.ImpulsesB.Linear = FPVector3{FP::FromRaw(jx), FP::FromRaw(jy), FP::FromRaw(jz)};
+        c.ImpulsesA.Linear = FPVector3{FP::FromRaw(-jx), FP::FromRaw(-jy), FP::FromRaw(-jz)};
+        if (!useRotation) {
+            // TODO(0x7d65a64, Quantum.Physics3D.Scene3D.Task_CollisionSolverCompute): without
+            // angular velocity the original leaves the task here (after the first constraint
+            // of its slice); every constraint is computed here.
+            continue;
+        }
+        if ((c.Flags & HasDynamicBodyB) != 0) {
+            c.ImpulsesB.Angular = FPVector3{FP::FromRaw(Mul(Raw(rb.Y), jz) - Mul(Raw(rb.Z), jy)),
+                                            FP::FromRaw(Mul(Raw(rb.Z), jx) - Mul(Raw(rb.X), jz)),
+                                            FP::FromRaw(Mul(Raw(rb.X), jy) - Mul(Raw(rb.Y), jx))};
+        }
+        if ((c.Flags & HasDynamicBodyA) != 0) {
+            c.ImpulsesA.Angular = FPVector3{FP::FromRaw(Mul(Raw(ra.Y), -jz) - Mul(Raw(ra.Z), -jy)),
+                                            FP::FromRaw(Mul(Raw(ra.Z), -jx) - Mul(Raw(ra.X), -jz)),
+                                            FP::FromRaw(Mul(Raw(ra.X), -jy) - Mul(Raw(ra.Y), -jx))};
+        }
+    }
+}
+
+// 0x7d66298 - a manifold with several contact points acts through its first constraint: the
+// impulses of its unsolved points summed and divided by the point count.
+void Scene3D::TaskCollisionSolverAggregateContacts() {
+    const bool useRotation = CachedSettings.UseAngularVelocityEnabled();
+    for (CollisionManifold3D* m : _collisionSolverManifolds) {
+        const std::int32_t points = m->_contactPointsCount;
+        if (m->GetIgnore() || points == 1) {
+            continue;
+        }
+        ContactConstraint* first = &_collisionSolverData[static_cast<std::size_t>(m->_constraintDataIdx)];
+        const bool angularA = useRotation && (first->Flags & HasDynamicBodyA) != 0;
+        const bool angularB = useRotation && (first->Flags & HasDynamicBodyB) != 0;
+        FP::Raw ax = 0, ay = 0, az = 0, lx = 0, ly = 0, lz = 0, bx = 0, by = 0, bz = 0;
+        bool allSolved = true;
+        for (std::int32_t p = 0; p < points; ++p) {
+            const ContactConstraint& c = first[p];
+            if ((c.Flags & WasSolved) != 0) {
+                continue;
+            }
+            if (angularA) {
+                ax += Raw(c.ImpulsesA.Angular.X);
+                ay += Raw(c.ImpulsesA.Angular.Y);
+                az += Raw(c.ImpulsesA.Angular.Z);
+            }
+            lx += Raw(c.ImpulsesB.Linear.X);
+            ly += Raw(c.ImpulsesB.Linear.Y);
+            lz += Raw(c.ImpulsesB.Linear.Z);
+            allSolved = false;
+            if (angularB) {
+                bx += Raw(c.ImpulsesB.Angular.X);
+                by += Raw(c.ImpulsesB.Angular.Y);
+                bz += Raw(c.ImpulsesB.Angular.Z);
+            }
+        }
+        if (allSolved) {
+            continue;
+        }
+        first->Flags &= ~WasSolved;
+        const FP::Raw share = points == 0 ? 0 : (std::int32_t{0x10000} / points); // 1 / points
+        first->ImpulsesB.Linear = FPVector3{FP::FromRaw(Mul(lx, share)), FP::FromRaw(Mul(ly, share)),
+                                            FP::FromRaw(Mul(lz, share))};
+        first->ImpulsesA.Linear = FPVector3{FP::FromRaw(-Mul(lx, share)), FP::FromRaw(-Mul(ly, share)),
+                                            FP::FromRaw(-Mul(lz, share))};
+        if (angularA) {
+            first->ImpulsesA.Angular = FPVector3{FP::FromRaw(Mul(ax, share)), FP::FromRaw(Mul(ay, share)),
+                                                 FP::FromRaw(Mul(az, share))};
+        }
+        if (angularB) {
+            first->ImpulsesB.Angular = FPVector3{FP::FromRaw(Mul(bx, share)), FP::FromRaw(Mul(by, share)),
+                                                 FP::FromRaw(Mul(bz, share))};
+        }
+    }
+}
+
+// 0x7d66e14 - per island still unsolved: the first constraint of every manifold with an
+// impulse is pushed on the front of both roots' chains. An island left with nothing to solve
+// is marked solved and its constraints are ignored by later iterations.
+void Scene3D::TaskVelocitySolverAggregate() {
+    for (Island3D& island : _islands) {
+        if (island.Ignore || island.VelocityConstraintsSolved) {
+            continue;
+        }
+        island.VelocityConstraintsSolved = true;
+        for (CollisionManifold3D* m : island.CollisionManifolds) {
+            ContactConstraint& c = _collisionSolverData[static_cast<std::size_t>(m->_constraintDataIdx)];
+            if ((c.Flags & WasSolved) != 0) {
+                continue;
+            }
+            island.VelocityConstraintsSolved = false;
+            Entry3D* rootA = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxA)]);
+            Entry3D* rootB = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxB)]);
+            c.ImpulsesA.NextAdr = rootA->SolverImpulsesAdr;
+            rootA->SolverImpulsesAdr = &c.ImpulsesA;
+            c.ImpulsesB.NextAdr = rootB->SolverImpulsesAdr;
+            rootB->SolverImpulsesAdr = &c.ImpulsesB;
+        }
+        // TODO(0x7d66e14, Quantum.Physics3D.Scene3D.Task_VelocitySolverAggregate): the island's
+        // joint constraints join the chains too; joints are not reimplemented yet.
+        if (island.VelocityConstraintsSolved) {
+            for (CollisionManifold3D* m : island.CollisionManifolds) {
+                for (std::int32_t p = 0; p < m->_contactPointsCount; ++p) {
+                    _collisionSolverData[static_cast<std::size_t>(m->_constraintDataIdx + p)].Flags |=
+                        IgnoreVelocitySolver;
+                }
+            }
+        }
+    }
+}
+
+// 0x7d67270 - per solver entry: the chained impulses combined (an impulse along the sum
+// only adds the share beyond it) and applied at once; angular only with rotation and a
+// body not frozen on every axis.
+void Scene3D::TaskVelocitySolverApply() {
+    const bool useRotation = CachedSettings.UseAngularVelocityEnabled();
+    for (Entry3D* entry : _solverEntries) {
+        if (entry->SolverImpulsesAdr == nullptr) {
+            continue;
+        }
+        const bool angular = useRotation && (static_cast<std::uint8_t>(entry->Body3D->RotationFreeze) & 7) != 7;
+        AccumulatedImpulse sum{};
+        for (const EntrySolverImpulses* impulse = entry->SolverImpulsesAdr; impulse != nullptr;
+             impulse = impulse->NextAdr) {
+            AccumulatedImpulse next{};
+            next.Velocity = impulse->Linear;
+            next.AngularVelocity = impulse->Angular;
+            sum.Accumulate(next, angular ? (ImpulseLinear | ImpulseAngular | ImpulseAccumulate)
+                                         : (ImpulseLinear | ImpulseAccumulate));
+        }
+        ApplyImpulse(entry, sum.Velocity, angular ? &sum.AngularVelocity : nullptr);
+        entry->SolverImpulsesAdr = nullptr;
+    }
+}
+
 // 0x7d67a6c - per island: every contact deeper than the allowance pushes its dynamic bodies
 // apart along the normal (correction split by inverse mass, minus what earlier contacts
 // already pushed in that direction); then positions move by correction * massInverse.
@@ -1932,7 +2270,7 @@ void Scene3D::TaskIntegrateVelocity() {
             const FP::Raw tx = Mul(Raw(body->_torque.X), halfDt);
             const FP::Raw ty = Mul(Raw(body->_torque.Y), halfDt);
             const FP::Raw tz = Mul(Raw(body->_torque.Z), halfDt);
-            const FPMatrix3x3& m = entry->WorldInertiaTensorInverse;
+            const Photon::Deterministic::FPMatrix3x3& m = entry->WorldInertiaTensorInverse;
             const FP::Raw wx = Mul(Raw(m.M01), ty) + Mul(Raw(m.M00), tx) + Mul(Raw(m.M02), tz);
             const FP::Raw wy = Mul(Raw(m.M11), ty) + Mul(Raw(m.M10), tx) + Mul(Raw(m.M12), tz);
             const FP::Raw wz = Mul(Raw(m.M21), ty) + Mul(Raw(m.M20), tx) + Mul(Raw(m.M22), tz);
@@ -2052,16 +2390,33 @@ void Scene3D::Update(FrameBase* frame, FP deltaTime, ICollisionCallbacks3D* call
     TaskPostCallbacksUpdateManifolds();
     TaskBuildIslands();
     if (CachedSettings.SolverIterations != 0) {
-        // TODO(0x7d65098, Quantum.Physics3D.Scene3D.Task_CollisionSolverInit) and the rest
-        // of the hybrid Jacobi/Gauss-Seidel solver: not ported; both solver types use the
-        // legacy Gauss-Seidel solver here.
-        TaskCollisionSolverInitLegacyGS(frame);
-        for (int iteration = 0; iteration < CachedSettings.SolverIterations; ++iteration) {
-            TaskVelocitySolverLegacyGS();
+        // TaskManagementData.ScheduleSolverTasksLGS (0x7d6ff38) / ScheduleSolverTasksHJGS
+        // (0x7d700e8): the manifolds are cached, the constraints initialised, then one pass
+        // per iteration.
+        TaskCollisionSolverCacheManifolds();
+        if (CachedSettings.SolverType == ConstraintsSolverType::LegacyGaussSeidel) {
+            TaskCollisionSolverInitLegacyGS(frame);
+            for (int iteration = 0; iteration < CachedSettings.SolverIterations; ++iteration) {
+                TaskVelocitySolverLegacyGS();
+            }
+        } else {
+            TaskCollisionSolverInit(frame);
+            for (int iteration = 0; iteration < CachedSettings.SolverIterations; ++iteration) {
+                TaskCollisionSolverCompute();
+                TaskCollisionSolverAggregateContacts();
+                // TODO(0x7d66708, Quantum.Physics3D.Scene3D.Task_CollisionSolverAggregateMesh):
+                // mesh manifolds; static triangle meshes are not reimplemented yet.
+                TaskVelocitySolverAggregate();
+                TaskVelocitySolverApply();
+            }
         }
     }
     TaskPenetrationCorrection();
     TaskIntegrateVelocity();
+    // TODO(0x7d6902c, Quantum.Physics3D.Scene3D.Task_PositionSolverCompute), TODO(0x7d69378,
+    // Quantum.Physics3D.Scene3D.Task_PositionSolverAggregate), TODO(0x7d69530,
+    // Quantum.Physics3D.Scene3D.Task_PositionSolverApply): the position solver runs for
+    // joints only (UseJoints with PositionSolverIterations); joints are not reimplemented yet.
     if (CachedSettings.AllowSleepingEnabled()) {
         TaskSleepDetectionEntries();
         TaskSleepDetectionIslands();
