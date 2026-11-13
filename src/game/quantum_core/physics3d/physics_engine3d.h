@@ -56,12 +56,25 @@ class PhysicsEngine3D {
     // missing and, if the flags change, stores them and forgets the tracked collisions.
     static void SetCallbacks(Core::FrameBase* frame, EntityRef entity, CallbackFlags flags);
 
-    // TODO(0x7d48988, Quantum.Physics3D.PhysicsEngine3D.AllocatePersistentHitCollection3D),
-    // TODO(0x7d48a04, Quantum.Physics3D.PhysicsEngine3D.GetQueryHits),
-    // TODO(0x7d48afc, Quantum.Physics3D.PhysicsEngine3D.TryGetQueryHits),
-    // TODO(0x7d48b50, Quantum.Physics3D.PhysicsEngine3D.AddLinecastQuery),
-    // TODO(0x7d48d84, Quantum.Physics3D.PhysicsEngine3D.AddOverlapShapeQuery): broad-phase
-    // queries resolved during the step.
+    // TODO(0x7d48988, Quantum.Physics3D.PhysicsEngine3D.AllocatePersistentHitCollection3D):
+    // a persistent hit collection allocated from the context's allocator (who frees it is
+    // left to the caller in the original).
+
+    // 0x7d48b50 - a line cast resolved by the next step; returns its hit collection index.
+    std::int32_t AddLinecastQuery(const FPVector3& start, const FPVector3& end, bool firstHitOnly,
+                                  std::int32_t layerMask, std::int32_t options) {
+        return _scene3D->AddBroadphaseLinecast(_context, start, end, firstHitOnly, layerMask, options);
+    }
+    // 0x7d48d84 - a shape overlap resolved by the next step.
+    std::int32_t AddOverlapShapeQuery(Core::FrameBase* frame, const FPVector3& pos, const FPQuaternion& rot,
+                                      const Shape3D& shape, std::int32_t layerMask, std::int32_t options) {
+        return _scene3D->AddBroadphaseShapeOverlap(frame, pos, rot, shape, layerMask, options);
+    }
+    // 0x7d48a04 - the hits of a broad-phase query of this step; an unknown index throws
+    // std::out_of_range (IndexOutOfRangeException).
+    HitCollection3D GetQueryHits(std::int32_t index) const;
+    // 0x7d48afc - the same without throwing (an empty collection when unknown).
+    bool TryGetQueryHits(std::int32_t index, HitCollection3D& hits) const;
     // TODO(0x7d48fd4, Quantum.Physics3D.PhysicsEngine3D.RegisterInternalTypes)
 
   private:

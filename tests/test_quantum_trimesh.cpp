@@ -8,6 +8,7 @@
 #include "quantum_core/triangle_ccw.h"
 
 #include <cstdio>
+#include <stdexcept>
 #include <vector>
 
 using namespace Quantum;
@@ -504,4 +505,41 @@ TEST_CASE("Scene3D mesh: the character controller stands and walks on a mesh flo
     CHECK(kcc->Grounded());
     CHECK(t->Position.X - startX > F(2));
     CHECK(Abs(t->Position.Y) < FP::FromRaw(6554));
+}
+
+TEST_CASE("Scene3D: broad-phase queries are resolved by the step") {
+    MeshWorld w;
+    w.frame->settings.Gravity = FPVector3::Zero();
+    const EntityRef ball = w.AddBody(V3(1, 2, 1), Shape3D::CreateSphere(FP::_0_50()), false);
+    w.Init();
+    w.Step();
+    const int detailed = QueryOptions::HitAll | QueryOptions::ComputeDetailedInfo;
+
+    w.engine->OnFrameSimulationBegin(w.frame.get());
+    const std::int32_t all = w.engine->AddLinecastQuery(V3(1, 5, 1), V3(1, -5, 1), false, -1, detailed);
+    const std::int32_t first = w.engine->AddLinecastQuery(V3(1, 5, 1), V3(1, -5, 1), true, -1, detailed);
+    const std::int32_t overlap = w.engine->AddOverlapShapeQuery(w.frame.get(), V3(1, 2, 1), FPQuaternion::Identity(),
+                                                                Shape3D::CreateSphere(F(1)), -1, detailed);
+    CHECK(all == 0 && first == 1 && overlap == 2);
+    HitCollection3D hits;
+    CHECK(w.engine->TryGetQueryHits(first, hits) && hits.Count() == 0); // not resolved yet
+    w.engine->Update(w.frame.get(), nullptr, w.frame->get_DeltaTime());
+
+    hits = w.engine->GetQueryHits(all);
+    CHECK(hits.Count() == 2); // the ball and the floor
+    hits = w.engine->GetQueryHits(first);
+    CHECK(hits.Count() == 1 && hits[0].Entity().Index == ball.Index);
+    hits = w.engine->GetQueryHits(overlap);
+    CHECK(hits.Count() == 1 && hits[0].Entity().Index == ball.Index);
+    CHECK(!w.engine->TryGetQueryHits(3, hits) && hits.Count() == 0);
+    bool threw = false;
+    try {
+        w.engine->GetQueryHits(-1);
+    } catch (const std::out_of_range&) {
+        threw = true;
+    }
+    CHECK(threw);
+    // The next frame starts without queries.
+    w.Step();
+    CHECK(!w.engine->TryGetQueryHits(0, hits));
 }

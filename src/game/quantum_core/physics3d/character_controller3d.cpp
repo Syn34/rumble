@@ -82,15 +82,20 @@ CharacterController3DMovement CharacterController3D::ComputeRawMovement(
     const bool manifoldNormal = useManifoldNormal.has_value() ? *useManifoldNormal : config->UseManifoldNormal;
     const FPVector3 gravity = config->GravityNormalized();
 
-    // TODO(0x7d48afc, Quantum.Physics3D.PhysicsEngine3D.TryGetQueryHits): with a broad-phase
-    // query registered (BroadPhaseQueryIndex) its hits are used; those queries are not
-    // reimplemented, so the sphere is always overlapped here.
+    // With a broad-phase query registered for the controller this step, its hits are used;
+    // otherwise the sphere is overlapped now.
     Core::FrameContext* context = frame->get_Context();
-    HitCollection3D hits(8, HitCollection3D::Temp, context);
-    const Shape3D sphere = Shape3D::CreateSphere(FromRaw(Raw(config->Extent) + Raw(config->Radius)));
-    context->get_Physics3D()->Scene()->OverlapShape(
-        frame, &hits, center, FPQuaternion::Identity(), sphere, layerMask.has_value() ? *layerMask : config->LayerMask,
-        Physics3D::QueryOptions::HitAll | Physics3D::QueryOptions::ComputeDetailedInfo);
+    Physics3D::PhysicsEngine3D* engine = context->get_Physics3D();
+    HitCollection3D hits;
+    const std::int32_t queryIndex = kcc->_broadphaseQueryIndexPlusOne - 1;
+    if (queryIndex < 0 || !engine->TryGetQueryHits(queryIndex, hits)) {
+        hits = HitCollection3D(8, HitCollection3D::Temp, context);
+        const Shape3D sphere = Shape3D::CreateSphere(FromRaw(Raw(config->Extent) + Raw(config->Radius)));
+        engine->Scene()->OverlapShape(
+            frame, &hits, center, FPQuaternion::Identity(), sphere,
+            layerMask.has_value() ? *layerMask : config->LayerMask,
+            Physics3D::QueryOptions::HitAll | Physics3D::QueryOptions::ComputeDetailedInfo);
+    }
     kcc->_broadphaseQueryIndexPlusOne = 0;
 
     movement.Type = CharacterMovementType::FreeFall;

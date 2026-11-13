@@ -266,6 +266,9 @@ void Scene3D::ResetScene(FrameBase* frame) {
     // Dynamic entries go; the static ones (first) stay.
     _entries.resize(static_cast<std::size_t>(_staticComponentsCount));
     _queriesCount = 1;
+    _queries.resize(1);
+    _hitCollectionsCount = 0;
+    _resetForFrame = true;
     _collisionSolverData.clear();
     _collisionSolverManifolds.clear();
     _islands.clear();
@@ -2642,7 +2645,12 @@ void Scene3D::TaskSleepDetectionIslands() {
 // 0x7d5a3ec - one step. Ordering follows TaskManagementData.ScheduleTasks (0x7d6f764).
 void Scene3D::Update(FrameBase* frame, FP deltaTime, ICollisionCallbacks3D* callbacks) {
     _deltaTime = deltaTime;
-    ResetScene(frame);
+    // The original resets in OnFrameSimulationBegin only (queries added afterwards belong
+    // to this step); a step without it resets here.
+    if (!_resetForFrame) {
+        ResetScene(frame);
+    }
+    _resetForFrame = false;
     CreateEntries(frame);
     ResetBucketsAndTls();
     TaskIntegrateForcesFirstHalf();
@@ -2654,6 +2662,7 @@ void Scene3D::Update(FrameBase* frame, FP deltaTime, ICollisionCallbacks3D* call
     TaskSortCcdManifolds();
     TaskCcdCallbacks(frame, callbacks);
     TaskPostCallbacksUpdateEntries(frame);
+    TaskQueryResolve(frame);
     TaskPostCallbacksUpdateManifolds();
     TaskBuildIslands();
     TaskIntegrateFirstTOI();
@@ -2810,6 +2819,16 @@ void Scene3D::ScanQueryCandidates(FrameBase* frame, HitCollection3D* hits, const
                              !frame->ComponentMask(entry->Ref.Index).IsSupersetOf(_minComponentSet) ||
                              entry->Collider3D->_disabled != 0)) {
                 continue;
+            }
+            if (_resolvingStepQueries && _callbacksWereCalled && !statics) {
+                // Task_QueryResolve after callbacks: entries ignored since, and entities
+                // whose kind no longer matches the options.
+                if (entry->Ignore) continue;
+                if ((options & HitAll) != HitAll) {
+                    if ((options & HitTriggers) == 0 && entry->Collider3D->_isTrigger == 1) continue;
+                    if ((options & HitDynamics) == 0 && entry->HasDynamicBody) continue;
+                    if ((options & HitKinematics) == 0 && !entry->HasDynamicBody) continue;
+                }
             }
             if (((query.LayerMask >> entry->Collider3D->Layer()) & 1) == 0) continue;
             const bool trigger = entry->Collider3D->_isTrigger == 1;
@@ -3609,6 +3628,112 @@ void Scene3D::ResolveQueryTriangleLinecast(QueryContextInfo3D& info) {
     hit.Normal = info.Tri->Normal;
     SetHitCollider(hit, info.MeshEntry);
     info.HitCollection->Add(hit, info.Frame->get_Context());
+}
+
+// ---------------------------------------------------------------------------------------
+// Broad-phase queries
+
+// 0x7d566f4 - the next query slot (index 0 is reserved; the count is _queriesCount).
+Query3D* Scene3D::GetNextQuery(std::int32_t& index) {
+    index = _queriesCount++;
+    if (static_cast<std::int32_t>(_queries.size()) < _queriesCount) {
+        _queries.resize(static_cast<std::size_t>(_queriesCount));
+    }
+    Query3D* query = &_queries[static_cast<std::size_t>(index)];
+    *query = Query3D{};
+    return query;
+}
+
+// 0x7d5684c - the next hit collection of the step, emptied; new ones are persistent
+// collections of the default capacity.
+HitCollection3D* Scene3D::GetNextHitCollection(Core::FrameContext* context, std::int32_t& index) {
+    // PhysicsConfig.DefaultHitCollectionItemsCapacity is not available yet (the collections
+    // grow as hits are added, so only the initial size differs).
+    constexpr std::int32_t DefaultHitCollectionItemsCapacity = 32;
+    if (_hitCollectionsCount == static_cast<std::int32_t>(_hitCollections.size())) {
+        _hitCollections.emplace_back(DefaultHitCollectionItemsCapacity, HitCollection3D::Persistent, context);
+    }
+    index = _hitCollectionsCount++;
+    HitCollection3D* hits = &_hitCollections[static_cast<std::size_t>(index)];
+    hits->Reset();
+    return hits;
+}
+
+std::int32_t Scene3D::AddBroadphaseLinecast(Core::FrameContext* context, const FPVector3& start, const FPVector3& end,
+                                            bool firstHitOnly, std::int32_t layerMask, std::int32_t options) {
+    std::int32_t queryIndex = 0;
+    Query3D* query = GetNextQuery(queryIndex);
+    GetNextEntry(query->EntryIndex);
+    GetNextHitCollection(context, query->HitCollectionIndex);
+    query->Options = options;
+    query->LayerMask = layerMask;
+    query->Type = QueryType::Linecast;
+    query->Transform.Position = start;
+    query->End = end;
+    query->FirstHitOnly = firstHitOnly;
+    return query->HitCollectionIndex;
+}
+
+std::int32_t Scene3D::AddBroadphaseShapeOverlap(FrameBase* frame, const FPVector3& pos, const FPQuaternion& rot,
+                                                const Shape3D& shape, std::int32_t layerMask, std::int32_t options) {
+    std::int32_t queryIndex = 0;
+    Query3D* query = GetNextQuery(queryIndex);
+    GetNextHitCollection(frame->get_Context(), query->HitCollectionIndex);
+    query->Options = options;
+    query->LayerMask = layerMask;
+    query->Type = QueryType::ShapeOverlap;
+    query->EntryIndex = -1;
+    query->Transform.Position = pos;
+    query->Transform.Rotation = rot;
+    if (shape.Type() == Shape3DType::Compound) {
+        // TODO(0x7d57124, Quantum.Physics3D.Scene3D.AddBroadphaseCompoundShapeOverlap): one
+        // query per child shape chained through NextInCompound (the root query is dropped
+        // when no child was added); compound shapes are not reimplemented yet.
+        return query->HitCollectionIndex;
+    }
+    query->Shape = shape;
+    GetNextEntry(query->EntryIndex);
+    return query->HitCollectionIndex;
+}
+
+// TODO(0x7d69b20, Quantum.Physics3D.Scene3D.Task_QueryResolve): the original resolves each
+// query against the candidates the broad phase listed for it per bucket (query endpoints:
+// TODO(0x7d5cc90, Quantum.Physics3D.Scene3D.Task_BroadPhaseQueryPreStep), TODO(0x7d5d194,
+// Quantum.Physics3D.Scene3D.QueryCheckEntryList), TODO(0x7d5dd7c,
+// Quantum.Physics3D.Scene3D.EntryCheckQueryList), TODO(0x7d5d308,
+// Quantum.Physics3D.Scene3D.QueryCheckTriangles), TODO(0x7d5d134,
+// Quantum.Physics3D.Scene3D.AddQueryItem)). Here each query walks the step's stabbing
+// lists like an immediate query, which finds the same pairs through the same filters, the
+// same narrow phase and the same first-hit bucket rule, but may list the hits of a bucket
+// in another order. As in the original, after callbacks ran ignored entries and entities
+// no longer matching the options are skipped, and a first-hit-only query keeps only its
+// nearest hit (by distance from the start for line casts, by cast distance otherwise).
+void Scene3D::TaskQueryResolve(FrameBase* frame) {
+    _resolvingStepQueries = true;
+    for (std::int32_t index = 1; index < _queriesCount; ++index) {
+        Query3D& query = _queries[static_cast<std::size_t>(index)];
+        if (query.EntryIndex < 0) {
+            continue; // compound roots (not supported yet)
+        }
+        HitCollection3D* hits = &_hitCollections[static_cast<std::size_t>(query.HitCollectionIndex)];
+        Entry3D* qEntry = &_tls.Entry;
+        qEntry->StaticColliderIndex = -1;
+        if (query.Type == QueryType::Linecast) {
+            InitLinecastEntry(query, qEntry);
+        } else {
+            InitShapeOverlapEntry(query, qEntry);
+        }
+        ResolveQuery(frame, hits, query, qEntry);
+        if (query.FirstHitOnly && hits->Count() >= 2) {
+            if (query.Type == QueryType::Linecast) {
+                hits->Sort(query.Transform.Position);
+            } else {
+                hits->SortCastDistance();
+            }
+            hits->SetCount(1);
+        }
+    }
+    _resolvingStepQueries = false;
 }
 
 } // namespace Quantum::Physics3D

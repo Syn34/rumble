@@ -37,6 +37,7 @@ class TriangleMesh;
 struct PhysicsCallbacksData;
 namespace Core {
 class FrameBase;
+class FrameContext;
 }
 } // namespace Quantum
 
@@ -245,6 +246,10 @@ struct Query3D {
     Shape3D Shape;
     std::int32_t Options = 0;
     std::int32_t LayerMask = 0;
+    std::int32_t HitCollectionIndex = 0; // broad-phase queries: where the hits go
+    std::int32_t EntryIndex = -1;        // the query's scene entry (-1 for a compound root)
+    bool IsPartOfCompound = false;
+    std::int32_t NextInCompound = 0;
 };
 
 // Scene3D.QueryContextInfo3D: what a static mesh traversal hands to the per-triangle test
@@ -380,6 +385,18 @@ class Scene3D {
     void SetSceneMesh(TriangleMesh* mesh) { _sceneMesh = mesh; }
     TriangleMesh* SceneMesh() const { return _sceneMesh; }
 
+    // Broad-phase queries: added during a frame (after OnFrameSimulationBegin), resolved by
+    // the next step; the returned index names their hit collection (GetQueryHits).
+    // 0x7d56628 - a line cast; reserves the query's entry and hit collection.
+    std::int32_t AddBroadphaseLinecast(Core::FrameContext* context, const FPVector3& start, const FPVector3& end,
+                                       bool firstHitOnly, std::int32_t layerMask, std::int32_t options);
+    // 0x7d57004 - a shape overlap (compound shapes are not supported yet: no hits).
+    std::int32_t AddBroadphaseShapeOverlap(Core::FrameBase* frame, const FPVector3& pos, const FPQuaternion& rot,
+                                           const Shape3D& shape, std::int32_t layerMask, std::int32_t options);
+    std::int32_t HitCollectionsCount() const { return _hitCollectionsCount; }
+    HitCollection3D* GetHitCollection(std::int32_t index) { return &_hitCollections[static_cast<std::size_t>(index)]; }
+    const Query3D& GetQuery(std::int32_t index) const { return _queries[static_cast<std::size_t>(index)]; }
+
     // Immediate queries (see scene3d.cpp for how they differ from the original's).
     void Linecast(Core::FrameBase* frame, HitCollection3D* hits, const FPVector3& start,
                   const FPVector3& end, bool firstHitOnly, std::int32_t layerMask,
@@ -487,6 +504,9 @@ class Scene3D {
     void TaskSleepDetectionIslands();
 
     Entry3D* GetNextEntry(std::int32_t& index);
+    Query3D* GetNextQuery(std::int32_t& index);
+    HitCollection3D* GetNextHitCollection(Core::FrameContext* context, std::int32_t& index);
+    void TaskQueryResolve(Core::FrameBase* frame);
     void UpdateManifoldCachedState(ManifoldData3D& m) const;
     Entry3D* Root(Entry3D* entry);
 
@@ -507,6 +527,11 @@ class Scene3D {
     std::vector<Entry3D*> _solverEntries; // the dynamic entries that joined an island
     std::vector<Entry3D> _entries;
     std::int32_t _queriesCount = 1;
+    std::vector<Query3D> _queries; // index 0 reserved
+    std::vector<HitCollection3D> _hitCollections;
+    std::int32_t _hitCollectionsCount = 0;
+    bool _resetForFrame = false;       // ResetScene ran since the last step
+    bool _resolvingStepQueries = false; // TaskQueryResolve: post-callback filters apply
     TriangleMesh* _sceneMesh = nullptr;
     std::int32_t _meshEntriesCount = 0; // mesh colliders of the map (Shape3D.Mesh.MeshIndex)
     // Per (bucket, mesh collider): [0] the collision and [1] the trigger mesh manifold of
