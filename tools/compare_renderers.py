@@ -9,6 +9,9 @@ point at a backend bug.
 
 Usage:
     python3 tools/compare_renderers.py <path/to/RangerRumble> [--frames N] [--out DIR]
+    python3 tools/compare_renderers.py build/tools/sceneview --args=--demo
+Any program that accepts --list-renderers, --renderer, --frames and --screenshot
+works; --args passes extra arguments to it (synthetic content only).
 Exit status is non-zero if any pair differs in more than --tolerance of pixels.
 """
 import argparse
@@ -34,6 +37,7 @@ def main():
     ap.add_argument("exe")
     ap.add_argument("--frames", type=int, default=20)
     ap.add_argument("--out", default="renderer-compare")
+    ap.add_argument("--args", default="", help="extra arguments for the program (space separated)")
     ap.add_argument("--tolerance", type=float, default=0.005,
                     help="max fraction of pixels allowed to differ (default 0.5%%)")
     args = ap.parse_args()
@@ -48,8 +52,9 @@ def main():
     images = {}
     for name in renderers:
         shot = os.path.join(args.out, f"{name}.ppm")
-        result = subprocess.run([args.exe, "--renderer", name, "--frames", str(args.frames),
-                                 "--screenshot", shot], capture_output=True, text=True)
+        result = subprocess.run([args.exe, *args.args.split(), "--renderer", name,
+                                 "--frames", str(args.frames), "--screenshot", shot],
+                                capture_output=True, text=True)
         print(result.stdout.strip())
         if result.returncode != 0:
             print(result.stderr, file=sys.stderr)

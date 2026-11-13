@@ -10,3 +10,8 @@ rr_set_warnings(contentindex)
 add_executable(meshview meshview/main.cpp)
 target_link_libraries(meshview PRIVATE rr::assets rr::render rr::platform)
 rr_set_warnings(meshview)
+
+# Prefab/scene viewer on the engine scene renderer.
+add_executable(sceneview sceneview/main.cpp)
+target_link_libraries(sceneview PRIVATE rr::scene rr::assets rr::render rr::platform)
+rr_set_warnings(sceneview)
