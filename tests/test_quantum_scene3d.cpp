@@ -225,3 +225,23 @@ TEST_CASE("Scene3D: a trigger callback fires once on enter") {
     CHECK(recorder.triggerEnter == 1);
     CHECK(recorder.triggerExit == 1);
 }
+
+TEST_CASE("Scene3D: inertia from shape factors and the context's engine") {
+    World w;
+    const EntityRef e = w.AddBody(V3(0, 0, 0), Shape3D::CreateBox(V3(1, 2, 3)), true);
+    PhysicsBody3D* body = w.frame->GetPointer<PhysicsBody3D>(e);
+    body->ResetInertia(w.frame.get(), e);
+    // Box with half extents (1, 2, 3), mass 1: I = ((4 + 9), (1 + 9), (1 + 4)) / 3.
+    const FPVector3 inv = body->InertiaTensorInverse();
+    CHECK(Photon::Deterministic::FPMath::Abs(inv.X - FP::FromRaw(65536 * 3 / 13)) < FP::FromRaw(8));
+    CHECK(Photon::Deterministic::FPMath::Abs(inv.Z - FP::FromRaw(65536 * 3 / 5)) < FP::FromRaw(8));
+    const FPVector3 sphere = Shape3D::CreateSphere(F(2)).CalculateInertiaTensorFactor(FPVector3::Zero());
+    CHECK(sphere.X == FP::FromRaw(2 * 4 * 65536 / 5));
+
+    FrameContext::Args args;
+    args.PlatformInfo = &w.platform;
+    args.HeapConfig = Quantum::Allocator::Heap::Config(12, 256, 4);
+    args.UsePhysics3D = true;
+    FrameContext withPhysics(args);
+    CHECK(withPhysics.get_Physics3D() != nullptr && w.context->get_Physics3D() == nullptr);
+}

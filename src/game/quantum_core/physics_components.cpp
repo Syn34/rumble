@@ -205,8 +205,22 @@ void PhysicsBody3D::ResetCenterOfMass(Core::FrameBase* f, EntityRef entity) {
     _centerOfMass = Physics3D::FPVector3RawInt::FromFPVector3(collider->Shape.LocalTransform.Position);
 }
 
-void PhysicsBody3D::ResetInertia(Core::FrameBase* /*f*/, EntityRef /*entity*/) {
-    // See the TODO in the header; the inertia is left unchanged.
+// 0x7d33d60 - inverse inertia = massInverse / factor per axis (zero for a non-positive
+// factor, and all zero for an infinite mass).
+void PhysicsBody3D::ResetInertia(Core::FrameBase* f, EntityRef entity) {
+    if (_massInverseRawInt == 0) {
+        _inertiaTensorInverse = {};
+        return;
+    }
+    const PhysicsCollider3D* collider = f->GetPointer<PhysicsCollider3D>(entity);
+    const FPVector3 factor = collider->Shape.CalculateInertiaTensorFactor(CenterOfMass());
+    const FP::Raw scaled = FP::Raw{_massInverseRawInt} << 16;
+    const auto axis = [scaled](FP value) {
+        return value.RawValue() >= 1 ? static_cast<std::int32_t>(scaled / value.RawValue()) : 0;
+    };
+    _inertiaTensorInverse.RawIntX = axis(factor.X);
+    _inertiaTensorInverse.RawIntY = axis(factor.Y);
+    _inertiaTensorInverse.RawIntZ = axis(factor.Z);
 }
 
 // ---------------------------------------------------------------------------------------

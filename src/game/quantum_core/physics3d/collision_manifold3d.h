@@ -30,6 +30,9 @@ using Photon::Deterministic::FP;
 using Photon::Deterministic::FPQuaternion;
 using Photon::Deterministic::FPVector3;
 
+struct Entry3D;
+class Scene3D;
+
 struct ManifoldData3D {
     static constexpr int SIZE = 32;
 
@@ -61,13 +64,16 @@ struct ManifoldData3D {
     bool GetUsesCcd() const { return HasFlag(UsesCcd); }         // 0x7d7b394
     void SetUsesCcd(bool value) { SetFlag(UsesCcd, value); }     // 0x7d7b3a0
 
-    // Scene-dependent (Scene3D entry storage, out of scope here):
-    // TODO(0x7d7b3c0, Quantum.Physics3D.ManifoldData3D.SetEntries): stores both entry
-    // indices and the triangle index, optionally refreshing the cached state.
-    // TODO(0x7d7b3d8, Quantum.Physics3D.ManifoldData3D.UpdateCachedState): IsDynamic = both
-    // entries dynamic; UsesCcd = either entry (or its compound root) uses CCD.
-    // TODO(0x7d7b4a4, Quantum.Physics3D.ManifoldData3D.GetEntryA),
-    // TODO(0x7d7b4bc, Quantum.Physics3D.ManifoldData3D.GetEntryB).
+    // 0x7d7b3c0 - stores both entry indices and the triangle index; optionally refreshes
+    // the cached flags from the scene.
+    void SetEntries(Scene3D* scene, std::int32_t entryA, std::int32_t entryB, std::int32_t tri,
+                    bool updateCachedState);
+    // 0x7d7b3d8 - IsDynamic = both entries are entities; UsesCcd = either (or its compound
+    // root) uses CCD.
+    void UpdateCachedState(const Scene3D* scene);
+    // 0x7d7b4a4 / 0x7d7b4bc
+    Entry3D* GetEntryA(Scene3D* scene) const;
+    Entry3D* GetEntryB(Scene3D* scene) const;
 
     bool HasFlag(Flags flag) const { return (_flags & flag) != 0; }
     void SetFlag(Flags flag, bool value) { _flags = value ? (_flags | flag) : (_flags & ~flag); }
@@ -120,9 +126,13 @@ struct CollisionManifold3D {
     std::int32_t GetConstraintDataIndex() const { return _constraintDataIdx; }     // 0x7d7b5e4
     void SetConstraintDataIndex(std::int32_t value) { _constraintDataIdx = value; } // 0x7d7b5ec
 
-    // TODO(0x7d7b5f4, Quantum.Physics3D.CollisionManifold3D.SetEntries),
-    // TODO(0x7d7b60c, Quantum.Physics3D.CollisionManifold3D.GetEntryA),
-    // TODO(0x7d7b624, Quantum.Physics3D.CollisionManifold3D.GetEntryB): scene-dependent.
+    // 0x7d7b5f4 / 0x7d7b60c / 0x7d7b624 - as ManifoldData3D's.
+    void SetEntries(Scene3D* scene, std::int32_t entryA, std::int32_t entryB, std::int32_t tri,
+                    bool updateCachedState) {
+        _m.SetEntries(scene, entryA, entryB, tri, updateCachedState);
+    }
+    Entry3D* GetEntryA(Scene3D* scene) const { return _m.GetEntryA(scene); }
+    Entry3D* GetEntryB(Scene3D* scene) const { return _m.GetEntryB(scene); }
 
     // 0x7d7b63c
     static FPVector3 GetContactPoint(const CollisionManifold3D* manifold, std::int32_t index);

@@ -355,15 +355,33 @@ Entry3D* Scene3D::Root(Entry3D* entry) {
     return entry->_compoundRootIndexPlusOne >= 1 ? entry->_compoundRoot : entry;
 }
 
-// 0x7d6c3c8 (ManifoldData3D.UpdateCachedState)
-void Scene3D::UpdateManifoldCachedState(ManifoldData3D& m) const {
-    const Entry3D& a = _entries[static_cast<std::size_t>(m._entryIdxA)];
-    const Entry3D& b = _entries[static_cast<std::size_t>(m._entryIdxB)];
-    m.SetIsDynamic(a.Ref.IsValid() && b.Ref.IsValid());
+void Scene3D::UpdateManifoldCachedState(ManifoldData3D& m) const { m.UpdateCachedState(this); }
+
+// 0x7d7b3d8
+void ManifoldData3D::UpdateCachedState(const Scene3D* scene) {
+    const Entry3D& a = scene->_entries[static_cast<std::size_t>(_entryIdxA)];
+    const Entry3D& b = scene->_entries[static_cast<std::size_t>(_entryIdxB)];
+    SetIsDynamic(a.Ref.IsValid() && b.Ref.IsValid());
     const Entry3D* rootA = a._compoundRootIndexPlusOne >= 1 ? a._compoundRoot : &a;
     const Entry3D* rootB = b._compoundRootIndexPlusOne >= 1 ? b._compoundRoot : &b;
-    m.SetUsesCcd(rootA->_useCCD || rootB->_useCCD);
+    SetUsesCcd(rootA->_useCCD || rootB->_useCCD);
 }
+
+// 0x7d7b3c0
+void ManifoldData3D::SetEntries(Scene3D* scene, std::int32_t entryA, std::int32_t entryB,
+                                std::int32_t tri, bool updateCachedState) {
+    _entryIdxA = entryA;
+    _entryIdxB = entryB;
+    _triIdx = tri;
+    if (updateCachedState) {
+        UpdateCachedState(scene);
+    }
+}
+
+// 0x7d7b4a4
+Entry3D* ManifoldData3D::GetEntryA(Scene3D* scene) const { return scene->GetEntryUnchecked(_entryIdxA); }
+// 0x7d7b4bc
+Entry3D* ManifoldData3D::GetEntryB(Scene3D* scene) const { return scene->GetEntryUnchecked(_entryIdxB); }
 
 // 0x7d5a214
 std::int32_t Scene3D::GetPointBucket(const FPVector3& point) const {

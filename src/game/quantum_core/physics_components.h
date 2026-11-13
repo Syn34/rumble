@@ -185,8 +185,7 @@ struct PhysicsBody3D {
     // 0x7d34234 - centre of mass = the collider shape's local position.
     void ResetCenterOfMass(Core::FrameBase* f, EntityRef entity);
 
-    // TODO(0x7d33d60, Quantum.PhysicsBody3D.ResetInertia): inverse inertia from the
-    // collider's Shape3D.CalculateInertiaTensorFactor (not reimplemented) and the mass.
+    // 0x7d33d60 - inverse inertia from the collider shape's inertia factor and the mass.
     void ResetInertia(Core::FrameBase* f, EntityRef entity);
     // TODO(0x7d34bf4, Quantum.PhysicsBody3D.Serialize): field-by-field frame serialisation.
 };

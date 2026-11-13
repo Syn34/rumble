@@ -36,6 +36,10 @@ class DynamicAssetDB;
 class IAssetSerializer;
 } // namespace Quantum
 
+namespace Quantum::Physics3D {
+class PhysicsEngine3D;
+}
+
 namespace Quantum::Core {
 
 class FrameBase;
@@ -119,7 +123,8 @@ class FrameContext {
     const CullingArea& get_CullingArea() const { return _cullingArea; }
 
     // TODO(0x7d1e4f8, Quantum.Core.FrameContext.get_Physics2D): needs PhysicsEngine2D.
-    // TODO(0x7d1e500, Quantum.Core.FrameContext.get_Physics3D): needs PhysicsEngine3D.
+    // 0x7d1e500 - null unless the context was created with UsePhysics3D.
+    Physics3D::PhysicsEngine3D* get_Physics3D() const { return _physics3D.get(); }
     // TODO(0x7d1e508, Quantum.Core.FrameContext.get_Navigation): needs Navigation.
     // TODO(0x7d1e520, Quantum.Core.FrameContext.get_TaskContext): needs Task.TaskContext.
     // TODO(0x7d1e528, Quantum.Core.FrameContext.get_ProfilerContext): needs ProfilerContext.
@@ -137,8 +142,8 @@ class FrameContext {
     // TODO(0x7d1ebc4, Quantum.Core.FrameContext.OnSimulationEnd): ends the task context
     // frame; missing, so this does nothing yet.
     void OnSimulationEnd() {}
-    // TODO(0x7d1ebdc, Quantum.Core.FrameContext.OnFrameSimulationBegin): forward to
-    // PhysicsEngine2D/3D.OnFrameSimulationBegin once they exist.
+    // TODO(0x7d1ebdc, Quantum.Core.FrameContext.OnFrameSimulationBegin): forwards to the 3D
+    // engine; PhysicsEngine2D is not ported.
     void OnFrameSimulationBegin(FrameBase* f);
     // TODO(0x7d1ec28, Quantum.Core.FrameContext.OnFrameSimulationEnd): the physics
     // engines' end-of-frame work is missing; FreeTempAllocations is done.
@@ -200,6 +205,7 @@ class FrameContext {
     std::function<bool(int)> _isLocalPlayer;
     std::shared_ptr<Quantum::DynamicAssetDB> _initialDynamicAssets;
     std::shared_ptr<Quantum::AssetDB> _assetDB;
+    std::shared_ptr<Physics3D::PhysicsEngine3D> _physics3D;
     Quantum::IAssetSerializer* _assetSerializer = nullptr;
     CullingArea _cullingArea;
     Quantum::Allocator::Heap::Group* _heapGroup = nullptr;
