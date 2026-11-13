@@ -2542,9 +2542,10 @@ void Scene3D::Update(FrameBase* frame, FP deltaTime, ICollisionCallbacks3D* call
 void Scene3D::ResolveQuery(FrameBase* frame, HitCollection3D* hits, const Query3D& query, Entry3D* qEntry) {
     const IntAABB& box = qEntry->AABB;
     const auto bucketCount = static_cast<std::int64_t>(_buckets.size());
+    // FPMath.Clamp(int, int, int): the quotient is narrowed to 32 bits first.
     const auto bucketOf = [&](std::int32_t coordinate) {
-        return static_cast<std::int32_t>(std::clamp<std::int64_t>((coordinate + _worldOffsetRaw) / _bucketsSizeRaw, 0,
-                                                                  bucketCount - 1));
+        const auto bucket = static_cast<std::int32_t>((coordinate + _worldOffsetRaw) / _bucketsSizeRaw);
+        return std::clamp(bucket, 0, static_cast<std::int32_t>(bucketCount - 1));
     };
     const std::int32_t low = bucketOf(_bucketOnX ? box.MinX : box.MinZ);
     const std::int32_t high = bucketOf(_bucketOnX ? box.MaxX : box.MaxZ);
@@ -2671,10 +2672,12 @@ void Scene3D::ResolveQueryNarrow(FrameBase* frame, HitCollection3D* hits, const 
     case QueryType::ShapeOverlap: {
         CollisionManifold3D& m = _tls.Manifold;
         m = CollisionManifold3D{};
-        m._m._entryIdxA = qEntry->Index;
-        m._m._entryIdxB = entry->Index;
+        // The scene entry is A and the query B: the normal points from the collider
+        // towards the query shape.
+        m._m._entryIdxA = entry->Index;
+        m._m._entryIdxB = qEntry->Index;
         m._m._triIdx = -1;
-        CollisionManifoldInfo3D info{&m, qEntry, entry, nullptr};
+        CollisionManifoldInfo3D info{&m, entry, qEntry, nullptr};
         if (!NarrowChecks::Check(_tls.Narrow, CachedSettings.CCDSettingsValue, _deltaTime, &info, detailed)) {
             return;
         }

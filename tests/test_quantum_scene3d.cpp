@@ -10,7 +10,10 @@
 #include "quantum_core/frame_context.h"
 #include "quantum_core/frame_serializer.h"
 #include "quantum_core/map.h"
+#include "quantum_core/physics3d/character_controller3d.h"
 #include "quantum_core/physics3d/physics_engine3d.h"
+#include "quantum_core/resource_manager.h"
+#include "quantum_core/asset_db.h"
 #include "quantum_core/physics_components.h"
 #include "quantum_core/physics_scene_settings.h"
 #include "quantum_core/transform.h"
@@ -73,6 +76,7 @@ class SceneTestFrame final : public FrameBase {
 };
 
 struct World {
+    std::unique_ptr<ResourceManagerStatic> resources; // outlives the context
     RegistryScope registry;
     SystemAllocator allocator;
     Photon::Deterministic::DeterministicPlatformInfo platform;
@@ -80,10 +84,15 @@ struct World {
     std::unique_ptr<SceneTestFrame> frame;
     std::unique_ptr<PhysicsEngine3D> engine;
 
-    World() {
+    explicit World(std::vector<std::shared_ptr<AssetObject>> assets = {}) {
         rr::test::InstallMathDerivedTables();
         platform.Allocator = &allocator;
         FrameContext::Args args;
+        if (!assets.empty()) {
+            resources = std::make_unique<ResourceManagerStatic>(assets, nullptr);
+            args.AssetDatabase = resources->CreateAssetDatabase();
+            args.UsePhysics3D = true; // the controller queries the context's engine
+        }
         args.PlatformInfo = &platform;
         args.HeapConfig = Quantum::Allocator::Heap::Config(12, 256, 4);
         context = std::make_unique<FrameContext>(args);
@@ -228,6 +237,7 @@ TEST_CASE("Scene3D: a first-hit line cast stops at the first bucket with a hit")
                            Shape3D::CreateSphere(F(1)), -1, QueryOptions::HitAll | QueryOptions::ComputeDetailedInfo);
     CHECK(overlap.Count() == 1 && overlap[0].Entity().Index == near.Index);
     CHECK(overlap[0].OverlapPenetration > FP::Zero());
+    CHECK(overlap[0].Normal.Z > FP::Zero()); // from the collider towards the query shape
 }
 
 TEST_CASE("Scene3D: a trigger callback fires once on enter") {
@@ -493,4 +503,39 @@ TEST_CASE("Scene3D: a CCD body stops at a thin wall instead of tunnelling") {
     const FP z = w.frame->GetPointer<Quantum::Transform3D>(bullet)->Position.Z;
     CHECK(z < F(10)); // never past the wall
     CHECK(z > F(5));  // but it did move up to it
+}
+
+TEST_CASE("Scene3D: the character controller lands, stands and walks") {
+    auto config = std::make_shared<CharacterController3DConfig>();
+    config->Guid = AssetGuid(500);
+    config->Loaded(nullptr, nullptr);
+    World w({config});
+    w.AddStaticBox(V3(0, -1, 0), V3(20, 1, 20));
+    const EntityRef hero = w.frame->Create();
+    w.frame->Add(hero, Quantum::Transform3D{V3(0, 1, 0), FPQuaternion::Identity()});
+    w.frame->Add(hero, CharacterController3D{});
+    CharacterController3D* kcc = w.frame->GetPointer<CharacterController3D>(hero);
+    kcc->Init(w.frame.get(), config.get());
+    CHECK(kcc->MaxSpeed == F(3) && kcc->Config().Id == AssetGuid(500));
+    PhysicsEngine3D* engine = w.context->get_Physics3D();
+    engine->Init(w.frame.get(), AssetGuid{});
+    engine->Update(w.frame.get(), nullptr, w.frame->get_DeltaTime());
+    for (int i = 0; i < 90; ++i) {
+        w.frame->GetPointer<CharacterController3D>(hero)->Move(w.frame.get(), hero, FPVector3::Zero());
+    }
+    const Quantum::Transform3D* t = w.frame->GetPointer<Quantum::Transform3D>(hero);
+    kcc = w.frame->GetPointer<CharacterController3D>(hero);
+    // Standing on the floor: the sphere (radius 0.5, centre offset 0.5) rests near y = 0.
+    CHECK(kcc->Grounded());
+    CHECK(Photon::Deterministic::FPMath::Abs(t->Position.Y) < FP::FromRaw(6554));
+    // Walking along +X reaches the controller's speed.
+    const FP startX = t->Position.X;
+    for (int i = 0; i < 60; ++i) {
+        w.frame->GetPointer<CharacterController3D>(hero)->Move(w.frame.get(), hero, V3(1, 0, 0));
+    }
+    kcc = w.frame->GetPointer<CharacterController3D>(hero);
+    CHECK(kcc->Grounded());
+    CHECK(t->Position.X - startX > F(2));
+    CHECK(kcc->Velocity.X <= F(3) && kcc->Velocity.X > F(2));
+    CHECK(Photon::Deterministic::FPMath::Abs(t->Position.Y) < FP::FromRaw(6554));
 }

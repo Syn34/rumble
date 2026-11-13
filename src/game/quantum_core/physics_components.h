@@ -25,6 +25,9 @@
 #include <optional>
 
 namespace Quantum {
+struct CharacterController3DMovement;
+class IKCCCallbacks3D;
+class CharacterController3DConfig;
 
 using Photon::Deterministic::FPMatrix3x3;
 
@@ -469,12 +472,27 @@ struct CharacterController3D {
     void SetBroadPhaseQueryIndex(std::int32_t value) {
         _broadphaseQueryIndexPlusOne = value < 0 ? 0 : value + 1;
     }
-    // TODO(0x7d2d194, Quantum.CharacterController3D.Init) and 0x7d2d1e0: set the config.
-    // TODO(0x7d2d1f0, Quantum.CharacterController3D.SetConfig) and 0x7d2d2c0.
-    // TODO(0x7d2d300, Quantum.CharacterController3D.Move): needs the 3D scene queries.
-    // TODO(0x7d2c40c, Quantum.CharacterController3D.ComputeRawMovement): shape overlap
-    // against the scene, contact normals, penetration correction, grounding.
-    // TODO(0x7d2d56c, Quantum.CharacterController3D.ComputeRawSteer)
+    // 0x7d2d194 / 0x7d2d1e0 - not grounded, at rest, with the config (the default one when
+    // null).
+    void Init(Core::FrameBase* frame, const CharacterController3DConfig* config);
+    // 0x7d2d1f0 / 0x7d2d2c0 - stores the config's reference and its MaxSpeed.
+    void SetConfig(Core::FrameBase* frame, const CharacterController3DConfig* config);
+    // 0x7d2d300 - one step: movement from the contacts, steering, then the transform moves
+    // by velocity * dt plus the penetration correction. Empty optionals use the config's
+    // values and the frame's delta time.
+    void Move(Core::FrameBase* frame, EntityRef entity, const FPVector3& direction,
+              IKCCCallbacks3D* callback = nullptr, std::optional<std::int32_t> layerMask = {},
+              std::optional<bool> useManifoldNormal = {}, std::optional<FP> deltaTime = {});
+    // 0x7d2c40c - overlaps the config's sphere (radius + extent) and classifies the hits.
+    static CharacterController3DMovement ComputeRawMovement(Core::FrameBase* frame, EntityRef entity,
+                                                            const Transform3D* transform,
+                                                            CharacterController3D* kcc,
+                                                            const FPVector3& direction,
+                                                            IKCCCallbacks3D* callback,
+                                                            std::optional<std::int32_t> layerMask,
+                                                            std::optional<bool> useManifoldNormal);
+    // 0x7d2d56c - velocity from the movement type (gravity, acceleration, braking, limits).
+    void ComputeRawSteer(Core::FrameBase* frame, const CharacterController3DMovement& movement, FP dt);
     // TODO(0x7d2da44, Quantum.CharacterController3D.Serialize)
 };
 static_assert(sizeof(CharacterController3D) == CharacterController3D::SIZE);

@@ -70,4 +70,5 @@ rr_set_warnings(rr_quantum_core)
 # 3D/2D physics scene (agent/qcore-physics2)
 target_sources(rr_quantum_core PRIVATE
     physics3d/collision_info3d.cpp
+    physics3d/character_controller3d.cpp
 )
