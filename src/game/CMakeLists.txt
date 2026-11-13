@@ -8,6 +8,12 @@ add_subdirectory(quantum_core)
 
 add_library(rr_game
     quantum_code/fp_math_utility.cpp
+    quantum_code/core_types.cpp
+    quantum_code/components_1.cpp
+    quantum_code/components_2.cpp
+    quantum_code/components_3.cpp
+    quantum_code/components_4.cpp
+    quantum_code/component_pointers.cpp
 )
 add_library(rr::game ALIAS rr_game)
 target_include_directories(rr_game PUBLIC .)
