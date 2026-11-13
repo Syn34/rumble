@@ -26,7 +26,7 @@
 namespace Quantum {
 
 class Frame;
-// Asset classes named by component methods (see systems/asset_decls.h).
+// Asset classes named by component methods (quantum_code/assets/).
 class EnergyCellManagerSpec;
 namespace Prototypes {
 class Killable_Prototype;
@@ -3436,7 +3436,7 @@ struct alignas(8) Killable {
     KilledByData killedBy;
 
     // 0x7c560fc - The Killable prototype the component was made from (implemented in
-    // systems/combat_libs.cpp; see systems/asset_decls.h).
+    // systems/combat_libs.cpp; see systems/killable_prototype.h).
     Prototypes::Killable_Prototype* GetPrototype(Frame* frame) const;
 
     // 0x7c55d7c

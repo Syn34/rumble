@@ -2,7 +2,11 @@
 #include "quantum_code/systems/reward_systems.h"
 
 #include "photon_deterministic/log.h"
-#include "quantum_code/systems/asset_decls.h"
+#include "quantum_code/assets/actor_specs.h"
+#include "quantum_code/assets/enhancement_specs.h"
+#include "quantum_code/assets/game_mode_specs.h"
+#include "quantum_code/assets/gameplay_specs.h"
+#include "quantum_code/assets/weapon_specs.h"
 #include "quantum_code/systems/combat_libs.h"
 #include "quantum_code/systems/libs.h"
 

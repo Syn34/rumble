@@ -1,6 +1,10 @@
 // game_mode_libs.cpp - GameModeHandlerLib, BoltLib and the game mode handler / energy
 // cell manager component helpers.
-#include "quantum_code/systems/asset_decls.h"
+#include "quantum_code/assets/actor_specs.h"
+#include "quantum_code/assets/enhancement_specs.h"
+#include "quantum_code/assets/game_mode_specs.h"
+#include "quantum_code/assets/gameplay_specs.h"
+#include "quantum_code/assets/weapon_specs.h"
 #include "quantum_code/systems/libs.h"
 #include "quantum_code/systems/combat_libs.h"
 #include "quantum_core/component_filter_struct.h"

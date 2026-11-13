@@ -203,6 +203,19 @@ class CallbackAction : public AssetObject {
 
     // 0x7c8e1fc
     CallbackAction() = default;
+
+    // Quantum.CallbackAction.Execute (abstract in the original; actions that are not
+    // reimplemented yet do nothing).
+    virtual void Execute(Frame* frame, EntityRef entity) {
+        (void)frame;
+        (void)entity;
+    }
+    // Quantum.CallbackAction.Execute with a target (abstract in the original).
+    virtual void Execute(Frame* frame, EntityRef entity, EntityRef targetEntity) {
+        (void)frame;
+        (void)entity;
+        (void)targetEntity;
+    }
 };
 
 class CollisionForceSpec : public AssetObject {
@@ -1031,10 +1044,13 @@ class Action_KillSelf : public CallbackAction {
     // 0x7cb1300
     Action_KillSelf() = default;
 
-    // TODO(0x7cb12dc, Quantum.Action_KillSelf.Execute): void Execute(Frame frame, EntityRef
-    //   entity); uses KillableLib.Kill
-    // TODO(0x7cb12f4, Quantum.Action_KillSelf.Execute): void Execute(Frame frame, EntityRef entity,
-    //   EntityRef targetEntity)
+    // 0x7cb12dc - Kills the entity running the action (systems/combat_libs.cpp).
+    void Execute(Frame* frame, EntityRef entity) override;
+    // 0x7cb12f4 - The target is ignored.
+    void Execute(Frame* frame, EntityRef entity, EntityRef targetEntity) override {
+        (void)targetEntity;
+        Execute(frame, entity);
+    }
 };
 
 class Action_MoveTo_StartMoving : public CallbackAction {

@@ -1,7 +1,11 @@
 // actor_systems.cpp
 #include "quantum_code/systems/actor_systems.h"
 
-#include "quantum_code/systems/asset_decls.h"
+#include "quantum_code/assets/actor_specs.h"
+#include "quantum_code/assets/enhancement_specs.h"
+#include "quantum_code/assets/game_mode_specs.h"
+#include "quantum_code/assets/gameplay_specs.h"
+#include "quantum_code/assets/weapon_specs.h"
 #include "quantum_code/systems/libs.h"
 
 namespace Quantum {

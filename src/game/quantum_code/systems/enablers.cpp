@@ -1,7 +1,11 @@
 // enablers.cpp - the projectile switcher enhancement's enabler and disabler.
 #include "quantum_code/systems/enablers.h"
 
-#include "quantum_code/systems/asset_decls.h"
+#include "quantum_code/assets/actor_specs.h"
+#include "quantum_code/assets/enhancement_specs.h"
+#include "quantum_code/assets/game_mode_specs.h"
+#include "quantum_code/assets/gameplay_specs.h"
+#include "quantum_code/assets/weapon_specs.h"
 
 namespace Quantum {
 

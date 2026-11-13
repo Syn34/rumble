@@ -2,7 +2,12 @@
 // lookups they use.
 #include "quantum_code/systems/combat_libs.h"
 
-#include "quantum_code/systems/asset_decls.h"
+#include "quantum_code/assets/actor_specs.h"
+#include "quantum_code/assets/enhancement_specs.h"
+#include "quantum_code/assets/game_mode_specs.h"
+#include "quantum_code/assets/gameplay_specs.h"
+#include "quantum_code/assets/weapon_specs.h"
+#include "quantum_code/systems/killable_prototype.h"
 #include "quantum_core/physics_components.h"
 
 namespace Quantum {
@@ -159,6 +164,12 @@ bool DamageLib::TryGetHitBy(Frame* frame, EntityRef entity, Damageable* damageab
 bool PlayerActorLib::IsGameModeFinished(Frame* frame, EntityRef entity) {
     PlayerActor* actor = nullptr;
     return frame->TryGetPointer<PlayerActor>(entity, actor) && actor->gameModeFinished;
+}
+
+// --- Action_KillSelf (asset) ------------------------------------------------------------------
+
+void Action_KillSelf::Execute(Frame* frame, EntityRef entity) {
+    KillableLib::Kill(frame, entity, KillType::Undefined, EntityRef{});
 }
 
 // --- KillableLib ---------------------------------------------------------------------------------
