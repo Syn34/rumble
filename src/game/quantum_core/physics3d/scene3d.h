@@ -9,8 +9,8 @@
 // colliders. Every per-bucket manifold array reserves index 0, as in the original.
 //
 // Not reimplemented yet (TODOs in scene3d.cpp): static meshes (TriangleMesh), broad-phase
-// queries resolved during the step, compound shapes, joints, CCD time-of-impact
-// integration and the hybrid Jacobi/Gauss-Seidel solver.
+// queries resolved during the step, compound shapes, joints (and the joint position
+// solver) and the static colliders' mutable state.
 #pragma once
 
 #include "quantum_core/physics3d/collision_info3d.h"
@@ -395,6 +395,10 @@ class Scene3D {
     void HandleExits(Core::FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map);
     bool RaiseExit(Core::FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
                    const Entry3D& entry, const PhysicsCallbacksEntry& item);
+    void TaskSortCcdManifolds();
+    void QuickSortManifoldsByTimeOfImpact(std::int32_t lo, std::int32_t hi);
+    void TaskCcdCallbacks(Core::FrameBase* frame, ICollisionCallbacks3D* callbacks);
+    void TaskIntegrateFirstTOI();
     void TaskPostCallbacksUpdateEntries(Core::FrameBase* frame);
     void TaskPostCallbacksUpdateManifolds();
     Island3D* GetNextIsland();
@@ -446,6 +450,12 @@ class Scene3D {
     PhysicsSceneSettings CachedSettings;
     ComponentSet _minComponentSet; // Transform3D + PhysicsCollider3D
     std::vector<ContactConstraint> _collisionSolverData;
+    // A CCD pair: its manifold data and, for collisions, the whole manifold.
+    struct CcdManifold {
+        ManifoldData3D* Data = nullptr;
+        CollisionManifold3D* Collision = nullptr;
+    };
+    std::vector<CcdManifold> _ccdManifolds;
     std::vector<CollisionManifold3D*> _collisionSolverManifolds;
 };
 

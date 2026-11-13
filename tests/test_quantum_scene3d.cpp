@@ -469,3 +469,28 @@ TEST_CASE("Scene3D: shape casts against spheres and boxes") {
     CHECK(Photon::Deterministic::FPMath::Abs(boxHits[0].CastDistanceNormalized - FP::FromRaw(27853)) <
           FP::FromRaw(400));
 }
+
+TEST_CASE("Scene3D: a CCD body stops at a thin wall instead of tunnelling") {
+    World w;
+    w.frame->settings.Gravity = FPVector3::Zero();
+    PhysicsQueryConfig config;
+    config.AllowCCD = true;
+    config.CCDLinearVelocityThreshold = F(1);
+    config.CCDAngularVelocityThreshold = F(1);
+    config.CCDDistanceTolerance = FP::FromRaw(655);
+    config.MaxTimeOfImpactIterations = 16;
+    config.MaxRootFindingIterations = 16;
+    w.frame->settings.CCDSettingsValue = CCDSettings(config);
+    w.AddStaticBox(V3(0, 0, 10), FPVector3{F(5), F(5), FP::FromRaw(6554)}); // 0.2 thick
+    const EntityRef bullet = w.AddBody(V3(0, 0, 0), Shape3D::CreateSphere(FP::_0_50()), true);
+    PhysicsBody3D* body = w.frame->GetPointer<PhysicsBody3D>(bullet);
+    body->Config |= PhysicsBody3D::ConfigFlags::UseContinuousCollisionDetection;
+    body->Velocity = V3(0, 0, 600); // 10 units per step
+    w.engine->Init(w.frame.get(), AssetGuid{});
+    for (int i = 0; i < 3; ++i) {
+        w.Step();
+    }
+    const FP z = w.frame->GetPointer<Quantum::Transform3D>(bullet)->Position.Z;
+    CHECK(z < F(10)); // never past the wall
+    CHECK(z > F(5));  // but it did move up to it
+}

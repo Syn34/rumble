@@ -2,10 +2,12 @@
 //
 // Step order (the original's task graph, run sequentially):
 //   CreateEntries -> IntegrateForcesFirstHalf -> BroadPhaseEntryPreStep -> BroadPhase ->
-//   NarrowPhase -> Callbacks -> BuildIslands -> collision solver (legacy Gauss-Seidel) ->
-//   PenetrationCorrection -> IntegrateVelocity -> SleepDetection.
-// Stages that need unported subsystems (meshes, queries resolved in the step, joints, CCD
-// integration, the hybrid solver) are marked with TODOs where they would run.
+//   NarrowPhase -> Callbacks -> SortCcdManifolds -> CcdCallbacks -> PostCallbacksUpdate
+//   Entries/Manifolds -> BuildIslands -> IntegrateFirstTOI -> collision solver (legacy
+//   Gauss-Seidel or hybrid Jacobi/Gauss-Seidel) -> PenetrationCorrection ->
+//   IntegrateVelocity -> SleepDetectionEntries/Islands.
+// Stages that need unported subsystems (meshes, queries resolved in the step, joints,
+// compounds) are marked with TODOs where they would run.
 #include "scene3d.h"
 
 #include "quantum_core/builtin_assets.h"
@@ -1311,6 +1313,94 @@ void Scene3D::TaskCallbacks(FrameBase* frame, ICollisionCallbacks3D* callbacks) 
     HandleExits(frame, callbacks, map);
 }
 
+// 0x7d5fb98 - the live CCD pairs of every bucket (collision, then trigger manifolds) sorted
+// by time of impact.
+void Scene3D::TaskSortCcdManifolds() {
+    _ccdManifolds.clear();
+    constexpr std::int32_t Mask = ManifoldData3D::Ignore | ManifoldData3D::UsesCcd;
+    for (Bucket3D& bucket : _buckets) {
+        for (std::size_t i = 1; i < bucket.CollisionManifolds.size(); ++i) {
+            CollisionManifold3D* m = &bucket.CollisionManifolds[i];
+            if ((m->_m._flags & Mask) == ManifoldData3D::UsesCcd) {
+                _ccdManifolds.push_back({&m->_m, m});
+            }
+        }
+        // TODO: mesh collision manifolds (static triangle meshes are not reimplemented yet).
+        for (std::size_t i = 1; i < bucket.TriggerManifolds.size(); ++i) {
+            ManifoldData3D* m = &bucket.TriggerManifolds[i];
+            if ((m->_flags & Mask) == ManifoldData3D::UsesCcd) {
+                _ccdManifolds.push_back({m, nullptr});
+            }
+        }
+    }
+    QuickSortManifoldsByTimeOfImpact(0, static_cast<std::int32_t>(_ccdManifolds.size()) - 1);
+}
+
+// 0x7d5fe60 - Lomuto partition on the last item, recursing left and looping right.
+void Scene3D::QuickSortManifoldsByTimeOfImpact(std::int32_t lo, std::int32_t hi) {
+    while (lo < hi) {
+        const FP pivot = _ccdManifolds[static_cast<std::size_t>(hi)].Data->TimeOfImpact;
+        std::int32_t store = lo;
+        for (std::int32_t j = lo; j < hi; ++j) {
+            if (_ccdManifolds[static_cast<std::size_t>(j)].Data->TimeOfImpact < pivot) {
+                std::swap(_ccdManifolds[static_cast<std::size_t>(store)], _ccdManifolds[static_cast<std::size_t>(j)]);
+                ++store;
+            }
+        }
+        std::swap(_ccdManifolds[static_cast<std::size_t>(store)], _ccdManifolds[static_cast<std::size_t>(hi)]);
+        QuickSortManifoldsByTimeOfImpact(lo, store - 1);
+        lo = store + 1;
+    }
+}
+
+// 0x7d5fefc - CCD pairs in time-of-impact order: a pair is skipped when either body already
+// hit something earlier; otherwise its callbacks run as in Task_Callbacks and a collision
+// that stays in play becomes both bodies' first time of impact.
+void Scene3D::TaskCcdCallbacks(FrameBase* frame, ICollisionCallbacks3D* callbacks) {
+    const Map* map = MapOf(frame, _currentMap);
+    for (const CcdManifold& item : _ccdManifolds) {
+        ManifoldData3D* m = item.Data;
+        Entry3D* entryA = &_entries[static_cast<std::size_t>(m->_entryIdxA)];
+        Entry3D* entryB = &_entries[static_cast<std::size_t>(m->_entryIdxB)];
+        Entry3D* rootA = Root(entryA);
+        Entry3D* rootB = Root(entryB);
+        if ((rootA->_useCCD && rootA->_firstTimeOfImpact < m->TimeOfImpact) ||
+            (rootB->_useCCD && rootB->_firstTimeOfImpact < m->TimeOfImpact)) {
+            continue;
+        }
+        if (m->GetIsTrigger()) {
+            if (_callbacksWereCalled && CheckIgnoreTriggerManifold(frame, m, entryA, entryB)) {
+                continue;
+            }
+            if (callbacks == nullptr) {
+                continue;
+            }
+            if (m->GetIsDynamic()) {
+                HandleDynamicTrigger(frame, callbacks, m, entryA, entryB);
+            } else {
+                HandleStaticTrigger(frame, callbacks, map, m, entryA, entryB);
+            }
+            continue;
+        }
+        // TODO(0x7d60c38, Quantum.Physics3D.Scene3D.HandleMeshCollision): mesh pairs
+        // (NextInMesh set) need static triangle meshes.
+        if (_callbacksWereCalled && CheckIgnoreCollisionManifold(frame, m, entryA, entryB)) {
+            continue;
+        }
+        if (callbacks != nullptr) {
+            if (m->GetIsDynamic()) {
+                HandleDynamicCollision(frame, callbacks, item.Collision, entryA, entryB);
+            } else {
+                HandleStaticCollision(frame, callbacks, map, item.Collision, entryA, entryB);
+            }
+        }
+        if (!m->GetIgnore()) {
+            rootA->_firstTimeOfImpact = m->TimeOfImpact;
+            rootB->_firstTimeOfImpact = m->TimeOfImpact;
+        }
+    }
+}
+
 // 0x7d62ca8 - runs only when callbacks ran: the dynamic entries re-read their body (it may
 // have been added, removed, disabled or made kinematic); entries whose entity lost its
 // collider are ignored, triggers lose their body.
@@ -1372,6 +1462,21 @@ void Scene3D::TaskPostCallbacksUpdateManifolds() {
         // TODO(0x7d63188, Quantum.Physics3D.Scene3D.Task_PostCallbacksUpdateManifolds): mesh
         // manifolds (their live triangle manifolds join the list and set the earliest time
         // of impact); static triangle meshes are not reimplemented yet.
+    }
+}
+
+// 0x7d64a80 - bodies whose first time of impact is set move up to it before the solver
+// (the rest of the step is integrated after it).
+void Scene3D::TaskIntegrateFirstTOI() {
+    const PhysicsSceneSettings& s = CachedSettings;
+    const bool applyMin = Raw(s.MinLinearIntegration) > 0 || Raw(s.MinAngularIntegration) > 0;
+    const bool integrateAngular = s.UseAngularVelocityEnabled();
+    for (std::size_t i = static_cast<std::size_t>(_staticComponentsCount + _queriesCount - 1);
+         i < _entries.size(); ++i) {
+        Entry3D* entry = &_entries[i];
+        if (entry->ShouldIntegrateVelocity && Raw(entry->_firstTimeOfImpact) >= 1) {
+            Entry3D::IntegrateVelocity(entry, entry->_firstTimeOfImpact, s, applyMin, integrateAngular);
+        }
     }
 }
 
@@ -2385,10 +2490,12 @@ void Scene3D::Update(FrameBase* frame, FP deltaTime, ICollisionCallbacks3D* call
     TaskBroadPhase(frame);
     TaskNarrowPhase();
     TaskCallbacks(frame, callbacks);
-    // TODO: CCD manifolds (Task_SortCcdManifolds, Task_CcdCallbacks, Task_IntegrateFirstTOI).
+    TaskSortCcdManifolds();
+    TaskCcdCallbacks(frame, callbacks);
     TaskPostCallbacksUpdateEntries(frame);
     TaskPostCallbacksUpdateManifolds();
     TaskBuildIslands();
+    TaskIntegrateFirstTOI();
     if (CachedSettings.SolverIterations != 0) {
         // TaskManagementData.ScheduleSolverTasksLGS (0x7d6ff38) / ScheduleSolverTasksHJGS
         // (0x7d700e8): the manifolds are cached, the constraints initialised, then one pass
