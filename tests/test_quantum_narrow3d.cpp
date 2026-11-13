@@ -6,7 +6,10 @@
 #include "quantum_core/gjk_settings.h"
 #include "quantum_core/physics3d/gjk3d.h"
 #include "quantum_core/physics3d/narrow_checks.h"
+#include "quantum_core/physics_components.h"
 #include "quantum_core/shape3d.h"
+
+#include <deque>
 #include "quantum_core/triangle_ccw.h"
 
 using namespace Quantum;
@@ -14,21 +17,27 @@ using namespace Quantum::Physics3D;
 using Photon::Deterministic::FPMath::Abs;
 
 namespace {
+// Entries point at their transform; tests keep the transforms alive here.
+Transform3D* TransformAt(const FPVector3& position) {
+    static std::deque<Transform3D> transforms;
+    transforms.push_back(Transform3D{position, FPQuaternion::Identity()});
+    return &transforms.back();
+}
 FP F(int v) { return FP::FromInt(v); }
 FP Q(int numerator, int denominator) { return FP::FromRaw(FP::Raw{65536} * numerator / denominator); }
 FPVector3 V3(FP x, FP y, FP z) { return {x, y, z}; }
 FPVector3 V3(int x, int y, int z) { return {F(x), F(y), F(z)}; }
 bool Near(FP a, FP b, int tolerance = 16) { return Abs(a - b) <= FP::FromRaw(tolerance); }
 
-NarrowEntry3D Entry(const Shape3D& shape, const FPVector3& position) {
-    NarrowEntry3D entry;
+Entry3D Entry(const Shape3D& shape, const FPVector3& position) {
+    Entry3D entry;
     entry.Shape = &shape;
     entry.Narrow.Position = position;
     entry.Narrow.RotatedRight = FPVector3::Right();
     entry.Narrow.RotatedUp = FPVector3::Up();
     entry.Narrow.RotatedForward = FPVector3::Forward();
     entry.Narrow.RotationInverse = FPQuaternion::Identity();
-    entry.TransformPosition = position;
+    entry.Transform3D = TransformAt(position);
     return entry;
 }
 
@@ -73,8 +82,8 @@ TEST_CASE("Physics3D SphereBox outside and inside") {
     rr::test::InstallMathDerivedTables();
     const Shape3D box = Shape3D::CreateBox(V3(1, 1, 1));
     const Shape3D sphere = Shape3D::CreateSphere(F(1));
-    const NarrowEntry3D boxEntry = Entry(box, V3(0, 0, 0));
-    const NarrowEntry3D beside = Entry(sphere, V3(Q(3, 2), F(0), F(0)));
+    const Entry3D boxEntry = Entry(box, V3(0, 0, 0));
+    const Entry3D beside = Entry(sphere, V3(Q(3, 2), F(0), F(0)));
     CollisionManifold3D m{};
     CollisionManifoldInfo3D info{&m, &beside, &boxEntry, nullptr};
     CHECK(NarrowChecks::CheckShapes(&info, true));
@@ -85,7 +94,7 @@ TEST_CASE("Physics3D SphereBox outside and inside") {
     // Centre inside, nearest face +X: normal -X, penetration 0.25 + radius, contact the
     // centre nudged 1/256 along the normal.
     const Shape3D small = Shape3D::CreateSphere(Q(1, 2));
-    const NarrowEntry3D inside = Entry(small, V3(Q(3, 4), Q(1, 4), F(0)));
+    const Entry3D inside = Entry(small, V3(Q(3, 4), Q(1, 4), F(0)));
     CollisionManifold3D m2{};
     CollisionManifoldInfo3D info2{&m2, &inside, &boxEntry, nullptr};
     CHECK(NarrowChecks::SphereBox::Check(&info2, true));
@@ -98,7 +107,7 @@ TEST_CASE("Physics3D SphereBox outside and inside") {
     CHECK(NarrowChecks::CheckShapes(&info3, true));
     CHECK(m3.GetNormalInverted() && info3.EntryA == &beside);
 
-    const NarrowEntry3D far = Entry(sphere, V3(3, 0, 0));
+    const Entry3D far = Entry(sphere, V3(3, 0, 0));
     CollisionManifold3D m4{};
     CollisionManifoldInfo3D info4{&m4, &far, &boxEntry, nullptr};
     CHECK(!NarrowChecks::CheckShapes(&info4, true));
@@ -109,10 +118,10 @@ TEST_CASE("Physics3D SphereTriangle face and edge regions") {
     const TriangleCCW tri = FloorTriangle();
     const Shape3D sphere = Shape3D::CreateSphere(Q(1, 2));
     const Shape3D mesh = Shape3D::CreateMesh(0);
-    const NarrowEntry3D meshEntry = Entry(mesh, V3(0, 0, 0));
+    const Entry3D meshEntry = Entry(mesh, V3(0, 0, 0));
 
     // Below the face (its front side): nearest point is the projection.
-    const NarrowEntry3D below = Entry(sphere, V3(Q(1, 4), Q(-1, 4), Q(1, 4)));
+    const Entry3D below = Entry(sphere, V3(Q(1, 4), Q(-1, 4), Q(1, 4)));
     CollisionManifold3D m{};
     CollisionManifoldInfo3D info{&m, &below, &meshEntry, &tri};
     CHECK(NarrowChecks::CheckShapes(&info, true));
@@ -121,7 +130,7 @@ TEST_CASE("Physics3D SphereTriangle face and edge regions") {
     CHECK(m._contactPoints[0] == V3(Q(1, 4), F(0), Q(1, 4)));
 
     // Beyond edge AB: nearest point (0, 0, 0.5) on that edge.
-    const NarrowEntry3D edge = Entry(sphere, V3(Q(-1, 4), Q(-1, 5), Q(1, 2)));
+    const Entry3D edge = Entry(sphere, V3(Q(-1, 4), Q(-1, 5), Q(1, 2)));
     CollisionManifold3D m2{};
     CollisionManifoldInfo3D info2{&m2, &edge, &meshEntry, &tri};
     CHECK(NarrowChecks::SphereTriangle::Check(&info2, true, false));
@@ -134,7 +143,7 @@ TEST_CASE("Physics3D SphereTriangle face and edge regions") {
     CHECK(NarrowChecks::SphereTriangle::Check(&info3, true, true));
     CHECK(m3._contactPoints[0] == V3(Q(-1, 4), F(0), Q(1, 2)));
 
-    const NarrowEntry3D high = Entry(sphere, V3(Q(1, 4), F(-1), Q(1, 4)));
+    const Entry3D high = Entry(sphere, V3(Q(1, 4), F(-1), Q(1, 4)));
     CollisionManifold3D m4{};
     CollisionManifoldInfo3D info4{&m4, &high, &meshEntry, &tri};
     CHECK(!NarrowChecks::CheckShapes(&info4, true));
@@ -154,8 +163,8 @@ TEST_CASE("Physics3D TriangleCollisionIterator average normal") {
 TEST_CASE("Physics3D GJK distance and simplex solvers") {
     rr::test::InstallMathDerivedTables();
     const Shape3D sphere = Shape3D::CreateSphere(F(1));
-    const NarrowEntry3D a = Entry(sphere, V3(0, 0, 0));
-    const NarrowEntry3D b = Entry(sphere, V3(0, 0, 5));
+    const Entry3D a = Entry(sphere, V3(0, 0, 0));
+    const Entry3D b = Entry(sphere, V3(0, 0, 5));
     SimplexData3D simplex{};
     SimplexDataPointers3D ptrs(&simplex);
     FP distance;
@@ -164,8 +173,8 @@ TEST_CASE("Physics3D GJK distance and simplex solvers") {
     CHECK(distance == F(3) && axis == V3(0, 0, -1));
 
     const Shape3D box = Shape3D::CreateBox(V3(1, 1, 1));
-    const NarrowEntry3D boxA = Entry(box, V3(0, 0, 0));
-    const NarrowEntry3D boxB = Entry(box, V3(F(4), Q(1, 2), F(0)));
+    const Entry3D boxA = Entry(box, V3(0, 0, 0));
+    const Entry3D boxB = Entry(box, V3(F(4), Q(1, 2), F(0)));
     Gjk3D::ComputeDistance(&ptrs, &boxA, &boxB, nullptr, distance, axis, 16, std::nullopt, 0);
     CHECK(distance == F(2) && axis == V3(-1, 0, 0));
 
@@ -208,8 +217,8 @@ TEST_CASE("Physics3D GJK shape cast") {
     config.ShapeCastSoftTolerance = Q(1, 100);
     const GJKSettings settings(config);
     const Shape3D sphere = Shape3D::CreateSphere(F(1));
-    const NarrowEntry3D a = Entry(sphere, V3(0, 0, 0));
-    const NarrowEntry3D b = Entry(sphere, V3(5, 0, 0));
+    const Entry3D a = Entry(sphere, V3(0, 0, 0));
+    const Entry3D b = Entry(sphere, V3(5, 0, 0));
     NarrowTls3D tls;
     Hit3D hit;
     CHECK(Gjk3D::ShapeCastManifold(tls, &a, &b, nullptr, settings, V3(-10, 0, 0), true, hit));
@@ -226,12 +235,12 @@ TEST_CASE("Physics3D GJK shape cast") {
 TEST_CASE("Physics3D time of impact of a fast sphere") {
     rr::test::InstallMathDerivedTables();
     const Shape3D sphere = Shape3D::CreateSphere(Q(1, 2));
-    NarrowBody3D body;
+    PhysicsBody3D body{};
     body.Velocity = V3(10, 0, 0);
-    NarrowEntry3D a = Entry(sphere, V3(0, 0, 0));
-    a.Body = &body;
+    Entry3D a = Entry(sphere, V3(0, 0, 0));
+    a.Body3D = &body;
     a.HasDynamicBody = true;
-    const NarrowEntry3D b = Entry(sphere, V3(3, 0, 0));
+    const Entry3D b = Entry(sphere, V3(3, 0, 0));
 
     PhysicsQueryConfig config;
     config.MaxTimeOfImpactIterations = 8;
@@ -265,7 +274,7 @@ TEST_CASE("Physics3D time of impact of a fast sphere") {
 TEST_CASE("Physics3D LinecastBody against a sphere and a box") {
     rr::test::InstallMathDerivedTables();
     const Shape3D sphere = Shape3D::CreateSphere(F(1));
-    NarrowEntry3D ball = Entry(sphere, V3(5, 0, 0));
+    Entry3D ball = Entry(sphere, V3(5, 0, 0));
     ball.Ref = {3, 1};
     Hit3D hit;
     CHECK(NarrowChecks::LinecastBody::Check(AssetGuid{}, &ball, V3(0, 0, 0), V3(10, 0, 0), true, hit));
@@ -275,7 +284,7 @@ TEST_CASE("Physics3D LinecastBody against a sphere and a box") {
     CHECK(hit.IsDynamic() && hit._entity.Index == 3);
 
     const Shape3D box = Shape3D::CreateBox(V3(1, 1, 1));
-    NarrowEntry3D crate = Entry(box, V3(5, 0, 0));
+    Entry3D crate = Entry(box, V3(5, 0, 0));
     crate.StaticColliderIndex = 7;
     CHECK(NarrowChecks::LinecastBody::Check(AssetGuid{}, &crate, V3(F(0), Q(1, 2), F(0)),
                                             V3(F(10), Q(1, 2), F(0)), true, hit));

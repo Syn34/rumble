@@ -56,7 +56,7 @@ namespace LinecastBody {
 // 0x7d782c8 - segment start->end against a sphere or (oriented) box entry. On a hit fills
 // the point, the fraction along the segment, the collider identity and, if asked, the
 // surface normal.
-bool Check(AssetGuid mapGuid, const NarrowEntry3D* b, const FPVector3& start, const FPVector3& end,
+bool Check(AssetGuid mapGuid, const Entry3D* b, const FPVector3& start, const FPVector3& end,
            bool computeNormal, Hit3D& hit);
 // 0x7d78710 - first point where start->end enters the sphere (a segment starting inside
 // misses); outputs zeroed on a miss.
@@ -90,7 +90,7 @@ CustomPlanesBox GetPlanesBox(CustomPlanesBox planes, const FPVector3& translatio
 // 0x7d72d44 - contact generation; planes and edges are relative to box A's centre.
 void GetContactPoints(const CustomPlanesBox& planesA, const CustomPlanesBox& planesB,
                       const CustomEdgesBox& edgesA, const CustomEdgesBox& edgesB,
-                      const NarrowEntry3D* boxEntryA, const NarrowEntry3D* boxEntryB,
+                      const Entry3D* boxEntryA, const Entry3D* boxEntryB,
                       const FPVector3& boxAToBoxBOffset, CollisionManifold3D* manifold,
                       bool detailedManifold);
 // 0x7d72ec4 - for every face plane of `boxEntry` (centre at `offset` from box A) and every
@@ -98,17 +98,17 @@ void GetContactPoints(const CustomPlanesBox& planesA, const CustomPlanesBox& pla
 // becomes a contact (translated by `boxAPosition`). Stops after the first contact unless
 // detailed, and once more than three are found.
 void GetContactPointPlaneEdge(const CustomPlanesBox& planes, const CustomEdgesBox& edges,
-                              const NarrowEntry3D* boxEntry, const FPVector3& offset,
+                              const Entry3D* boxEntry, const FPVector3& offset,
                               const FPVector3& boxAPosition, CollisionManifold3D* manifold,
                               bool detailedManifold);
 // 0x7d75a6c - where the segment crosses the plane; segments within raw 65 of parallel miss.
 // `intersection` is only written on a hit.
 bool ClipToPlane(const CustomPlane& plane, const CustomLine& line, FPVector3& intersection);
 // 0x7d75878 - all eight corners (from the edges) inside the grown box.
-bool BoxInAABB(const CustomEdgesBox& edges, const NarrowEntry3D* boxEntry, const FPVector3& offset);
+bool BoxInAABB(const CustomEdgesBox& edges, const Entry3D* boxEntry, const FPVector3& offset);
 // 0x7d75bac - `point` (relative to box A) inside the box with the given half-extents whose
 // centre is at `offset`; `point` is replaced by its coordinates in the box's frame.
-bool PointInAABB(FPVector3& point, const NarrowEntry3D* box, const FPVector3& extents,
+bool PointInAABB(FPVector3& point, const Entry3D* box, const FPVector3& extents,
                  const FPVector3& offset);
 } // namespace BoxBox
 
@@ -151,7 +151,7 @@ bool PlaneBoxOverlaps(const FPVector3& triInverseNormal, const CustomVertexTrian
                       FPVector3& deepestBoxVertexProj);
 // 0x7d763d0 - triangle edges clipped by the box's local face planes; crossings inside
 // `boxExtents` become (world space) contacts, at most four.
-void ClipTriEdgesOnBoxPlanes(const NarrowEntry3D* boxEntry, const CustomVertexTriangle& tri,
+void ClipTriEdgesOnBoxPlanes(const Entry3D* boxEntry, const CustomVertexTriangle& tri,
                              const FPVector3& boxExtents, CollisionManifold3D* m);
 // 0x7d77f18 - like BoxBox.ClipToPlane, but only segments within raw 6 of parallel miss.
 bool ClipToPlane(const CustomPlane& plane, const CustomLine& line, FPVector3& intersection);
@@ -159,7 +159,7 @@ bool ClipToPlane(const CustomPlane& plane, const CustomLine& line, FPVector3& in
 bool PointInAabb(const FPVector3& point, const FPVector3& extents);
 // 0x7d77624 - the box's local edges clipped by the triangle's plane; crossings inside the
 // triangle become (world space) contacts, at most four.
-void ClipBoxEdgesOnTriPlane(const NarrowEntry3D* boxEntry, const FPVector3& triNormal,
+void ClipBoxEdgesOnTriPlane(const Entry3D* boxEntry, const FPVector3& triNormal,
                             const CustomVertexTriangle& triVertex, CollisionManifold3D* m);
 // 0x7d77fd4 - `p` (on the triangle's plane) inside the triangle, edges included.
 bool PointInTriangle(const FPVector3& p, const CustomVertexTriangle& tri);

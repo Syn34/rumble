@@ -5,13 +5,23 @@
 
 #include "photon_deterministic/fp.h"
 #include "photon_deterministic/fp_quaternion.h"
+#include "photon_deterministic/fp_matrix3x3.h"
 #include "photon_deterministic/fp_vector3.h"
+#include "quantum_core/entity_ref.h"
 #include "quantum_core/physics2d/hit.h" // HitEntityRef
 #include "quantum_core/shape3d.h"
 #include "quantum_core/triangle_ccw.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
+
+namespace Quantum {
+struct PhysicsCollider3D;
+struct PhysicsBody3D;
+struct PhysicsJoints3D;
+struct PhysicsCallbacks3D;
+} // namespace Quantum
 
 namespace Quantum::Physics3D {
 
@@ -122,7 +132,7 @@ struct CollisionManifold3D {
 };
 static_assert(sizeof(CollisionManifold3D) == CollisionManifold3D::SIZE);
 
-struct NarrowEntry3D;
+struct Entry3D;
 
 // A plane through `pointOnPlane` with unit `normal`. The distance field is left at zero by
 // the constructor; the box checks fill it in when they need it.
@@ -190,7 +200,7 @@ struct NarrowData3D {
     // (conjugate over the squared length). The box caches are only written for box shapes;
     // of the local planes only the non-zero components of normal and point are written
     // (the rest keep whatever the entry held, zero in practice).
-    static void Init(NarrowData3D* narrow, const NarrowEntry3D* entry, const FPVector3& pos,
+    static void Init(NarrowData3D* narrow, const Entry3D* entry, const FPVector3& pos,
                      const FPQuaternion& rot);
 
     // 0x7d7bdd4 - pose from the entity transform: with a time step the body's motion over
@@ -198,41 +208,97 @@ struct NarrowData3D {
     // rotated centre of mass), then the shape's local offset. `useCachedRot` reports
     // whether the shape has no local rotation. Both transform arguments are updated in
     // place, as in the original.
-    static void InitFromTransform(NarrowData3D* narrow, const NarrowEntry3D* entry, FPVector3& tPos,
+    static void InitFromTransform(NarrowData3D* narrow, const Entry3D* entry, FPVector3& tPos,
                                   FPQuaternion& tRot, bool& useCachedRot,
                                   std::optional<FP> deltaTime);
 };
 static_assert(sizeof(NarrowData3D) == 0x7a0);
 
-// The parts of the entry's PhysicsBody3D component that the narrow phase reads.
-struct NarrowBody3D {
-    FPVector3 Velocity;
-    FPVector3 AngularVelocity;
+// Quantum.Physics3D.IntAABB: an entry's broad-phase bounds in raw-int units.
+struct IntAABB {
+    std::int32_t MinX = 0;
+    std::int32_t MaxX = 0;
+    std::int32_t MinY = 0;
+    std::int32_t MaxY = 0;
+    std::int32_t MinZ = 0;
+    std::int32_t MaxZ = 0;
 };
+static_assert(sizeof(IntAABB) == 24);
 
-// The fields of a broad-phase entry (Quantum.Physics3D.Entry3D) that the narrow-phase
-// checks read; filled by the scene once it exists (original: Entry3D.Shape, Narrow, Body3D,
-// Transform3D, HasDynamicBody, RotatedCenterOfMass, UseSmoothSphereMeshCollision).
-struct NarrowEntry3D {
+struct Island3D;
+class Scene3D;
+
+// Quantum.Physics3D.Entry3D: one collider in the 3D scene (an entity's collider or a static
+// collider of the map), with the cached state the broad and narrow phases and the solver
+// work on. Component pointers point into the frame's component buffers.
+struct Entry3D {
+    std::int32_t Index = 0;
+    alignas(8) EntityRef Ref; // invalid for static colliders (8-aligned in the original)
+    bool Ignore = false;
+    PhysicsCollider3D* Collider3D = nullptr;
     const Shape3D* Shape = nullptr;
-    NarrowData3D Narrow;
-    // Only read when a query extrapolates motion over a time step (CCD / time of impact).
-    const NarrowBody3D* Body = nullptr;
-    FPVector3 TransformPosition; // Entry3D.Transform3D->Position
+    PhysicsBody3D* Body3D = nullptr;
+    ::Quantum::Transform3D* Transform3D = nullptr;
+    PhysicsJoints3D* Joints = nullptr;
+    std::int32_t JointSolverDataIndex = 0;
+    PhysicsCallbacks3D* Callbacks = nullptr;
+    bool HasStaticTriggerCallbacks = false;
+    bool HasDynamicTriggerCallbacks = false;
+    Island3D* Island = nullptr;
+    bool ShouldIntegrateVelocity = false;
     bool HasDynamicBody = false;
+    bool _useCCD = false;
+    FP _firstTimeOfImpact;
+    std::int32_t _compoundRootIndexPlusOne = 0;
+    Entry3D* _compoundRoot = nullptr;
+    IntAABB AABB;
+    std::int32_t BucketStart = 0;
+    std::int32_t BucketEnd = 0;
+    std::int32_t BucketIncrement = 0;
+    std::int32_t StaticColliderIndex = -1; // negative for entity colliders
     bool UseSmoothSphereMeshCollision = false;
+    NarrowData3D Narrow;
     FPVector3 RotatedCenterOfMass;
-    // Reported by queries (line casts): Entry3D.StaticColliderIndex (negative for dynamic
-    // entries), Entry3D.Ref and the collider's trigger flag.
-    std::int32_t StaticColliderIndex = -1;
-    Physics2D::HitEntityRef Ref;
-    bool IsTrigger = false;
+    Photon::Deterministic::FPMatrix3x3 WorldInertiaTensorInverse;
+    FPVector3 AccumulatedCorrection;
+    std::int64_t SolverImpulsesAdr = 0;
+
+    // 0x7d79dd4 - entries of entities (as opposed to static colliders).
+    bool IsDynamic() const { return Ref.Raw() != 0; }
+    // 0x7d79de4 - parts of a compound use their root's setting.
+    bool UsesCcd() const;
+    // 0x7d79e08
+    std::int32_t CompoundRootIndex() const { return _compoundRootIndexPlusOne - 1; }
+    // 0x7d79e14
+    void SetCompoundRootIndex(std::int32_t value) { _compoundRootIndexPlusOne = value + 1; }
+    Entry3D* CompoundRoot() const { return _compoundRoot; }       // 0x7d79e20
+    void SetCompoundRoot(Entry3D* value) { _compoundRoot = value; } // 0x7d79e28
+    // 0x7d79e30 - resolves the compound root pointer from the scene's entry array.
+    void Init(Entry3D* sceneEntries);
+
+    // Whether the collider is a trigger (helper; the original reads Collider3D directly).
+    bool IsTriggerCollider() const;
+
+    // 0x7d7ac64 - narrow-phase pose from the transform; dynamic bodies (not compound parts)
+    // also refresh their world-space body settings.
+    static void InitNarrowData(Entry3D* entry, const FPVector3* pos, const FPQuaternion* rot);
+    // TODO(0x7d7a3dc, Quantum.Physics3D.Entry3D.CalculateWorldBodySettings): rotated centre
+    // of mass and world inverse inertia tensor (optionally for an explicit rotation).
+    static void CalculateWorldBodySettings(Entry3D* entry, std::optional<FPQuaternion> rotation);
+    // TODO(0x7d7a724, Quantum.Physics3D.Entry3D.IntegrateVelocity): gravity, forces, drag and
+    // torque into the body's velocities.
+    // TODO(0x7d7aa88, Quantum.Physics3D.Entry3D.ApplyMinVelocityIntegration)
+    // TODO(0x7d7ab5c, Quantum.Physics3D.Entry3D.ComputeEntryAabb)
+    // TODO(0x7d7adc8, Quantum.Physics3D.Entry3D.InitBroadAabb): bounds swept over the step
+    // for CCD entries.
 };
+static_assert(sizeof(Entry3D) == 0x8d0);
+static_assert(offsetof(Entry3D, Narrow) == 0xb0 && offsetof(Entry3D, SolverImpulsesAdr) == 0x8c8);
 
 struct CollisionManifoldInfo3D {
     CollisionManifold3D* Manifold = nullptr;
-    const NarrowEntry3D* EntryA = nullptr;
-    const NarrowEntry3D* EntryB = nullptr;
+    const Entry3D* EntryA = nullptr;
+    const Entry3D* EntryB = nullptr;
     const TriangleCCW* Tri = nullptr; // the mesh triangle when B (or A) is a static mesh
 
     // 0x7d7b4d4 - swaps A and B and toggles NormalInverted. As in 2D, the original's

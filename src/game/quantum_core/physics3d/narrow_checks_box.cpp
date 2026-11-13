@@ -41,8 +41,8 @@ FPVector3 LocalToWorld(const NarrowData3D& narrow, const FPVector3& p) {
 // 0x7d70eec
 bool BoxBox::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
     assert(mInfo != nullptr && mInfo->EntryA != nullptr && mInfo->EntryB != nullptr);
-    const NarrowEntry3D& boxA = *mInfo->EntryA;
-    const NarrowEntry3D& boxB = *mInfo->EntryB;
+    const Entry3D& boxA = *mInfo->EntryA;
+    const Entry3D& boxB = *mInfo->EntryB;
     const NarrowData3D& a = boxA.Narrow;
     const NarrowData3D& b = boxB.Narrow;
     const FPVector3 extentsA = boxA.Shape->Box._extents;
@@ -165,7 +165,7 @@ CustomPlanesBox BoxBox::GetPlanesBox(CustomPlanesBox planes, const FPVector3& tr
 // 0x7d72d44
 void BoxBox::GetContactPoints(const CustomPlanesBox& planesA, const CustomPlanesBox& planesB,
                               const CustomEdgesBox& edgesA, const CustomEdgesBox& edgesB,
-                              const NarrowEntry3D* boxEntryA, const NarrowEntry3D* boxEntryB,
+                              const Entry3D* boxEntryA, const Entry3D* boxEntryB,
                               const FPVector3& boxAToBoxBOffset, CollisionManifold3D* manifold,
                               bool detailedManifold) {
     assert(boxEntryA != nullptr && manifold != nullptr);
@@ -194,7 +194,7 @@ void BoxBox::GetContactPoints(const CustomPlanesBox& planesA, const CustomPlanes
 
 // 0x7d72ec4
 void BoxBox::GetContactPointPlaneEdge(const CustomPlanesBox& planes, const CustomEdgesBox& edges,
-                                      const NarrowEntry3D* boxEntry, const FPVector3& offset,
+                                      const Entry3D* boxEntry, const FPVector3& offset,
                                       const FPVector3& boxAPosition, CollisionManifold3D* manifold,
                                       bool detailedManifold) {
     assert(boxEntry != nullptr && manifold != nullptr);
@@ -233,7 +233,7 @@ bool BoxBox::ClipToPlane(const CustomPlane& plane, const CustomLine& line, FPVec
 }
 
 // 0x7d75878
-bool BoxBox::BoxInAABB(const CustomEdgesBox& edges, const NarrowEntry3D* boxEntry,
+bool BoxBox::BoxInAABB(const CustomEdgesBox& edges, const Entry3D* boxEntry,
                        const FPVector3& offset) {
     assert(boxEntry != nullptr);
     const FPVector3 grownExtents = boxEntry->Shape->Box._extents * extentsExpansionMultiplier();
@@ -251,7 +251,7 @@ bool BoxBox::BoxInAABB(const CustomEdgesBox& edges, const NarrowEntry3D* boxEntr
 }
 
 // 0x7d75bac
-bool BoxBox::PointInAABB(FPVector3& point, const NarrowEntry3D* box, const FPVector3& extents,
+bool BoxBox::PointInAABB(FPVector3& point, const Entry3D* box, const FPVector3& extents,
                          const FPVector3& offset) {
     assert(box != nullptr);
     point = box->Narrow.RotationInverse * (point - offset);
@@ -384,7 +384,7 @@ bool BoxTriangle::PlaneBoxOverlaps(const FPVector3& triInverseNormal, const Cust
 }
 
 // 0x7d763d0
-void BoxTriangle::ClipTriEdgesOnBoxPlanes(const NarrowEntry3D* boxEntry,
+void BoxTriangle::ClipTriEdgesOnBoxPlanes(const Entry3D* boxEntry,
                                           const CustomVertexTriangle& tri,
                                           const FPVector3& boxExtents, CollisionManifold3D* m) {
     assert(boxEntry != nullptr && m != nullptr);
@@ -429,7 +429,7 @@ bool BoxTriangle::PointInAabb(const FPVector3& point, const FPVector3& extents) 
 }
 
 // 0x7d77624
-void BoxTriangle::ClipBoxEdgesOnTriPlane(const NarrowEntry3D* boxEntry, const FPVector3& triNormal,
+void BoxTriangle::ClipBoxEdgesOnTriPlane(const Entry3D* boxEntry, const FPVector3& triNormal,
                                          const CustomVertexTriangle& triVertex,
                                          CollisionManifold3D* m) {
     assert(boxEntry != nullptr && m != nullptr);
@@ -527,7 +527,7 @@ FP::Raw BoxTriangle::PointPenetrationRaw(const FPVector3& point, const FPVector3
 // 0x7d72058
 bool BoxTriangle::Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
     assert(mInfo != nullptr && mInfo->EntryA != nullptr && mInfo->Tri != nullptr);
-    const NarrowEntry3D& box = *mInfo->EntryA;
+    const Entry3D& box = *mInfo->EntryA;
     const TriangleCCW* tri = mInfo->Tri;
     CollisionManifold3D* manifold = mInfo->Manifold;
     const Shape3D::BoxShape& boxShape = box.Shape->Box;

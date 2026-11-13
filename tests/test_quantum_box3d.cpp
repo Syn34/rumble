@@ -4,7 +4,10 @@
 #include "math_tables.h"
 
 #include "quantum_core/physics3d/narrow_checks.h"
+#include "quantum_core/physics_components.h"
 #include "quantum_core/shape3d.h"
+
+#include <deque>
 #include "quantum_core/triangle_ccw.h"
 
 using namespace Quantum;
@@ -12,6 +15,12 @@ using namespace Quantum::Physics3D;
 using Photon::Deterministic::FPMath::Abs;
 
 namespace {
+// Entries point at their transform; tests keep the transforms alive here.
+Transform3D* TransformAt(const FPVector3& position) {
+    static std::deque<Transform3D> transforms;
+    transforms.push_back(Transform3D{position, FPQuaternion::Identity()});
+    return &transforms.back();
+}
 FP F(int v) { return FP::FromInt(v); }
 FP Q(int numerator, int denominator) { return FP::FromRaw(FP::Raw{65536} * numerator / denominator); }
 FPVector3 V3(FP x, FP y, FP z) { return {x, y, z}; }
@@ -21,12 +30,12 @@ bool Near(const FPVector3& a, const FPVector3& b, int tolerance = 16) {
     return Near(a.X, b.X, tolerance) && Near(a.Y, b.Y, tolerance) && Near(a.Z, b.Z, tolerance);
 }
 
-NarrowEntry3D BoxEntry(const Shape3D& shape, const FPVector3& position,
+Entry3D BoxEntry(const Shape3D& shape, const FPVector3& position,
                        const FPQuaternion& rotation = FPQuaternion::Identity()) {
-    NarrowEntry3D entry;
+    Entry3D entry;
     entry.Shape = &shape;
     NarrowData3D::Init(&entry.Narrow, &entry, position, rotation);
-    entry.TransformPosition = position;
+    entry.Transform3D = TransformAt(position);
     return entry;
 }
 } // namespace
@@ -34,7 +43,7 @@ NarrowEntry3D BoxEntry(const Shape3D& shape, const FPVector3& position,
 TEST_CASE("Physics3D NarrowData3D box caches") {
     rr::test::InstallMathDerivedTables();
     const Shape3D box = Shape3D::CreateBox(V3(1, 2, 3));
-    const NarrowEntry3D entry = BoxEntry(box, V3(5, 0, 0));
+    const Entry3D entry = BoxEntry(box, V3(5, 0, 0));
     const NarrowData3D& n = entry.Narrow;
     CHECK(n.RotatedRight == FPVector3::Right() && n.RotatedUp == FPVector3::Up());
     CHECK(n.RotatedForward == FPVector3::Forward());
@@ -49,7 +58,7 @@ TEST_CASE("Physics3D NarrowData3D box caches") {
 
     // A quarter turn about Y: +X maps to -Z (left-handed), the inverse undoes the rotation.
     const FPQuaternion quarter = FPQuaternion::AngleAxis(F(90), FPVector3::Up());
-    const NarrowEntry3D turned = BoxEntry(box, V3(0, 0, 0), quarter);
+    const Entry3D turned = BoxEntry(box, V3(0, 0, 0), quarter);
     CHECK(Near(turned.Narrow.RotatedRight, V3(0, 0, -1), 128));
     CHECK(Near(turned.Narrow.RotatedForward, V3(1, 0, 0), 128));
     CHECK(Near(turned.Narrow.RotationInverse * turned.Narrow.RotatedRight, FPVector3::Right(), 16));
@@ -59,7 +68,7 @@ TEST_CASE("Physics3D NarrowData3D box caches") {
 TEST_CASE("Physics3D NarrowData3D InitFromTransform applies the local offset") {
     rr::test::InstallMathDerivedTables();
     const Shape3D box = Shape3D::CreateBox(V3(1, 1, 1), V3(0, 1, 0));
-    NarrowEntry3D entry;
+    Entry3D entry;
     entry.Shape = &box;
     FPVector3 position = V3(2, 0, 0);
     FPQuaternion rotation = FPQuaternion::Identity();
@@ -69,8 +78,9 @@ TEST_CASE("Physics3D NarrowData3D InitFromTransform applies the local offset") {
     CHECK(entry.Narrow.Position == V3(2, 1, 0));
 
     // With a time step the body's velocity moves the pose first.
-    NarrowBody3D body{V3(4, 0, 0), FPVector3::Zero()};
-    entry.Body = &body;
+    PhysicsBody3D body{};
+    body.Velocity = V3(4, 0, 0);
+    entry.Body3D = &body;
     position = V3(2, 0, 0);
     NarrowData3D::InitFromTransform(&entry.Narrow, &entry, position, rotation, useCachedRot, Q(1, 2));
     CHECK(entry.Narrow.Position == V3(4, 1, 0));
@@ -79,8 +89,8 @@ TEST_CASE("Physics3D NarrowData3D InitFromTransform applies the local offset") {
 TEST_CASE("Physics3D BoxBox stacked boxes") {
     rr::test::InstallMathDerivedTables();
     const Shape3D unit = Shape3D::CreateBox(V3(1, 1, 1));
-    const NarrowEntry3D a = BoxEntry(unit, V3(0, 0, 0));
-    const NarrowEntry3D b = BoxEntry(unit, V3(F(0), Q(3, 2), F(0)));
+    const Entry3D a = BoxEntry(unit, V3(0, 0, 0));
+    const Entry3D b = BoxEntry(unit, V3(F(0), Q(3, 2), F(0)));
 
     CollisionManifold3D m{};
     CollisionManifoldInfo3D info{&m, &a, &b, nullptr};
@@ -101,7 +111,7 @@ TEST_CASE("Physics3D BoxBox stacked boxes") {
     CHECK(NarrowChecks::BoxBox::Check(&quickInfo, false));
     CHECK(quick._contactPointsCount == 1);
 
-    const NarrowEntry3D apart = BoxEntry(unit, V3(F(0), Q(5, 2), F(0)));
+    const Entry3D apart = BoxEntry(unit, V3(F(0), Q(5, 2), F(0)));
     CollisionManifold3D none{};
     CollisionManifoldInfo3D noneInfo{&none, &a, &apart, nullptr};
     CHECK(!NarrowChecks::BoxBox::Check(&noneInfo, true));
@@ -112,8 +122,8 @@ TEST_CASE("Physics3D BoxBox containment and rotated boxes") {
     rr::test::InstallMathDerivedTables();
     const Shape3D big = Shape3D::CreateBox(V3(2, 2, 2));
     const Shape3D small = Shape3D::CreateBox(V3(Q(1, 2), Q(1, 2), Q(1, 2)));
-    const NarrowEntry3D outer = BoxEntry(big, V3(0, 0, 0));
-    const NarrowEntry3D inner = BoxEntry(small, V3(Q(1, 10), F(0), F(0)));
+    const Entry3D outer = BoxEntry(big, V3(0, 0, 0));
+    const Entry3D inner = BoxEntry(small, V3(Q(1, 10), F(0), F(0)));
     CollisionManifold3D m{};
     CollisionManifoldInfo3D info{&m, &outer, &inner, nullptr};
     CHECK(NarrowChecks::BoxBox::Check(&info, true));
@@ -123,9 +133,9 @@ TEST_CASE("Physics3D BoxBox containment and rotated boxes") {
 
     // A box turned 45 degrees about Y under an axis-aligned one: separated along Y only.
     const Shape3D unit = Shape3D::CreateBox(V3(1, 1, 1));
-    const NarrowEntry3D turned =
+    const Entry3D turned =
         BoxEntry(unit, V3(0, 0, 0), FPQuaternion::AngleAxis(F(45), FPVector3::Up()));
-    const NarrowEntry3D above = BoxEntry(unit, V3(F(0), Q(9, 5), F(0)));
+    const Entry3D above = BoxEntry(unit, V3(F(0), Q(9, 5), F(0)));
     CollisionManifold3D r{};
     CollisionManifoldInfo3D rInfo{&r, &turned, &above, nullptr};
     CHECK(NarrowChecks::BoxBox::Check(&rInfo, true));
@@ -148,9 +158,9 @@ TEST_CASE("Physics3D BoxTriangle against a large floor triangle") {
 
     const Shape3D unit = Shape3D::CreateBox(V3(1, 1, 1));
     const Shape3D mesh = Shape3D::CreateMesh(0);
-    NarrowEntry3D meshEntry;
+    Entry3D meshEntry;
     meshEntry.Shape = &mesh;
-    const NarrowEntry3D box = BoxEntry(unit, V3(F(0), Q(-3, 4), F(0)));
+    const Entry3D box = BoxEntry(unit, V3(F(0), Q(-3, 4), F(0)));
 
     CollisionManifold3D m{};
     CollisionManifoldInfo3D info{&m, &meshEntry, &box, &tri};
@@ -169,7 +179,7 @@ TEST_CASE("Physics3D BoxTriangle against a large floor triangle") {
     CollisionManifoldInfo3D quickInfo{&quick, &box, &meshEntry, &tri};
     CHECK(NarrowChecks::BoxTriangle::Check(&quickInfo, false));
 
-    const NarrowEntry3D below = BoxEntry(unit, V3(F(0), Q(-3, 2), F(0)));
+    const Entry3D below = BoxEntry(unit, V3(F(0), Q(-3, 2), F(0)));
     CollisionManifold3D none{};
     CollisionManifoldInfo3D noneInfo{&none, &below, &meshEntry, &tri};
     CHECK(!NarrowChecks::BoxTriangle::Check(&noneInfo, true));
