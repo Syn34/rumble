@@ -382,7 +382,7 @@ class PhysicsCollider2D_Prototype final : public PendingComponentPrototype {
     void Dispatch(ComponentPrototypeVisitorBase& visitor) override { visitor.Visit(*this); }
 };
 
-class PhysicsCollider3D_Prototype final : public PendingComponentPrototype {
+class PhysicsCollider3D_Prototype final : public TypedComponentPrototype<PhysicsCollider3D> {
   public:
     std::shared_ptr<Shape3DConfig> ShapeConfig;
     std::int32_t Layer = 0;
@@ -390,14 +390,12 @@ class PhysicsCollider3D_Prototype final : public PendingComponentPrototype {
     AssetRefPhysicsMaterial PhysicsMaterial;
 
     // 0x7d7f818
-    PhysicsCollider3D_Prototype() : PendingComponentPrototype("PhysicsCollider3D") {}
+    PhysicsCollider3D_Prototype() = default;
 
-    // TODO(0x7d7f594, Quantum.Prototypes.PhysicsCollider3D_Prototype.Materialize): creates the
-    // shape (Shape3DConfig.CreateShape), looks up the material, builds the collider with
-    // PhysicsCollider3D.Create and frees the temporary compound shape buffer; needs the
-    // collider and shape config types.
-    // TODO(0x7d7f708, Quantum.Prototypes.PhysicsCollider3D_Prototype.AddToEntity):
-    // Materialize, then Set; true when new.
+    // 0x7d7f594 - the shape from the config, the material looked up, then
+    // PhysicsCollider3D.Create (a temporary persistent compound would be freed after).
+    void Materialize(Core::FrameBase* f, PhysicsCollider3D& result) const;
+    // 0x7d7f708 - Materialize, then Set; true when new.
     bool AddToEntity(Core::FrameBase* f, EntityRef entity,
                      const PrototypeMaterializationContext& context) override;
     // 0x7d7f7f0

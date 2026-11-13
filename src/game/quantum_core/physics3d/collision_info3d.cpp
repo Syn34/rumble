@@ -2,6 +2,7 @@
 #include "collision_info3d.h"
 
 #include "quantum_core/physics3d/collision_manifold3d.h"
+#include "quantum_core/physics3d/narrow_checks.h"
 
 namespace Quantum {
 
@@ -32,12 +33,20 @@ CollisionInfo3D::CollisionInfo3D(Physics3D::CollisionManifold3D* manifold, Physi
                                  Physics3D::CollisionManifold3D* triManifolds)
     : _map(map), _sceneMesh(sceneMesh), _isStatic(isStatic), _isMesh(isMesh), _isInverse(isInverse),
       _manifold(manifold), _entryA(entryA), _entryB(entryB),
-      ContactPoints(manifold, isInverse, isMesh, triManifolds) {}
+      ContactPoints(manifold, isInverse, isMesh, triManifolds) {
+    if (isMesh) {
+        MeshTriangleCollisions = {manifold, triManifolds, manifold, sceneMesh};
+    }
+}
 
 // 0x7d3a7d4
 FPVector3 CollisionInfo3D::ContactNormal() const {
-    // TODO(0x7d3a898, Quantum.TriangleCollisionIterator.get_AverageNormal): mesh manifolds
-    // average their triangles' normals; meshes are not reimplemented yet.
+    if (_isMesh) {
+        const Physics3D::NarrowChecks::TriangleCollisionIterator triangles(
+            MeshTriangleCollisions._sceneMesh, MeshTriangleCollisions._meshManifold,
+            MeshTriangleCollisions._triManifolds);
+        return triangles.AverageNormal();
+    }
     return _isInverse ? _manifold->Normal : -_manifold->Normal;
 }
 

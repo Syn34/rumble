@@ -6,7 +6,8 @@
 //   Entries/Manifolds -> BuildIslands -> IntegrateFirstTOI -> collision solver (legacy
 //   Gauss-Seidel or hybrid Jacobi/Gauss-Seidel) -> PenetrationCorrection ->
 //   IntegrateVelocity -> SleepDetectionEntries/Islands.
-// Stages that need unported subsystems (meshes, queries resolved in the step, joints,
+// NarrowPhaseMeshes follows NarrowPhase; the hybrid solver aggregates mesh manifolds after
+// the contacts. Stages that need unported subsystems (queries resolved in the step, joints,
 // compounds) are marked with TODOs where they would run.
 #include "scene3d.h"
 
@@ -17,6 +18,7 @@
 #include "quantum_core/map.h"
 #include "quantum_core/physics3d/narrow_checks.h"
 #include "quantum_core/physics_components.h"
+#include "quantum_core/triangle_mesh.h"
 
 #include "photon_deterministic/fp_math.h"
 
@@ -194,6 +196,22 @@ CollisionManifold3D* Bucket3D::GetNextCollisionManifold() {
     return &m;
 }
 
+// 0x7d79b34
+CollisionManifold3D* Bucket3D::GetNextMeshCollisionManifold(std::int32_t& index) {
+    index = static_cast<std::int32_t>(MeshCollisionManifolds.size());
+    CollisionManifold3D& m = MeshCollisionManifolds.emplace_back();
+    m._m.BucketIndex = Index;
+    return &m;
+}
+
+// 0x7d79bf4
+CollisionManifold3D* Bucket3D::GetNextTriangleCollisionManifold(std::int32_t& index) {
+    index = static_cast<std::int32_t>(TriangleCollisionManifolds.size());
+    CollisionManifold3D& m = TriangleCollisionManifolds.emplace_back();
+    m._m.BucketIndex = Index;
+    return &m;
+}
+
 // 0x7d79cb4
 QueryManifold3D* Bucket3D::GetNextQueryManifold(std::int32_t& index) {
     index = static_cast<std::int32_t>(QueryManifolds.size());
@@ -248,9 +266,13 @@ void Scene3D::ResetScene(FrameBase* frame) {
     // Dynamic entries go; the static ones (first) stay.
     _entries.resize(static_cast<std::size_t>(_staticComponentsCount));
     _queriesCount = 1;
+    _queries.resize(1);
+    _hitCollectionsCount = 0;
+    _resetForFrame = true;
     _collisionSolverData.clear();
     _collisionSolverManifolds.clear();
     _islands.clear();
+    _meshPerBucketManifolds.assign(static_cast<std::size_t>(2 * _meshEntriesCount) * _buckets.size(), 0);
 }
 
 namespace {
@@ -271,8 +293,8 @@ void SortEndPoints(EndPoint* first, EndPoint* last) {
 // the original): world size and buckets from the map, one entry per static collider (the
 // map's order; meshes get an entry but no endpoints), the static endpoints sorted once per
 // bucket and swept to build the buckets' static stabbing lists.
-// Two deviations: a map guid that is not valid falls back to the frame's map (the original
-// keeps the default world), and the static colliders' mutable state
+// Two deviations: a map guid that is not valid falls back to the frame's map, which then
+// becomes the current map (the original keeps the default world), and the static colliders' mutable state
 // (StaticCollidersState, toggled colliders) is not tracked.
 void Scene3D::UpdateMap(FrameBase* frame, AssetGuid mapGuid) {
     if (_mapInitialized && mapGuid == _currentMap) {
@@ -281,12 +303,16 @@ void Scene3D::UpdateMap(FrameBase* frame, AssetGuid mapGuid) {
     _entries.clear();
     _staticComponents.clear();
     _staticComponentsCount = 0;
+    _meshEntriesCount = 0;
     SetDefaultWorld();
     _mapInitialized = true;
     _currentMap = mapGuid;
     Map* map = mapGuid.IsValid() ? frame->FindAsset<Map>(mapGuid) : frame->get_Map();
     if (map == nullptr) {
         return;
+    }
+    if (!mapGuid.IsValid()) {
+        _currentMap = map->Guid; // the frame's map stands in (static hits and exits name it)
     }
     _bucketOnX = map->BucketingAxis == Map::BucketAxis::X;
     _sortOnX = map->SortingAxis == Map::SortAxis::X;
@@ -306,7 +332,12 @@ void Scene3D::UpdateMap(FrameBase* frame, AssetGuid mapGuid) {
         bucket.Min = i * bucketSize;
         bucket.Max = bucket.Min + bucketSize;
     }
-    // TODO(0x7d39438, Quantum.TriangleMesh.InitializeFromMap): the map's static triangle mesh.
+    // The map's static triangle mesh (built once per map), and room in every thread's
+    // mailboxes for its triangles.
+    if (_sceneMesh != nullptr) {
+        _sceneMesh->InitializeFromMap(frame, *map);
+        _tls.EnsureMailboxesCapacity(_sceneMesh->TriangleCount());
+    }
 
     // Static colliders become the first entries.
     const std::int32_t staticCount = static_cast<std::int32_t>(map->StaticColliders3D.size());
@@ -315,19 +346,19 @@ void Scene3D::UpdateMap(FrameBase* frame, AssetGuid mapGuid) {
         StaticComponents3D& components = _staticComponents.emplace_back();
         components.Transform3D.Position = source.Position;
         components.Transform3D.Rotation = source.Rotation;
+        Shape3D shape;
         switch (source.ShapeType) {
-        case Shape3DType::Sphere: components.Collider3D.Shape = Shape3D::CreateSphere(source.SphereRadius); break;
-        case Shape3DType::Box: components.Collider3D.Shape = Shape3D::CreateBox(source.BoxExtents); break;
-        case Shape3DType::Mesh:
-            // TODO(0x7d3ac90, Quantum.Shape3D.CreateMesh): mesh shapes need TriangleMesh.
-            components.Collider3D.Shape = Shape3D{};
-            components.Collider3D.Shape._type = Shape3DType::Mesh;
-            break;
-        default: break; // the original logs an error for any other shape
+        case Shape3DType::Sphere: shape = Shape3D::CreateSphere(source.SphereRadius); break;
+        case Shape3DType::Box: shape = Shape3D::CreateBox(source.BoxExtents); break;
+        case Shape3DType::Mesh: shape = Shape3D::CreateMesh(_meshEntriesCount++); break;
+        default: break; // the original logs an error for any other shape (the entry stays)
         }
-        components.Collider3D.SetLayer(source.StaticData.Layer);
-        components.Collider3D.SetIsTrigger(source.StaticData.IsTrigger);
-        components.Collider3D._material.Id = source.PhysicsMaterial.Id;
+        PhysicsMaterial* material = nullptr;
+        if (source.PhysicsMaterial.Id.IsValid()) {
+            material = frame->FindAsset<PhysicsMaterial>(source.PhysicsMaterial.Id);
+        }
+        components.Collider3D =
+            PhysicsCollider3D::Create(frame, shape, material, source.StaticData.IsTrigger, source.StaticData.Layer);
     }
     _staticComponentsCount = staticCount;
     for (std::int32_t staticIndex = 0; staticIndex < staticCount; ++staticIndex) {
@@ -504,6 +535,11 @@ void Scene3D::ResetBucketsAndTls() {
         bucket.SolverManifolds.clear();
         bucket.TriggerManifolds.assign(1, ManifoldData3D{});
         bucket.TriggerManifoldsProcessCount = 1;
+        bucket.MeshCollisionManifolds.assign(1, CollisionManifold3D{});
+        bucket.MeshCollisionManifoldsProcessCount = 1;
+        bucket.TriangleCollisionManifolds.assign(1, CollisionManifold3D{});
+        bucket.TriangleCollisionManifoldsProcessCount = 1;
+        bucket.TriangleTriggerManifolds.assign(1, ManifoldData3D{});
     }
 }
 
@@ -783,21 +819,27 @@ void Scene3D::TaskBroadPhase(FrameBase* /*frame*/) {
                     if (entry->HasStaticTriggerCallbacks && tls.StaticTrigger.Count >= 1) {
                         EntryCheckEntryList(tls.StaticTrigger, b, entry, true, false, false, false);
                     }
-                    // TODO: EntryCheckTriangles (static mesh triangles).
+                    EntryCheckTriangles(idx, b, false, false);
                 }
                 target = &tls.Dynamic;
             } else if (category == 0x90000000u) { // kinematic
                 if (tls.Dynamic.Count >= 1) EntryCheckEntryList(tls.Dynamic, b, entry, false, false, true, false);
                 if (tls.KinematicTrigger.Count >= 1) EntryCheckEntryList(tls.KinematicTrigger, b, entry, true, false, true, false);
-                if (entry->HasStaticTriggerCallbacks && tls.StaticTrigger.Count >= 1) {
-                    EntryCheckEntryList(tls.StaticTrigger, b, entry, true, false, true, false);
+                if (entry->HasStaticTriggerCallbacks) {
+                    if (tls.StaticTrigger.Count >= 1) {
+                        EntryCheckEntryList(tls.StaticTrigger, b, entry, true, false, true, false);
+                    }
+                    EntryCheckTriangles(idx, b, false, true);
                 }
                 target = &tls.Kinematic;
             } else if (category == 0xb0000000u) { // kinematic trigger
                 if (tls.Dynamic.Count >= 1) EntryCheckEntryList(tls.Dynamic, b, entry, true, false, true, false);
                 if (tls.Kinematic.Count >= 1) EntryCheckEntryList(tls.Kinematic, b, entry, true, false, true, false);
-                if (entry->HasStaticTriggerCallbacks && tls.Static.Count >= 1) {
-                    EntryCheckEntryList(tls.Static, b, entry, true, false, true, false);
+                if (entry->HasStaticTriggerCallbacks) {
+                    if (tls.Static.Count >= 1) {
+                        EntryCheckEntryList(tls.Static, b, entry, true, false, true, false);
+                    }
+                    EntryCheckTriangles(idx, b, true, true);
                 }
                 target = &tls.KinematicTrigger;
             } else if (category == 0xc0000000u) { // static
@@ -836,7 +878,28 @@ void Scene3D::TaskNarrowPhase() {
             }
             Entry3D* a = &_entries[static_cast<std::size_t>(m._entryIdxA)];
             Entry3D* b = &_entries[static_cast<std::size_t>(m._entryIdxB)];
-            // TODO: triggers against static meshes walk the triangle manifolds.
+            if (b->Shape->Type() == Shape3DType::Mesh) {
+                // A trigger against a static mesh: the first touching triangle decides.
+                m.SetIgnore(true);
+                for (std::int32_t t = m.NextInMesh; t != 0;) {
+                    const ManifoldData3D& tri = bucket.TriangleTriggerManifolds[static_cast<std::size_t>(t)];
+                    CollisionManifold3D temp{};
+                    temp._m._entryIdxA = tri._entryIdxA;
+                    temp._m._entryIdxB = tri._entryIdxB;
+                    temp._m._triIdx = tri._triIdx;
+                    UpdateManifoldCachedState(temp._m);
+                    CollisionManifoldInfo3D info{&temp, &_entries[static_cast<std::size_t>(temp._m._entryIdxA)],
+                                                 &_entries[static_cast<std::size_t>(temp._m._entryIdxB)],
+                                                 &_sceneMesh->GetTriangle(temp._m._triIdx)->CCWTri};
+                    if (NarrowChecks::Check(_tls.Narrow, ccd, _deltaTime, &info, false)) {
+                        m.TimeOfImpact = temp._m.TimeOfImpact;
+                        m.SetIgnore(false);
+                        break;
+                    }
+                    t = tri.NextInMesh;
+                }
+                continue;
+            }
             CollisionManifold3D temp{};
             temp._m._entryIdxA = m._entryIdxA;
             temp._m._entryIdxB = m._entryIdxB;
@@ -854,6 +917,18 @@ void Scene3D::TaskNarrowPhase() {
             CollisionManifold3D* m = &bucket.CollisionManifolds[static_cast<std::size_t>(i)];
             CollisionManifoldInfo3D info{m, &_entries[static_cast<std::size_t>(m->_m._entryIdxA)],
                                          &_entries[static_cast<std::size_t>(m->_m._entryIdxB)], nullptr};
+            if (!NarrowChecks::Check(_tls.Narrow, ccd, _deltaTime, &info, true)) {
+                m->SetIgnore(true);
+            }
+        }
+        // The triangle manifolds of static mesh pairs.
+        const std::int32_t triangles = static_cast<std::int32_t>(bucket.TriangleCollisionManifolds.size());
+        for (std::int32_t i = bucket.GetNextTriangleManifoldToProcess(); i < triangles;
+             i = bucket.GetNextTriangleManifoldToProcess()) {
+            CollisionManifold3D* m = &bucket.TriangleCollisionManifolds[static_cast<std::size_t>(i)];
+            CollisionManifoldInfo3D info{m, &_entries[static_cast<std::size_t>(m->_m._entryIdxA)],
+                                         &_entries[static_cast<std::size_t>(m->_m._entryIdxB)],
+                                         &_sceneMesh->GetTriangle(m->_m._triIdx)->CCWTri};
             if (!NarrowChecks::Check(_tls.Narrow, ccd, _deltaTime, &info, true)) {
                 m->SetIgnore(true);
             }
@@ -915,8 +990,13 @@ bool HasDynamicBody(FrameBase* f, EntityRef entity) {
            body->Status != PhysicsBodyStatus::None && !body->GetIsKinematic();
 }
 
+// The scene's map: the frame's own when it is the one (or none is named).
 const Map* MapOf(FrameBase* frame, AssetGuid guid) {
-    return guid.IsValid() ? frame->FindAsset<Map>(guid) : frame->get_Map();
+    const Map* frameMap = frame->get_Map();
+    if (!guid.IsValid() || (frameMap != nullptr && frameMap->Guid == guid)) {
+        return frameMap;
+    }
+    return frame->FindAsset<Map>(guid);
 }
 } // namespace
 
@@ -1290,9 +1370,18 @@ void Scene3D::TaskCallbacks(FrameBase* frame, ICollisionCallbacks3D* callbacks) 
                 HandleStaticCollision(frame, callbacks, map, m, a, b);
             }
         }
-        // TODO(0x7d60c38, Quantum.Physics3D.Scene3D.HandleMeshCollision) and
-        // TODO(0x7d62ad0, Quantum.Physics3D.Scene3D.CheckIgnoreMeshCollisionManifold): mesh
-        // collision manifolds come here; static triangle meshes are not reimplemented yet.
+        for (std::size_t i = 1; i < bucket.MeshCollisionManifolds.size(); ++i) {
+            CollisionManifold3D* m = &bucket.MeshCollisionManifolds[i];
+            if ((m->_m._flags & Skip) != 0) {
+                continue;
+            }
+            Entry3D* a = &_entries[static_cast<std::size_t>(m->_m._entryIdxA)];
+            Entry3D* b = &_entries[static_cast<std::size_t>(m->_m._entryIdxB)];
+            if (_callbacksWereCalled && CheckIgnoreMeshCollisionManifold(frame, m, a)) {
+                continue;
+            }
+            HandleMeshCollision(frame, callbacks, map, m, a, b, bucket.TriangleCollisionManifolds.data());
+        }
         for (std::size_t i = 1; i < bucket.TriggerManifolds.size(); ++i) {
             ManifoldData3D* m = &bucket.TriggerManifolds[i];
             if ((m->_flags & Skip) != 0) {
@@ -1325,7 +1414,12 @@ void Scene3D::TaskSortCcdManifolds() {
                 _ccdManifolds.push_back({&m->_m, m});
             }
         }
-        // TODO: mesh collision manifolds (static triangle meshes are not reimplemented yet).
+        for (std::size_t i = 1; i < bucket.MeshCollisionManifolds.size(); ++i) {
+            CollisionManifold3D* m = &bucket.MeshCollisionManifolds[i];
+            if ((m->_m._flags & Mask) == ManifoldData3D::UsesCcd) {
+                _ccdManifolds.push_back({&m->_m, m});
+            }
+        }
         for (std::size_t i = 1; i < bucket.TriggerManifolds.size(); ++i) {
             ManifoldData3D* m = &bucket.TriggerManifolds[i];
             if ((m->_flags & Mask) == ManifoldData3D::UsesCcd) {
@@ -1382,16 +1476,25 @@ void Scene3D::TaskCcdCallbacks(FrameBase* frame, ICollisionCallbacks3D* callback
             }
             continue;
         }
-        // TODO(0x7d60c38, Quantum.Physics3D.Scene3D.HandleMeshCollision): mesh pairs
-        // (NextInMesh set) need static triangle meshes.
-        if (_callbacksWereCalled && CheckIgnoreCollisionManifold(frame, m, entryA, entryB)) {
-            continue;
-        }
-        if (callbacks != nullptr) {
-            if (m->GetIsDynamic()) {
-                HandleDynamicCollision(frame, callbacks, item.Collision, entryA, entryB);
-            } else {
-                HandleStaticCollision(frame, callbacks, map, item.Collision, entryA, entryB);
+        if (m->NextInMesh >= 1) {
+            // A static mesh pair.
+            if (_callbacksWereCalled && CheckIgnoreMeshCollisionManifold(frame, item.Collision, entryA)) {
+                continue;
+            }
+            if (callbacks != nullptr) {
+                HandleMeshCollision(frame, callbacks, map, item.Collision, entryA, entryB,
+                                    _buckets[static_cast<std::size_t>(m->BucketIndex)].TriangleCollisionManifolds.data());
+            }
+        } else {
+            if (_callbacksWereCalled && CheckIgnoreCollisionManifold(frame, m, entryA, entryB)) {
+                continue;
+            }
+            if (callbacks != nullptr) {
+                if (m->GetIsDynamic()) {
+                    HandleDynamicCollision(frame, callbacks, item.Collision, entryA, entryB);
+                } else {
+                    HandleStaticCollision(frame, callbacks, map, item.Collision, entryA, entryB);
+                }
             }
         }
         if (!m->GetIgnore()) {
@@ -1459,9 +1562,21 @@ void Scene3D::TaskPostCallbacksUpdateManifolds() {
             }
             bucket.SolverManifolds.push_back(m);
         }
-        // TODO(0x7d63188, Quantum.Physics3D.Scene3D.Task_PostCallbacksUpdateManifolds): mesh
-        // manifolds (their live triangle manifolds join the list and set the earliest time
-        // of impact); static triangle meshes are not reimplemented yet.
+        // Mesh manifolds: their live triangle manifolds join the solver list.
+        for (std::size_t i = 1; i < bucket.MeshCollisionManifolds.size(); ++i) {
+            CollisionManifold3D& m = bucket.MeshCollisionManifolds[i];
+            if (m.GetIgnore()) {
+                continue;
+            }
+            if (_callbacksWereCalled) {
+                const Entry3D& a = _entries[static_cast<std::size_t>(m._m._entryIdxA)];
+                if (a.Ignore || !a.HasDynamicBody) {
+                    m.SetIgnore(true);
+                    continue;
+                }
+            }
+            PruneTriangleChain(bucket, m, &bucket.SolverManifolds);
+        }
     }
 }
 
@@ -1502,6 +1617,9 @@ void Scene3D::TaskBuildIslands() {
         }
     };
     for (Bucket3D& bucket : _buckets) {
+        if (bucket.SolverManifolds.empty()) {
+            continue; // (mesh manifolds included: live ones always have solver triangles)
+        }
         for (CollisionManifold3D* m : bucket.SolverManifolds) {
             if (m->_m._triIdx != 0) {
                 continue; // triangle manifolds come with their mesh manifold
@@ -1536,8 +1654,23 @@ void Scene3D::TaskBuildIslands() {
                 rootB->Island = islandA;
             }
         }
-        // TODO(0x7d6351c, Quantum.Physics3D.Scene3D.Task_BuildIslands): mesh manifolds (the
-        // entity joins or starts an island); static triangle meshes are not reimplemented yet.
+        // Mesh manifolds: the entity joins its island or starts one (the mesh has no body).
+        for (std::size_t i = 1; i < bucket.MeshCollisionManifolds.size(); ++i) {
+            CollisionManifold3D* m = &bucket.MeshCollisionManifolds[i];
+            if (m->GetIgnore()) {
+                continue;
+            }
+            Entry3D* root = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxA)]);
+            if (root->Island != nullptr) {
+                root->Island->AddManifold(m);
+                continue;
+            }
+            Island3D* island = GetNextIsland();
+            island->AddEntry(root);
+            island->AddManifold(m);
+            root->Island = island;
+            _solverEntries.push_back(root);
+        }
     }
 }
 
@@ -1932,16 +2065,30 @@ void Scene3D::TaskVelocitySolverLegacyGS() {
             Entry3D* entryA = &_entries[static_cast<std::size_t>(m->_m._entryIdxA)];
             Entry3D* entryB = &_entries[static_cast<std::size_t>(m->_m._entryIdxB)];
             AccumulatedImpulseCollection impulses{};
-            // TODO: a mesh manifold (NextInMesh != 0) adds the impulses of its triangle
-            // manifolds (the first added, the rest accumulated) and applies them to A only;
-            // static triangle meshes are not reimplemented yet.
-            AccumulateImpulses(&_collisionSolverData[static_cast<std::size_t>(m->_constraintDataIdx)], m, entryA,
-                               entryB, useRotation, impulses, island.VelocityConstraintsSolved, ImpulseAdd);
-            if (entryA->HasDynamicBody) {
+            if (m->_m.NextInMesh != 0) {
+                // A static mesh pair: the impulses of its triangle manifolds (the first added,
+                // the rest accumulated) go to the entity at once.
+                CollisionManifold3D* triangles =
+                    _buckets[static_cast<std::size_t>(m->_m.BucketIndex)].TriangleCollisionManifolds.data();
+                std::int32_t flags = ImpulseAdd;
+                for (std::int32_t t = m->_m.NextInMesh; t != 0; t = triangles[t]._m.NextInMesh) {
+                    CollisionManifold3D* tri = &triangles[t];
+                    AccumulateImpulses(&_collisionSolverData[static_cast<std::size_t>(tri->_constraintDataIdx)], tri,
+                                       &_entries[static_cast<std::size_t>(tri->_m._entryIdxA)],
+                                       &_entries[static_cast<std::size_t>(tri->_m._entryIdxB)], useRotation, impulses,
+                                       island.VelocityConstraintsSolved, flags);
+                    flags = ImpulseAccumulate;
+                }
                 impulses.A.Apply(entryA);
-            }
-            if (entryB->HasDynamicBody) {
-                impulses.B.Apply(entryB);
+            } else {
+                AccumulateImpulses(&_collisionSolverData[static_cast<std::size_t>(m->_constraintDataIdx)], m, entryA,
+                                   entryB, useRotation, impulses, island.VelocityConstraintsSolved, ImpulseAdd);
+                if (entryA->HasDynamicBody) {
+                    impulses.A.Apply(entryA);
+                }
+                if (entryB->HasDynamicBody) {
+                    impulses.B.Apply(entryB);
+                }
             }
             m->_flags |= CollisionManifold3D::Solved;
         }
@@ -2277,8 +2424,37 @@ void Scene3D::TaskPenetrationCorrection() {
     const FP::Raw correctionFactor = Raw(CachedSettings.PenetrationCorrection);
     for (Island3D& island : _islands) {
         if (island.Ignore) continue;
+        // Pushes the entity of side A out along -normal (minus what it was already pushed
+        // that way).
+        const auto pushA = [](Entry3D* a, FP::Raw correction, FP::Raw nx, FP::Raw ny, FP::Raw nz) {
+            FPVector3& acc = a->AccumulatedCorrection;
+            // Already pushed along -n: products negated before the shift, as the original.
+            const FP::Raw done = ((-(ny * Raw(acc.Y))) >> 16) + ((-(nx * Raw(acc.X))) >> 16) +
+                                 ((-(nz * Raw(acc.Z))) >> 16);
+            const FP::Raw amount = done > 0 ? correction - done : correction;
+            if (done <= 0 || amount > 0) {
+                acc.X = FromRaw(Raw(acc.X) + Mul(amount, -nx));
+                acc.Y = FromRaw(Raw(acc.Y) + Mul(amount, -ny));
+                acc.Z = FromRaw(Raw(acc.Z) + Mul(amount, -nz));
+            }
+        };
         for (CollisionManifold3D* m : island.CollisionManifolds) {
-            // TODO: mesh manifolds correct per triangle manifold (NextInMesh chain).
+            if (m->_m.NextInMesh != 0) {
+                // A static mesh pair: each triangle manifold pushes the entity alone.
+                const CollisionManifold3D* triangles =
+                    _buckets[static_cast<std::size_t>(m->_m.BucketIndex)].TriangleCollisionManifolds.data();
+                for (std::int32_t t = m->_m.NextInMesh; t != 0; t = triangles[t]._m.NextInMesh) {
+                    const CollisionManifold3D& tri = triangles[t];
+                    const FP::Raw penetration = Raw(tri.Penetration) - allowance;
+                    if (penetration <= 0) continue;
+                    Entry3D* a = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxA)]);
+                    const FP::Raw invA = a->Body3D->_massInverseRawInt;
+                    // (A zero inverse mass divides by zero in the original, giving 0 on arm64.)
+                    const FP::Raw correction = invA == 0 ? 0 : Mul((penetration << 16) / invA, correctionFactor);
+                    pushA(a, correction, Raw(tri.Normal.X), Raw(tri.Normal.Y), Raw(tri.Normal.Z));
+                }
+                continue;
+            }
             const FP::Raw penetration = Raw(m->Penetration) - allowance;
             if (penetration <= 0) continue;
             Entry3D* a = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxA)]);
@@ -2289,16 +2465,7 @@ void Scene3D::TaskPenetrationCorrection() {
             const FP::Raw correction = Mul((penetration << 16) / (invA + invB), correctionFactor);
             const FP::Raw nx = Raw(m->Normal.X), ny = Raw(m->Normal.Y), nz = Raw(m->Normal.Z);
             if (a->HasDynamicBody) {
-                FPVector3& acc = a->AccumulatedCorrection;
-                // Already pushed along -n: products negated before the shift, as the original.
-                const FP::Raw done = ((-(ny * Raw(acc.Y))) >> 16) + ((-(nx * Raw(acc.X))) >> 16) +
-                                     ((-(nz * Raw(acc.Z))) >> 16);
-                const FP::Raw amount = done > 0 ? correction - done : correction;
-                if (done <= 0 || amount > 0) {
-                    acc.X = FromRaw(Raw(acc.X) + Mul(amount, -nx));
-                    acc.Y = FromRaw(Raw(acc.Y) + Mul(amount, -ny));
-                    acc.Z = FromRaw(Raw(acc.Z) + Mul(amount, -nz));
-                }
+                pushA(a, correction, nx, ny, nz);
             }
             if (b->HasDynamicBody) {
                 FPVector3& acc = b->AccumulatedCorrection;
@@ -2482,17 +2649,24 @@ void Scene3D::TaskSleepDetectionIslands() {
 // 0x7d5a3ec - one step. Ordering follows TaskManagementData.ScheduleTasks (0x7d6f764).
 void Scene3D::Update(FrameBase* frame, FP deltaTime, ICollisionCallbacks3D* callbacks) {
     _deltaTime = deltaTime;
-    ResetScene(frame);
+    // The original resets in OnFrameSimulationBegin only (queries added afterwards belong
+    // to this step); a step without it resets here.
+    if (!_resetForFrame) {
+        ResetScene(frame);
+    }
+    _resetForFrame = false;
     CreateEntries(frame);
     ResetBucketsAndTls();
     TaskIntegrateForcesFirstHalf();
     TaskBroadPhaseEntryPreStep();
     TaskBroadPhase(frame);
     TaskNarrowPhase();
+    TaskNarrowPhaseMeshes();
     TaskCallbacks(frame, callbacks);
     TaskSortCcdManifolds();
     TaskCcdCallbacks(frame, callbacks);
     TaskPostCallbacksUpdateEntries(frame);
+    TaskQueryResolve(frame);
     TaskPostCallbacksUpdateManifolds();
     TaskBuildIslands();
     TaskIntegrateFirstTOI();
@@ -2511,8 +2685,7 @@ void Scene3D::Update(FrameBase* frame, FP deltaTime, ICollisionCallbacks3D* call
             for (int iteration = 0; iteration < CachedSettings.SolverIterations; ++iteration) {
                 TaskCollisionSolverCompute();
                 TaskCollisionSolverAggregateContacts();
-                // TODO(0x7d66708, Quantum.Physics3D.Scene3D.Task_CollisionSolverAggregateMesh):
-                // mesh manifolds; static triangle meshes are not reimplemented yet.
+                TaskCollisionSolverAggregateMesh();
                 TaskVelocitySolverAggregate();
                 TaskVelocitySolverApply();
             }
@@ -2573,10 +2746,24 @@ void Scene3D::ResolveQuery(FrameBase* frame, HitCollection3D* hits, const Query3
     }
     const std::int32_t options = query.Options;
     const bool detailed = (options & ComputeDetailedInfo) != 0;
-    // TODO(0x7d55a20, Quantum.Physics3D.Scene3D.TraverseSceneMeshLinecast), TODO(0x7d54f48,
-    // Quantum.Physics3D.Scene3D.TraverseSceneMeshShapeOverlap), TODO(0x7d55208,
-    // Quantum.Physics3D.Scene3D.TraverseSceneMeshShapeCast): with HitStatics the static
-    // triangle mesh is tested first; meshes are not reimplemented yet.
+    // With HitStatics the static triangle mesh is tested first.
+    if ((options & HitStatics) != 0 && _sceneMesh != nullptr) {
+        QueryContextInfo3D info;
+        info.Frame = frame;
+        info.HitCollection = hits;
+        info.Query = &query;
+        info.ComputeDetailedInfo = detailed;
+        info.QueryEntry = qEntry;
+        const PhysicsSceneSettings* settings = frame->get_PhysicsSceneSettings();
+        info.GjkSettings = settings != nullptr ? &settings->GJKSettingsValue : &CachedSettings.GJKSettingsValue;
+        switch (query.Type) {
+        case QueryType::ShapeOverlap:
+            TraverseSceneMeshShapeOverlap(info, &Scene3D::ResolveQueryTriangleOverlap);
+            break;
+        case QueryType::ShapeCast: TraverseSceneMeshShapeCast(info, &Scene3D::ResolveQueryTriangleShapeCast); break;
+        case QueryType::Linecast: TraverseSceneMeshLinecast(info, &Scene3D::ResolveQueryTriangleLinecast); break;
+        }
+    }
     const std::int32_t hitsBefore = hits->Count();
     std::int32_t bucketHitsStart = hitsBefore;
     std::int32_t b = qEntry->BucketStart - increment;
@@ -2636,6 +2823,16 @@ void Scene3D::ScanQueryCandidates(FrameBase* frame, HitCollection3D* hits, const
                              !frame->ComponentMask(entry->Ref.Index).IsSupersetOf(_minComponentSet) ||
                              entry->Collider3D->_disabled != 0)) {
                 continue;
+            }
+            if (_resolvingStepQueries && _callbacksWereCalled && !statics) {
+                // Task_QueryResolve after callbacks: entries ignored since, and entities
+                // whose kind no longer matches the options.
+                if (entry->Ignore) continue;
+                if ((options & HitAll) != HitAll) {
+                    if ((options & HitTriggers) == 0 && entry->Collider3D->_isTrigger == 1) continue;
+                    if ((options & HitDynamics) == 0 && entry->HasDynamicBody) continue;
+                    if ((options & HitKinematics) == 0 && !entry->HasDynamicBody) continue;
+                }
             }
             if (((query.LayerMask >> entry->Collider3D->Layer()) & 1) == 0) continue;
             const bool trigger = entry->Collider3D->_isTrigger == 1;
@@ -2852,4 +3049,696 @@ void Scene3D::InitShapeOverlapEntry(const Query3D& query, Entry3D* qEntry) {
     qEntry->BucketIncrement = 1;
 }
 
+// ---------------------------------------------------------------------------------------
+// Static triangle meshes
+
+// 0x7d5d5bc - the broad phase of an entry against the static mesh, once per entry (in its
+// first bucket): every triangle in the cells its box covers (each once, through the
+// thread's mailboxes) whose bounding sphere reaches the entry's. Pairs are grouped per
+// mesh collider in a mesh manifold (a trigger manifold when either side is a trigger),
+// found again through _meshPerBucketManifolds; each reached triangle chains a triangle
+// manifold to it. A new mesh manifold starts ignored and is only opened when the pair can
+// interact (a kinematic entry meets only the opposite trigger kind; a static trigger needs
+// the entry's static trigger callbacks) and the layers collide.
+void Scene3D::EntryCheckTriangles(std::int32_t entryIdx, std::int32_t bucketIdx, bool entryIsTrigger,
+                                  bool isKinematic) {
+    Entry3D* entry = &_entries[static_cast<std::size_t>(entryIdx)];
+    if (entry->BucketStart != bucketIdx || _sceneMesh == nullptr) {
+        return;
+    }
+    const std::int32_t layerRow = CachedSettings.Layers[entry->Collider3D->Layer()];
+    const FP::Raw broadRadius = Root(entry)->_useCCD ? entry->AABB.GetBroadRadiusRaw() : Raw(entry->Shape->BroadRadius);
+    TriangleMesh& mesh = *_sceneMesh;
+    const std::uint64_t sequence = ++_tls.OverlapSequence;
+    const TriangleMesh::CellBounds cells = mesh.GetBounds(entry->AABB);
+    std::uint64_t* mailboxes = _tls.GetTrianglesMailboxes(mesh.TriangleCapacity());
+    Bucket3D& bucket = _buckets[static_cast<std::size_t>(bucketIdx)];
+    const auto bucketCount = static_cast<std::int32_t>(_buckets.size());
+    const FPVector3& centre = entry->Narrow.Position;
+    const auto reaches = [&](const TriangleCCW& tri) {
+        const FP::Raw dx = Raw(tri.Center.X) - Raw(centre.X);
+        const FP::Raw dy = Raw(tri.Center.Y) - Raw(centre.Y);
+        const FP::Raw dz = Raw(tri.Center.Z) - Raw(centre.Z);
+        const FP::Raw reach = Raw(tri.BroadRadius) + broadRadius;
+        return ((dy * dy) >> 16) + ((dx * dx) >> 16) + ((dz * dz) >> 16) <= ((reach * reach) >> 16);
+    };
+    // The mesh manifolds used last (slots; 0 = none) and the mesh collider they belong to.
+    std::int32_t triggerSlot = 0, triggerMesh = 0;
+    std::int32_t collisionSlot = 0, collisionMesh = 0;
+
+    for (std::int32_t z = cells.MinZ; z <= cells.MaxZ; ++z) {
+        for (std::int32_t y = cells.MinY; y <= cells.MaxY; ++y) {
+            for (std::int32_t x = cells.MinX; x <= cells.MaxX; ++x) {
+                const std::int32_t* triangles = nullptr;
+                std::int32_t count = 0;
+                if (!mesh.TryGetTriangles(x, y, z, triangles, count)) {
+                    continue;
+                }
+                for (std::int32_t k = 0; k < count; ++k) {
+                    const std::int32_t triIndex = triangles[k];
+                    if (mailboxes[triIndex] == sequence) {
+                        continue;
+                    }
+                    mailboxes[triIndex] = sequence;
+                    const TriangleCCW& tri = mesh.GetTriangle(triIndex)->CCWTri;
+                    Entry3D* meshEntry = &_entries[static_cast<std::size_t>(tri.StaticDataIndex)];
+                    const bool staticIsTrigger = meshEntry->Collider3D->_isTrigger == 1;
+                    const std::int32_t meshIndex = meshEntry->Shape->Mesh.MeshIndex;
+                    const bool triggerPair = staticIsTrigger || entryIsTrigger;
+                    std::int32_t& cachedSlot = triggerPair ? triggerSlot : collisionSlot;
+                    std::int32_t& cachedMesh = triggerPair ? triggerMesh : collisionMesh;
+                    // Mesh manifold data of a slot of the right kind.
+                    const auto meshData = [&](std::int32_t slot) -> ManifoldData3D& {
+                        return triggerPair ? bucket.TriggerManifolds[static_cast<std::size_t>(slot)]
+                                           : bucket.MeshCollisionManifolds[static_cast<std::size_t>(slot)]._m;
+                    };
+                    bool created = false;
+                    if (cachedSlot == 0 || cachedMesh != meshIndex) {
+                        const std::int32_t kind = triggerPair ? 1 : 0;
+                        std::int32_t& stored =
+                            _meshPerBucketManifolds[static_cast<std::size_t>(bucketCount * ((meshIndex << 1) | kind) + bucketIdx)];
+                        // The slot holds this step's manifold of another entity: a new one
+                        // takes its place.
+                        if (stored != 0 &&
+                            _entries[static_cast<std::size_t>(meshData(stored)._entryIdxA)].Ref.Raw() == entry->Ref.Raw()) {
+                            cachedSlot = stored;
+                        } else {
+                            ManifoldData3D* m = nullptr;
+                            if (triggerPair) {
+                                stored = static_cast<std::int32_t>(bucket.TriggerManifolds.size());
+                                m = &bucket.TriggerManifolds.emplace_back();
+                                m->SetIsTrigger(true);
+                            } else {
+                                m = &bucket.GetNextMeshCollisionManifold(stored)->_m;
+                            }
+                            cachedSlot = stored;
+                            m->_entryIdxA = entry->Index;
+                            m->_entryIdxB = meshEntry->Index;
+                            m->_triIdx = 0;
+                            UpdateManifoldCachedState(*m);
+                            m->SetIgnore(true);
+                            created = true;
+                        }
+                        cachedMesh = meshIndex;
+                    }
+                    ManifoldData3D& m = meshData(cachedSlot);
+                    if (created) {
+                        const bool canInteract = isKinematic ? staticIsTrigger != entryIsTrigger
+                                                             : !staticIsTrigger || entry->HasStaticTriggerCallbacks;
+                        if (!canInteract || ((layerRow >> meshEntry->Collider3D->Layer()) & 1) == 0) {
+                            continue;
+                        }
+                        m.SetIgnore(false);
+                    } else if (m.GetIgnore()) {
+                        continue;
+                    }
+                    if (!reaches(tri)) {
+                        continue;
+                    }
+                    std::int32_t triSlot = 0;
+                    ManifoldData3D* t = nullptr;
+                    if (triggerPair) {
+                        triSlot = static_cast<std::int32_t>(bucket.TriangleTriggerManifolds.size());
+                        t = &bucket.TriangleTriggerManifolds.emplace_back();
+                        t->SetIsTrigger(true);
+                    } else {
+                        t = &bucket.GetNextTriangleCollisionManifold(triSlot)->_m;
+                    }
+                    t->_entryIdxA = entry->Index;
+                    t->_entryIdxB = meshEntry->Index;
+                    t->_triIdx = triIndex;
+                    UpdateManifoldCachedState(*t);
+                    ManifoldData3D& owner = meshData(cachedSlot);
+                    t->NextInMesh = owner.NextInMesh;
+                    owner.NextInMesh = triSlot;
+                }
+            }
+        }
+    }
+}
+
+// Part of Task_NarrowPhaseMeshes / Task_PostCallbacksUpdateManifolds: drops the ignored
+// triangle manifolds from a mesh manifold's chain (optionally listing the live ones) and
+// gives it the earliest time of impact among them; a mesh manifold left without triangles
+// is ignored.
+void Scene3D::PruneTriangleChain(Bucket3D& bucket, CollisionManifold3D& mesh,
+                                 std::vector<CollisionManifold3D*>* liveTriangles) {
+    mesh._m.TimeOfImpact = FP::FromRaw(0x7fffffff);
+    ManifoldData3D* previous = &mesh._m;
+    for (std::int32_t t = mesh._m.NextInMesh; t != 0;) {
+        CollisionManifold3D& tri = bucket.TriangleCollisionManifolds[static_cast<std::size_t>(t)];
+        if (tri.GetIgnore()) {
+            previous->NextInMesh = 0;
+            t = tri._m.NextInMesh;
+            continue;
+        }
+        if (liveTriangles != nullptr) {
+            liveTriangles->push_back(&tri);
+        }
+        if (tri._m.TimeOfImpact < mesh._m.TimeOfImpact) {
+            mesh._m.TimeOfImpact = tri._m.TimeOfImpact;
+        }
+        previous->NextInMesh = t;
+        previous = &tri._m;
+        t = tri._m.NextInMesh;
+    }
+    if (mesh._m.NextInMesh == 0) {
+        mesh.SetIgnore(true);
+    }
+}
+
+// 0x7d5f9b8 - after the narrow phase: each live mesh manifold keeps only its touching
+// triangles.
+void Scene3D::TaskNarrowPhaseMeshes() {
+    for (Bucket3D& bucket : _buckets) {
+        const auto count = static_cast<std::int32_t>(bucket.MeshCollisionManifolds.size());
+        for (std::int32_t i = bucket.GetNextMeshManifoldToProcess(); i < count; i = bucket.GetNextMeshManifoldToProcess()) {
+            CollisionManifold3D& mesh = bucket.MeshCollisionManifolds[static_cast<std::size_t>(i)];
+            if (!mesh.GetIgnore()) {
+                PruneTriangleChain(bucket, mesh, nullptr);
+            }
+        }
+    }
+}
+
+// 0x7d62ad0 - after a callback ran, a mesh pair is dropped when its entity lost its
+// collider, became a trigger or no longer has a dynamic body; otherwise the entry's
+// callbacks pointer is refreshed.
+bool Scene3D::CheckIgnoreMeshCollisionManifold(FrameBase* frame, CollisionManifold3D* m, Entry3D* entryA) {
+    if (EntityLost(frame, entryA, _minComponentSet) || entryA->Collider3D->_isTrigger == 1) {
+        entryA->Ignore = true;
+    }
+    if (entryA->Ignore || !HasDynamicBody(frame, entryA->Ref)) {
+        m->SetIgnore(true);
+        return true;
+    }
+    RefreshCallbacks(frame, entryA);
+    return false;
+}
+
+// 0x7d60c38 - the entity (always A) against a static mesh collider: as a static collision,
+// with a mesh collision info (contact points and normal from the triangle manifolds); the
+// tracked entry records whether the mesh collider is a trigger.
+void Scene3D::HandleMeshCollision(FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
+                                  CollisionManifold3D* manifold, Entry3D* entryA, Entry3D* entryB,
+                                  CollisionManifold3D* triManifolds) {
+    PhysicsCallbacks3D* cb = entryA->Callbacks;
+    if (cb == nullptr || cb->Flags == CallbackFlags::None) {
+        return;
+    }
+    const CollisionInfo3D info(manifold, entryA, entryB, _sceneMesh, map, true, false, true, triManifolds);
+    const bool tracks = Wants(cb, StaticCollisionEnterExit);
+    bool known = false;
+    std::int32_t index = 0;
+    if (tracks) {
+        if (cb->IsCollidingWith(f, MapAsListEntry(map), entryB->StaticColliderIndex, index)) {
+            known = true;
+        } else if (Wants(cb, CallbackFlags::OnStaticCollisionEnter)) {
+            callbacks->OnCollisionEnter3D(f, info);
+            _callbacksWereCalled = true;
+        }
+    }
+    if (Wants(cb, CallbackFlags::OnStaticCollision)) {
+        callbacks->OnCollision3D(f, info);
+        _callbacksWereCalled = true;
+    }
+    if (!tracks || manifold->GetIgnore() || !Wants(cb, StaticCollisionEnterExit)) {
+        return;
+    }
+    if (known) {
+        cb->SetEntryIsActive(f, index, true);
+    } else {
+        cb->AddCollision(f, MapAsListEntry(map), entryB->StaticColliderIndex, entryB->Collider3D->_isTrigger == 1);
+    }
+}
+
+// 0x7d66708 - a mesh manifold acts through the constraint of its last triangle: the first
+// triangle's impulses (B's linear, A's angular) with every later unsolved triangle's
+// accumulated on top (the share beyond what the sum already covers); A's linear impulse
+// is the opposite of B's. The mesh manifold now points at that constraint.
+void Scene3D::TaskCollisionSolverAggregateMesh() {
+    if (_collisionSolverManifolds.empty()) {
+        return;
+    }
+    const bool useRotation = CachedSettings.UseAngularVelocityEnabled();
+    const std::int32_t flags = useRotation ? (ImpulseLinear | ImpulseAngular | ImpulseAccumulate)
+                                           : (ImpulseLinear | ImpulseAccumulate);
+    for (Bucket3D& bucket : _buckets) {
+        for (std::size_t i = 1; i < bucket.MeshCollisionManifolds.size(); ++i) {
+            CollisionManifold3D& mesh = bucket.MeshCollisionManifolds[i];
+            if (mesh.GetIgnore() || mesh.GetSolved()) {
+                continue;
+            }
+            const CollisionManifold3D* tri = &bucket.TriangleCollisionManifolds[static_cast<std::size_t>(mesh._m.NextInMesh)];
+            std::int32_t last = tri->_constraintDataIdx;
+            const ContactConstraint& first = _collisionSolverData[static_cast<std::size_t>(last)];
+            AccumulatedImpulse sum{};
+            sum.Velocity = first.ImpulsesB.Linear;
+            sum.AngularVelocity = first.ImpulsesA.Angular;
+            bool solved = (first.Flags & WasSolved) != 0;
+            while (tri->_m.NextInMesh != 0) {
+                tri = &bucket.TriangleCollisionManifolds[static_cast<std::size_t>(tri->_m.NextInMesh)];
+                last = tri->_constraintDataIdx;
+                const ContactConstraint& c = _collisionSolverData[static_cast<std::size_t>(last)];
+                if ((c.Flags & WasSolved) != 0) {
+                    continue;
+                }
+                solved = false;
+                AccumulatedImpulse add{};
+                add.Velocity = c.ImpulsesB.Linear;
+                add.AngularVelocity = c.ImpulsesA.Angular;
+                sum.Accumulate(add, flags);
+            }
+            mesh._constraintDataIdx = last;
+            ContactConstraint& target = _collisionSolverData[static_cast<std::size_t>(last)];
+            target.ImpulsesB.Linear = sum.Velocity;
+            target.ImpulsesA.Linear = FPVector3{FromRaw(-Raw(sum.Velocity.X)), FromRaw(-Raw(sum.Velocity.Y)),
+                                                FromRaw(-Raw(sum.Velocity.Z))};
+            target.ImpulsesA.Angular = sum.AngularVelocity;
+            target.Flags = (target.Flags & ~WasSolved) | (solved ? WasSolved : 0);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Static mesh traversal of immediate queries
+
+namespace {
+// One axis of a 3D digital differential analyser over the mesh cells (Amanatides-Woo):
+// the current cell, the step direction, the ray fraction of the next cell boundary and the
+// fraction one cell spans (all in the raw 16.16 units the original uses).
+struct CellWalkAxis {
+    std::int32_t Cell = 0;
+    std::int32_t Step = 1;
+    FP::Raw TMax = std::numeric_limits<FP::Raw>::max();
+    FP::Raw TDelta = std::numeric_limits<FP::Raw>::max();
+
+    // From `start` to `end` with cells of `inverseCell` (65536 / cell size, truncated);
+    // returns the number of cells crossed.
+    std::int32_t Init(FP::Raw start, FP::Raw end, std::int64_t inverseCell) {
+        const std::int64_t scaled = start * inverseCell;
+        Cell = static_cast<std::int32_t>(scaled >> 32);
+        if (end == start) {
+            return 0;
+        }
+        const auto endCell = static_cast<std::int32_t>((end * inverseCell) >> 32);
+        if (end > start) {
+            Step = 1;
+            TDelta = (std::int64_t{1} << 32) / (end - start);
+            const FP::Raw boundary = ((scaled + (std::int64_t{1} << 32)) >> 16) & ~FP::Raw{0xffff};
+            TMax = (TDelta * (boundary - (scaled >> 16))) >> 16;
+            return endCell - Cell;
+        }
+        Step = -1;
+        TDelta = (std::int64_t{1} << 32) / (start - end);
+        TMax = (TDelta * ((scaled >> 16) & 0xffff)) >> 16;
+        return Cell - endCell;
+    }
+    void Advance() {
+        Cell += Step;
+        TMax = static_cast<FP::Raw>(static_cast<std::uint64_t>(TMax) + static_cast<std::uint64_t>(TDelta));
+    }
+};
+
+// The axis whose next boundary comes first (ties go to the later axis).
+int NextAxis(const CellWalkAxis& x, const CellWalkAxis& y, const CellWalkAxis& z) {
+    if (x.TMax < y.TMax) {
+        return x.TMax < z.TMax ? 0 : 2;
+    }
+    return y.TMax < z.TMax ? 1 : 2;
+}
+
+// A point's cell on one axis, by division as TriangleMesh.ToCell does.
+std::int32_t PointCell(FP coordinate, std::int32_t cellSize) {
+    return static_cast<std::int32_t>((coordinate.RawValue() / cellSize) >> 16);
+}
+
+// After a cell of a first-hit-only walk: whether a hit found since the walk began lies no
+// further ahead (on every axis) than `ahead` cells, which ends the walk.
+bool HitWithin(const HitCollection3D* hits, std::int32_t hitsBefore, std::int32_t cellSize, const CellWalkAxis* axes,
+               std::int32_t ahead) {
+    for (std::int32_t i = hitsBefore; i < hits->Count(); ++i) {
+        const FPVector3& point = hits->HitsBuffer()[i].Point;
+        if ((PointCell(point.X, cellSize) - axes[0].Cell) * axes[0].Step > ahead) continue;
+        if ((PointCell(point.Y, cellSize) - axes[1].Cell) * axes[1].Step > ahead) continue;
+        if ((PointCell(point.Z, cellSize) - axes[2].Cell) * axes[2].Step <= ahead) return true;
+    }
+    return false;
+}
+} // namespace
+
+namespace {
+// The triangles of one cell for a query: each once per traversal, filtered by the query's
+// layers and trigger option, handed to `visit`.
+template <class Visit>
+void VisitQueryCellTriangles(TriangleMesh& mesh, std::vector<Entry3D>& entries, std::uint64_t* mailboxes,
+                             std::uint64_t sequence, const Query3D& query, const std::int32_t* triangles,
+                             std::int32_t count, Visit&& visit) {
+    for (std::int32_t k = 0; k < count; ++k) {
+        const std::int32_t triIndex = triangles[k];
+        if (mailboxes[triIndex] == sequence) {
+            continue;
+        }
+        mailboxes[triIndex] = sequence;
+        const TriangleCCW& tri = mesh.GetTriangle(triIndex)->CCWTri;
+        Entry3D* meshEntry = &entries[static_cast<std::size_t>(tri.StaticDataIndex)];
+        if (((query.LayerMask >> meshEntry->Collider3D->Layer()) & 1) == 0) {
+            continue;
+        }
+        if (meshEntry->Collider3D->_isTrigger == 1 && (query.Options & HitTriggers) == 0) {
+            continue;
+        }
+        visit(triIndex, meshEntry, tri);
+    }
+}
+} // namespace
+
+// 0x7d55a20 - the cells along the segment, in order (3D DDA); a first-hit-only query
+// stops after the first cell at or past which a hit was found.
+void Scene3D::TraverseSceneMeshLinecast(QueryContextInfo3D& info, TriTraversalDelegate triDelegate) {
+    const Query3D& query = *info.Query;
+    TriangleMesh& mesh = *_sceneMesh;
+    const std::uint64_t sequence = ++_tls.OverlapSequence;
+    const FPVector3& start = query.Transform.Position;
+    const FPVector3& end = query.End;
+    const std::int32_t hitsBefore = info.HitCollection != nullptr ? info.HitCollection->Count() : 0;
+    std::uint64_t* mailboxes = _tls.GetTrianglesMailboxes(mesh.TriangleCapacity());
+    const std::int64_t inverseCell = 0x10000 / mesh.CellSize();
+    CellWalkAxis axes[3];
+    std::int32_t remaining = 1 + axes[0].Init(Raw(start.X), Raw(end.X), inverseCell) +
+                             axes[1].Init(Raw(start.Y), Raw(end.Y), inverseCell) +
+                             axes[2].Init(Raw(start.Z), Raw(end.Z), inverseCell);
+    for (; remaining >= 1; --remaining) {
+        const std::int32_t* triangles = nullptr;
+        std::int32_t count = 0;
+        if (mesh.TryGetTriangles(axes[0].Cell, axes[1].Cell, axes[2].Cell, triangles, count)) {
+            VisitQueryCellTriangles(mesh, _entries, mailboxes, sequence, query, triangles, count,
+                                    [&](std::int32_t triIndex, Entry3D* meshEntry, const TriangleCCW& tri) {
+                                        info.TriIndex = triIndex;
+                                        info.MeshEntry = meshEntry;
+                                        info.Tri = &tri;
+                                        (this->*triDelegate)(info);
+                                    });
+        }
+        if (query.FirstHitOnly && info.HitCollection->Count() > hitsBefore &&
+            HitWithin(info.HitCollection, hitsBefore, mesh.CellSize(), axes, 0)) {
+            return;
+        }
+        axes[NextAxis(axes[0], axes[1], axes[2])].Advance();
+    }
+}
+
+// 0x7d55208 - the cells within reach of the cast shape along its translation: a cube of
+// (shape radius in cells + 1) around each cell of the centre's walk, entered whole at the
+// start and then one new face per step. Cells whose centre lies too far from the cast
+// line (more than the cube's cells' broad radius plus the shape's) are skipped.
+void Scene3D::TraverseSceneMeshShapeCast(QueryContextInfo3D& info, TriTraversalDelegate triDelegate) {
+    const Query3D& query = *info.Query;
+    TriangleMesh& mesh = *_sceneMesh;
+    const FPVector3& translation = query.End;
+    const FPVector3 start = info.QueryEntry->Narrow.Position;
+    const FPVector3 dir = FPVector3::Normalize(translation);
+    const std::uint64_t sequence = ++_tls.OverlapSequence;
+    const std::int32_t hitsBefore = info.HitCollection != nullptr ? info.HitCollection->Count() : 0;
+    std::uint64_t* mailboxes = _tls.GetTrianglesMailboxes(mesh.TriangleCapacity());
+    const std::int32_t cellSize = mesh.CellSize();
+    const std::int64_t inverseCell = 0x10000 / cellSize;
+    const FP::Raw shapeRadius = Raw(query.Shape.BroadRadius);
+    const auto reach = static_cast<std::int32_t>((shapeRadius / cellSize) >> 16) + 1;
+    const auto addRaw = [](FP a, FP b) { return Raw(a) + Raw(b); };
+
+    CellWalkAxis axes[3];
+    std::int32_t remaining = 1 + axes[0].Init(Raw(start.X), addRaw(start.X, translation.X), inverseCell) +
+                             axes[1].Init(Raw(start.Y), addRaw(start.Y, translation.Y), inverseCell) +
+                             axes[2].Init(Raw(start.Z), addRaw(start.Z, translation.Z), inverseCell);
+    if (remaining < 1) {
+        return;
+    }
+    const FP::Raw limit = Raw(mesh.CellBroadRadius()) * reach + shapeRadius;
+    const FP::Raw limitSq = (limit * limit) >> 16;
+    const FP::Raw startRaw[3] = {Raw(start.X), Raw(start.Y), Raw(start.Z)};
+    const FP::Raw dirRaw[3] = {Raw(dir.X), Raw(dir.Y), Raw(dir.Z)};
+    // Per axis: the leading offset and the cell range [from, to) walked in step direction.
+    std::int32_t lead[3], from[3], to[3];
+    for (int a = 0; a < 3; ++a) {
+        lead[a] = axes[a].Step * reach;
+        from[a] = axes[a].Cell - lead[a];
+        to[a] = axes[a].Cell + axes[a].Step + lead[a];
+    }
+    // Distance of a cell's centre from the cast line (squared, raw).
+    const auto offLineSq = [&](const std::int32_t cell[3]) {
+        FP::Raw d[3];
+        for (int a = 0; a < 3; ++a) {
+            const auto centre = static_cast<std::int32_t>(static_cast<std::uint32_t>(cellSize) * static_cast<std::uint32_t>(cell[a]) +
+                                                          static_cast<std::uint32_t>(mesh.CellExtent()));
+            d[a] = (static_cast<FP::Raw>(centre) << 16) - startRaw[a];
+        }
+        const FP::Raw along = Mul(d[1], dirRaw[1]) + Mul(d[0], dirRaw[0]) + Mul(d[2], dirRaw[2]);
+        FP::Raw p[3];
+        for (int a = 0; a < 3; ++a) {
+            p[a] = d[a] - Mul(along, dirRaw[a]);
+        }
+        return ((p[1] * p[1]) >> 16) + ((p[0] * p[0]) >> 16) + ((p[2] * p[2]) >> 16);
+    };
+
+    for (; remaining >= 1; --remaining) {
+        std::int32_t cell[3];
+        for (cell[0] = from[0]; cell[0] != to[0]; cell[0] += axes[0].Step) {
+            for (cell[1] = from[1]; cell[1] != to[1]; cell[1] += axes[1].Step) {
+                for (cell[2] = from[2]; cell[2] != to[2]; cell[2] += axes[2].Step) {
+                    const std::int32_t* triangles = nullptr;
+                    std::int32_t count = 0;
+                    if (!mesh.TryGetTriangles(cell[0], cell[1], cell[2], triangles, count)) {
+                        continue;
+                    }
+                    if (offLineSq(cell) > limitSq || count < 1) {
+                        continue;
+                    }
+                    VisitQueryCellTriangles(mesh, _entries, mailboxes, sequence, query, triangles, count,
+                                            [&](std::int32_t triIndex, Entry3D* meshEntry, const TriangleCCW& tri) {
+                                                info.TriIndex = triIndex;
+                                                info.MeshEntry = meshEntry;
+                                                info.Tri = &tri;
+                                                (this->*triDelegate)(info);
+                                            });
+                }
+            }
+        }
+        if (query.FirstHitOnly && info.HitCollection->Count() > hitsBefore &&
+            HitWithin(info.HitCollection, hitsBefore, cellSize, axes, reach)) {
+            return;
+        }
+        // Step the walk: the stepped axis gets just its new leading face, the other two
+        // their whole range again.
+        const int next = NextAxis(axes[0], axes[1], axes[2]);
+        for (int a = 0; a < 3; ++a) {
+            if (a != next) {
+                from[a] = axes[a].Cell - lead[a];
+            }
+        }
+        axes[next].Advance();
+        to[next] += axes[next].Step;
+        from[next] = axes[next].Cell + lead[next];
+    }
+}
+
+// 0x7d54f48 - the cells the query entry's box covers; each triangle whose bounding sphere
+// reaches the shape's.
+void Scene3D::TraverseSceneMeshShapeOverlap(QueryContextInfo3D& info, TriTraversalDelegate triDelegate) {
+    const Query3D& query = *info.Query;
+    TriangleMesh& mesh = *_sceneMesh;
+    const std::uint64_t sequence = ++_tls.OverlapSequence;
+    const Entry3D* qEntry = info.QueryEntry;
+    const FPVector3& centre = qEntry->Narrow.Position;
+    const FP::Raw shapeRadius = Raw(query.Shape.BroadRadius);
+    const TriangleMesh::CellBounds cells = mesh.GetBounds(qEntry->AABB);
+    std::uint64_t* mailboxes = _tls.GetTrianglesMailboxes(mesh.TriangleCapacity());
+    for (std::int32_t z = cells.MinZ; z <= cells.MaxZ; ++z) {
+        for (std::int32_t y = cells.MinY; y <= cells.MaxY; ++y) {
+            for (std::int32_t x = cells.MinX; x <= cells.MaxX; ++x) {
+                const std::int32_t* triangles = nullptr;
+                std::int32_t count = 0;
+                if (!mesh.TryGetTriangles(x, y, z, triangles, count)) {
+                    continue;
+                }
+                VisitQueryCellTriangles(mesh, _entries, mailboxes, sequence, query, triangles, count,
+                                        [&](std::int32_t triIndex, Entry3D* meshEntry, const TriangleCCW& tri) {
+                                            const FP::Raw dx = Raw(tri.Center.X) - Raw(centre.X);
+                                            const FP::Raw dy = Raw(tri.Center.Y) - Raw(centre.Y);
+                                            const FP::Raw dz = Raw(tri.Center.Z) - Raw(centre.Z);
+                                            const FP::Raw r = Raw(tri.BroadRadius) + shapeRadius;
+                                            if (((dy * dy) >> 16) + ((dx * dx) >> 16) + ((dz * dz) >> 16) > ((r * r) >> 16)) {
+                                                return;
+                                            }
+                                            info.TriIndex = triIndex;
+                                            info.MeshEntry = meshEntry;
+                                            info.Tri = &tri;
+                                            (this->*triDelegate)(info);
+                                        });
+            }
+        }
+    }
+}
+
+// 0x7d70570 (ResolveQuery's overlap lambda) - the query shape (A) against one triangle of
+// the mesh entry (B); the normal is reported from the mesh towards the shape.
+void Scene3D::ResolveQueryTriangleOverlap(QueryContextInfo3D& info) {
+    CollisionManifold3D& m = _tls.Manifold;
+    m = CollisionManifold3D{};
+    m._m._entryIdxA = info.QueryEntry->Index;
+    m._m._entryIdxB = info.MeshEntry->Index;
+    m._m._triIdx = -1;
+    CollisionManifoldInfo3D mInfo{&m, info.QueryEntry, info.MeshEntry, info.Tri};
+    if (!NarrowChecks::Check(_tls.Narrow, CachedSettings.CCDSettingsValue, _deltaTime, &mInfo, info.ComputeDetailedInfo)) {
+        return;
+    }
+    Hit3D hit{};
+    SetHitCollider(hit, info.MeshEntry);
+    if (info.ComputeDetailedInfo) {
+        hit.Point = CollisionManifold3D::GetAverageContactPoint(&m);
+        hit.Normal = (m._flags & CollisionManifold3D::NormalInverted) != 0 ? m.Normal : -m.Normal;
+        hit.OverlapPenetration = m.Penetration;
+    }
+    info.HitCollection->Add(hit, info.Frame->get_Context());
+}
+
+// 0x7d70908 (ResolveQuery's shape cast lambda) - GJK ray cast of the shape against the
+// triangle (casts into its back never hit).
+void Scene3D::ResolveQueryTriangleShapeCast(QueryContextInfo3D& info) {
+    Hit3D hit{};
+    if (!Gjk3D::ShapeCastManifold(_tls.Narrow, info.MeshEntry, info.QueryEntry, info.Tri, *info.GjkSettings,
+                                  info.Query->End, info.ComputeDetailedInfo, hit)) {
+        return;
+    }
+    SetHitCollider(hit, info.MeshEntry);
+    info.HitCollection->Add(hit, info.Frame->get_Context());
+}
+
+// 0x7d70a20 (ResolveQuery's line cast lambda) - the segment against the triangle's front
+// face; the hit always carries the triangle's normal.
+void Scene3D::ResolveQueryTriangleLinecast(QueryContextInfo3D& info) {
+    const FPVector3& start = info.Query->Transform.Position;
+    const FPVector3& end = info.Query->End;
+    const FPVector3 dir{FromRaw(Raw(end.X) - Raw(start.X)), FromRaw(Raw(end.Y) - Raw(start.Y)),
+                        FromRaw(Raw(end.Z) - Raw(start.Z))};
+    FPVector3 point;
+    FP distance;
+    if (!info.Tri->RayIntersectsTriangle(start, dir, point, distance)) {
+        return;
+    }
+    Hit3D hit{};
+    hit.Point = point;
+    hit.CastDistanceNormalized = distance;
+    hit.Normal = info.Tri->Normal;
+    SetHitCollider(hit, info.MeshEntry);
+    info.HitCollection->Add(hit, info.Frame->get_Context());
+}
+
+// ---------------------------------------------------------------------------------------
+// Broad-phase queries
+
+// 0x7d566f4 - the next query slot (index 0 is reserved; the count is _queriesCount).
+Query3D* Scene3D::GetNextQuery(std::int32_t& index) {
+    index = _queriesCount++;
+    if (static_cast<std::int32_t>(_queries.size()) < _queriesCount) {
+        _queries.resize(static_cast<std::size_t>(_queriesCount));
+    }
+    Query3D* query = &_queries[static_cast<std::size_t>(index)];
+    *query = Query3D{};
+    return query;
+}
+
+// 0x7d5684c - the next hit collection of the step, emptied; new ones are persistent
+// collections of the default capacity.
+HitCollection3D* Scene3D::GetNextHitCollection(Core::FrameContext* context, std::int32_t& index) {
+    // PhysicsConfig.DefaultHitCollectionItemsCapacity is not available yet (the collections
+    // grow as hits are added, so only the initial size differs).
+    constexpr std::int32_t DefaultHitCollectionItemsCapacity = 32;
+    if (_hitCollectionsCount == static_cast<std::int32_t>(_hitCollections.size())) {
+        _hitCollections.emplace_back(DefaultHitCollectionItemsCapacity, HitCollection3D::Persistent, context);
+    }
+    index = _hitCollectionsCount++;
+    HitCollection3D* hits = &_hitCollections[static_cast<std::size_t>(index)];
+    hits->Reset();
+    return hits;
+}
+
+std::int32_t Scene3D::AddBroadphaseLinecast(Core::FrameContext* context, const FPVector3& start, const FPVector3& end,
+                                            bool firstHitOnly, std::int32_t layerMask, std::int32_t options) {
+    std::int32_t queryIndex = 0;
+    Query3D* query = GetNextQuery(queryIndex);
+    GetNextEntry(query->EntryIndex);
+    GetNextHitCollection(context, query->HitCollectionIndex);
+    query->Options = options;
+    query->LayerMask = layerMask;
+    query->Type = QueryType::Linecast;
+    query->Transform.Position = start;
+    query->End = end;
+    query->FirstHitOnly = firstHitOnly;
+    return query->HitCollectionIndex;
+}
+
+std::int32_t Scene3D::AddBroadphaseShapeOverlap(FrameBase* frame, const FPVector3& pos, const FPQuaternion& rot,
+                                                const Shape3D& shape, std::int32_t layerMask, std::int32_t options) {
+    std::int32_t queryIndex = 0;
+    Query3D* query = GetNextQuery(queryIndex);
+    GetNextHitCollection(frame->get_Context(), query->HitCollectionIndex);
+    query->Options = options;
+    query->LayerMask = layerMask;
+    query->Type = QueryType::ShapeOverlap;
+    query->EntryIndex = -1;
+    query->Transform.Position = pos;
+    query->Transform.Rotation = rot;
+    if (shape.Type() == Shape3DType::Compound) {
+        // TODO(0x7d57124, Quantum.Physics3D.Scene3D.AddBroadphaseCompoundShapeOverlap): one
+        // query per child shape chained through NextInCompound (the root query is dropped
+        // when no child was added); compound shapes are not reimplemented yet.
+        return query->HitCollectionIndex;
+    }
+    query->Shape = shape;
+    GetNextEntry(query->EntryIndex);
+    return query->HitCollectionIndex;
+}
+
+// TODO(0x7d69b20, Quantum.Physics3D.Scene3D.Task_QueryResolve): the original resolves each
+// query against the candidates the broad phase listed for it per bucket (query endpoints:
+// TODO(0x7d5cc90, Quantum.Physics3D.Scene3D.Task_BroadPhaseQueryPreStep), TODO(0x7d5d194,
+// Quantum.Physics3D.Scene3D.QueryCheckEntryList), TODO(0x7d5dd7c,
+// Quantum.Physics3D.Scene3D.EntryCheckQueryList), TODO(0x7d5d308,
+// Quantum.Physics3D.Scene3D.QueryCheckTriangles), TODO(0x7d5d134,
+// Quantum.Physics3D.Scene3D.AddQueryItem)). Here each query walks the step's stabbing
+// lists like an immediate query, which finds the same pairs through the same filters, the
+// same narrow phase and the same first-hit bucket rule, but may list the hits of a bucket
+// in another order. As in the original, after callbacks ran ignored entries and entities
+// no longer matching the options are skipped, and a first-hit-only query keeps only its
+// nearest hit (by distance from the start for line casts, by cast distance otherwise).
+void Scene3D::TaskQueryResolve(FrameBase* frame) {
+    _resolvingStepQueries = true;
+    for (std::int32_t index = 1; index < _queriesCount; ++index) {
+        Query3D& query = _queries[static_cast<std::size_t>(index)];
+        if (query.EntryIndex < 0) {
+            continue; // compound roots (not supported yet)
+        }
+        HitCollection3D* hits = &_hitCollections[static_cast<std::size_t>(query.HitCollectionIndex)];
+        Entry3D* qEntry = &_tls.Entry;
+        qEntry->StaticColliderIndex = -1;
+        if (query.Type == QueryType::Linecast) {
+            InitLinecastEntry(query, qEntry);
+        } else {
+            InitShapeOverlapEntry(query, qEntry);
+        }
+        ResolveQuery(frame, hits, query, qEntry);
+        if (query.FirstHitOnly && hits->Count() >= 2) {
+            if (query.Type == QueryType::Linecast) {
+                hits->Sort(query.Transform.Position);
+            } else {
+                hits->SortCastDistance();
+            }
+            hits->SetCount(1);
+        }
+    }
+    _resolvingStepQueries = false;
+}
+
 } // namespace Quantum::Physics3D
+

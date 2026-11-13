@@ -13,6 +13,10 @@
 
 namespace Quantum {
 
+namespace Core {
+class FrameBase;
+}
+
 class Shape3DConfig {
   public:
     using FP = Photon::Deterministic::FP;
@@ -46,11 +50,13 @@ class Shape3DConfig {
     // 0x7d3c0e4 - compound shapes are persistent by default.
     Shape3DConfig() = default;
 
-    // TODO(0x7d3ba74, Quantum.Shape3DConfig.CreateShape): sphere/box shapes with the local
-    // transform (PositionOffset, FPQuaternion.Euler(RotationOffset); a zero rotation keeps
-    // the identity), or for Compound a persistent compound (Shape3D.CreatePersistentCompound
-    // on the frame) filled with each CompoundShapes entry's shape; sets UserTag. Needs the
-    // compound shape buffer on FrameBase.
+    // 0x7d3ba74 - a sphere (offset by PositionOffset) or a box (offset and rotated by
+    // FPQuaternion.Euler(RotationOffset), identity for a zero rotation); any other type
+    // gives an empty shape. UserTag is set on the result. Compound configs throw
+    // std::logic_error: they need a persistent compound on the frame heap
+    // (TODO(0x7d35960, Quantum.Shape3D.CreatePersistentCompound) and
+    // CompoundShape3D.AddShape).
+    Shape3D CreateShape(Core::FrameBase* frame) const;
 };
 
 } // namespace Quantum

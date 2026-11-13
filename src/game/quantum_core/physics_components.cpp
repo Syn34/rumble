@@ -465,4 +465,81 @@ void PhysicsCallbacks2D::OnRemoved(Core::FrameBase* f, EntityRef /*entity*/, voi
     static_cast<PhysicsCallbacks2D*>(component)->FreeList(f);
 }
 
+// 0x7d3581c
+PhysicsCollider3D PhysicsCollider3D::Create(Core::FrameBase* /*f*/, const Shape3D& shape,
+                                            const ::Quantum::PhysicsMaterial* material, bool isTrigger,
+                                            std::int32_t layer) {
+    PhysicsCollider3D collider{};
+    collider._isTrigger = isTrigger ? 1 : 0;
+    collider._layer = layer < 0 ? 0 : (layer > 31 ? 31 : layer);
+    collider._material.Id = material != nullptr ? material->Guid : AssetGuid(::Quantum::PhysicsMaterial::DEFAULT_ID);
+    if (shape.Type() == Shape3DType::Compound) {
+        // TODO(0x7d359f8, Quantum.Shape3D.CompoundShape3D.CopyFrom)
+        throw std::logic_error("PhysicsCollider3D.Create: compound shapes are not supported yet");
+    }
+    collider.Shape = shape;
+    return collider;
+}
+
+// 0x7d35bf0
+void PhysicsCollider3D::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* collider = static_cast<PhysicsCollider3D*>(ptr);
+    Photon::Deterministic::IBitStream& stream = serializer->Stream();
+    stream.Serialize(&collider->_isTrigger);
+    stream.Serialize(&collider->_disabled);
+    stream.Serialize(&collider->_padding);
+    stream.Serialize(&collider->_layer);
+    AssetRefPhysicsMaterial::Serialize(&collider->_material, serializer);
+    Shape3D::Serialize(&collider->Shape, serializer);
+}
+
+// 0x7d3606c
+void PhysicsCollider3D::OnRemoved(Core::FrameBase* /*f*/, EntityRef /*entity*/, void* component) {
+    const auto* collider = static_cast<const PhysicsCollider3D*>(component);
+    if (collider->Shape.Type() == Shape3DType::Compound) {
+        // Freeing the persistent children waits for CompoundShape3D.FreePersistent.
+    }
+}
+
+// 0x7d302cc
+void PhysicsCallbacksEntry::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* entry = static_cast<PhysicsCallbacksEntry*>(ptr);
+    Photon::Deterministic::IBitStream& stream = serializer->Stream();
+    stream.Serialize(&entry->_flags);
+    stream.Serialize(&entry->StaticColliderIndex);
+    static_assert(sizeof(EntityRef) == sizeof(AssetGuid));
+    AssetGuid::Serialize(&entry->Other, serializer);
+}
+
+// 0x7d35530
+void PhysicsCallbacks3D::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* callbacks = static_cast<PhysicsCallbacks3D*>(ptr);
+    Photon::Deterministic::IBitStream& stream = serializer->Stream();
+    stream.Serialize(reinterpret_cast<std::int32_t*>(&callbacks->Flags));
+    stream.Serialize(&callbacks->_listCount);
+    stream.Serialize(&callbacks->_listCapacity);
+    FrameSerializer::PtrKey key{};
+    if (!serializer->PointerSerialize(&callbacks->_listBufferPtr, key)) {
+        return;
+    }
+    auto* entries = static_cast<PhysicsCallbacksEntry*>(
+        serializer->PointerResolve(key, callbacks->_listCapacity * static_cast<int>(sizeof(PhysicsCallbacksEntry))));
+    for (std::int32_t i = 0; i < callbacks->_listCount; ++i) {
+        PhysicsCallbacksEntry::Serialize(&entries[i], serializer);
+    }
+}
+
+// 0x7d2da44
+void CharacterController3D::Serialize(void* ptr, FrameSerializer* serializer) {
+    auto* kcc = static_cast<CharacterController3D*>(ptr);
+    Photon::Deterministic::IBitStream& stream = serializer->Stream();
+    stream.Serialize(&kcc->_grounded);
+    stream.Serialize(&kcc->_jumped);
+    stream.Serialize(&kcc->_padding);
+    stream.Serialize(&kcc->_broadphaseQueryIndexPlusOne);
+    AssetGuid::Serialize(&kcc->_config, serializer);
+    FP::Serialize(&kcc->MaxSpeed, *serializer);
+    FPVector3::Serialize(&kcc->Velocity, serializer);
+}
+
 } // namespace Quantum

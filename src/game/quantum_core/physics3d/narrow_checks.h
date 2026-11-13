@@ -10,7 +10,7 @@
 
 namespace Quantum {
 struct CCDSettings;
-struct TriangleMesh; // the scene's static mesh (not reimplemented yet)
+class TriangleMesh; // the scene's static mesh (triangle_mesh.h)
 } // namespace Quantum
 
 namespace Quantum::Physics3D::NarrowChecks {

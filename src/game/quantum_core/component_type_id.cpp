@@ -79,19 +79,21 @@ void ComponentTypeId<void>::RegisterFrameworkComponents() {
     Add<Transform2D>(ComponentCallbacks(&Transform2D::Serialize), none);
     Add<Transform3D>(ComponentCallbacks(&Transform3D::Serialize), none);
     Add<Transform2DVertical>(ComponentCallbacks(&Transform2DVertical::Serialize), none);
-    // Physics components. Their Serialize callbacks are still TODO (null here).
+    // Physics components (null Serialize callbacks are still TODO).
     Add<PhysicsCollider2D>(ComponentCallbacks(nullptr, &PhysicsCollider2D::OnAdded, nullptr), none);
     Add<PhysicsBody2D>(ComponentCallbacks(&PhysicsBody2D::Serialize, &PhysicsBody2D::OnAdded, &PhysicsBody2D::OnRemoved), none);
-    Add<PhysicsCollider3D>(ComponentCallbacks(nullptr, &PhysicsCollider3D::OnAdded, nullptr), none);
+    Add<PhysicsCollider3D>(
+        ComponentCallbacks(&PhysicsCollider3D::Serialize, &PhysicsCollider3D::OnAdded, &PhysicsCollider3D::OnRemoved), none);
     Add<PhysicsBody3D>(ComponentCallbacks(&PhysicsBody3D::Serialize, &PhysicsBody3D::OnAdded, &PhysicsBody3D::OnRemoved), none);
     Add<PhysicsJoints2D>(ComponentCallbacks(), none);
     Add<PhysicsJoints3D>(ComponentCallbacks(), none);
     Add<PhysicsCallbacks2D>(
         ComponentCallbacks(nullptr, &PhysicsCallbacks2D::OnAdded, &PhysicsCallbacks2D::OnRemoved), none);
     Add<PhysicsCallbacks3D>(
-        ComponentCallbacks(nullptr, &PhysicsCallbacks3D::OnAdded, &PhysicsCallbacks3D::OnRemoved), none);
+        ComponentCallbacks(&PhysicsCallbacks3D::Serialize, &PhysicsCallbacks3D::OnAdded, &PhysicsCallbacks3D::OnRemoved),
+        none);
     Add<CharacterController2D>(ComponentCallbacks(), none);
-    Add<CharacterController3D>(ComponentCallbacks(), none);
+    Add<CharacterController3D>(ComponentCallbacks(&CharacterController3D::Serialize), none);
     // Pending their C++ types (registered by name and size so later indices stay right):
     AddEntry(nullptr, "NavMeshPathfinder", 96, {}, none);
     // The navigation agents' OnAdded/OnRemoved callbacks are still TODO (null here).

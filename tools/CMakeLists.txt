@@ -4,6 +4,8 @@ rr_set_warnings(assetinfo)
 
 add_executable(contentindex contentindex/main.cpp)
 target_link_libraries(contentindex PRIVATE rr::content)
+# Uses the tests' derived maths tables (tests/math_tables.h) to rebuild triangle data.
+target_include_directories(contentindex PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 rr_set_warnings(contentindex)
 
 # Mesh/texture viewer and decoder checks (needs a renderer for viewing).
