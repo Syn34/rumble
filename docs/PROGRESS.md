@@ -108,15 +108,22 @@ local no-ops with documented behaviour.
 - quantum.core 3D physics scene: Scene3D step run task by task on one thread (entry creation
   with statics first, first/second-half force integration, bucketed sweep-and-prune broad
   phase with the original endpoint order and active/stabbing lists, narrow phase, trigger and
-  collision callbacks with enter/stay/exit lists, islands, legacy Gauss-Seidel contact solver,
-  penetration correction, velocity integration, sleeping), Entry3D world body settings /
-  integration / AABBs, PhysicsSceneSettings, map static colliders (spheres/boxes),
-  PhysicsEngine3D (owned by FrameContext with UsePhysics3D; SetCallbacks; immediate line casts
-  and shape overlaps). Partly verified against the original and marked TODO: callback
-  handlers, islands, the velocity solver loop, sleep detection, UpdateMap, immediate queries.
-  Not ported: static meshes (TriangleMesh), broad-phase queries resolved in the step, shape
-  casts, compounds, CCD integration, joints, the hybrid Jacobi/Gauss-Seidel solver, the
-  whole 2D scene/engine
+  collision callbacks with the original handler order, post-callback component checks and
+  enter/stay/exit lists, CCD pairs sorted by time of impact with their callbacks and
+  first-TOI integration, post-callback entry/manifold updates, islands, both contact
+  solvers - legacy Gauss-Seidel (accumulated impulses) and hybrid Jacobi/Gauss-Seidel
+  (per-body impulse chains) - penetration correction, velocity integration, per-entry and
+  per-island sleep detection), UpdateMap (world/bucket sizes, radix-sorted static endpoints,
+  static stabbing lists), Entry3D world body settings / integration / AABBs,
+  PhysicsSceneSettings, map static colliders (spheres/boxes), CollisionInfo3D /
+  TriggerInfo3D / ExitInfo3D, PhysicsEngine3D (owned by FrameContext with UsePhysics3D;
+  SetCallbacks; immediate line casts, shape overlaps and shape casts walking the buckets as
+  the original, hit order included), CharacterController3D movement (Init, SetConfig, Move,
+  ComputeRawMovement, ComputeRawSteer) and its prototype. Not ported: static triangle meshes
+  (TriangleMesh, mesh manifolds and their solver/callback paths), broad-phase queries
+  resolved in the step (Query3D, Task_QueryResolve, the controller's query hits), compound
+  shapes, joints and the joint position solver, the static colliders' mutable state, the
+  whole 2D scene/engine and the 2D controller
 - `Photon.Deterministic.RNGSession` (13/13; PCG32 seeded by SplitMix64), `BitStream` (107/107,
   incl. generic `SerializeArrayLength`), `ByteUtils` (20/20; the gzip writer emits stored deflate
   blocks, so compressed bytes differ from zlib's)

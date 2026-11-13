@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-12",
+ "updated": "2026-11-13",
  "assemblies": [
   {
    "assembly": "AFuncs.dll",
@@ -970,7 +970,7 @@
   {
    "assembly": "quantum.core.dll",
    "methods": 2608,
-   "done": 1336,
+   "done": 1397,
    "game": false
   },
   {
