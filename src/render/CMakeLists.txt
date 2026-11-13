@@ -12,6 +12,7 @@ rr_add_shader_programs(rr_render
     COMMON ${CMAKE_CURRENT_SOURCE_DIR}/shaders/common.glsl
     PROGRAMS
         unlit_color
+        lit_textured
 )
 
 if(RR_ENABLE_OPENGL)

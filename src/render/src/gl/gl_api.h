@@ -65,6 +65,42 @@ inline constexpr GLenum GL_RENDERER = 0x1F01;
 inline constexpr GLenum GL_VERSION = 0x1F02;
 inline constexpr GLenum GL_PACK_ALIGNMENT = 0x0D05;
 inline constexpr GLuint GL_INVALID_INDEX = 0xFFFFFFFFu;
+inline constexpr GLenum GL_UNPACK_ALIGNMENT = 0x0CF5;
+inline constexpr GLenum GL_TEXTURE_2D = 0x0DE1;
+inline constexpr GLenum GL_TEXTURE0 = 0x84C0;
+inline constexpr GLenum GL_TEXTURE_MAG_FILTER = 0x2800;
+inline constexpr GLenum GL_TEXTURE_MIN_FILTER = 0x2801;
+inline constexpr GLenum GL_TEXTURE_WRAP_S = 0x2802;
+inline constexpr GLenum GL_TEXTURE_WRAP_T = 0x2803;
+inline constexpr GLenum GL_TEXTURE_BASE_LEVEL = 0x813C;
+inline constexpr GLenum GL_TEXTURE_MAX_LEVEL = 0x813D;
+inline constexpr GLenum GL_NEAREST = 0x2600;
+inline constexpr GLenum GL_LINEAR = 0x2601;
+inline constexpr GLenum GL_NEAREST_MIPMAP_NEAREST = 0x2700;
+inline constexpr GLenum GL_LINEAR_MIPMAP_NEAREST = 0x2701;
+inline constexpr GLenum GL_NEAREST_MIPMAP_LINEAR = 0x2702;
+inline constexpr GLenum GL_LINEAR_MIPMAP_LINEAR = 0x2703;
+inline constexpr GLenum GL_REPEAT = 0x2901;
+inline constexpr GLenum GL_CLAMP_TO_EDGE = 0x812F;
+inline constexpr GLenum GL_MIRRORED_REPEAT = 0x8370;
+inline constexpr GLenum GL_RGBA8 = 0x8058;
+inline constexpr GLenum GL_SRGB8_ALPHA8 = 0x8C43;
+inline constexpr GLenum GL_EXTENSIONS = 0x1F03;
+inline constexpr GLenum GL_NUM_EXTENSIONS = 0x821D;
+// KHR_texture_compression_astc_ldr: RGBA formats from 0x93B0, sRGB from 0x93D0, in
+// the order 4x4, 5x4, 5x5, 6x5, 6x6, 8x5, 8x6, 8x8, 10x5, 10x6, 10x8, 10x10, 12x10, 12x12.
+inline constexpr GLenum GL_COMPRESSED_RGBA_ASTC_4x4_KHR = 0x93B0;
+inline constexpr GLenum GL_COMPRESSED_RGBA_ASTC_5x5_KHR = 0x93B2;
+inline constexpr GLenum GL_COMPRESSED_RGBA_ASTC_6x6_KHR = 0x93B4;
+inline constexpr GLenum GL_COMPRESSED_RGBA_ASTC_8x8_KHR = 0x93B7;
+inline constexpr GLenum GL_COMPRESSED_RGBA_ASTC_10x10_KHR = 0x93BB;
+inline constexpr GLenum GL_COMPRESSED_RGBA_ASTC_12x12_KHR = 0x93BD;
+inline constexpr GLenum GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR = 0x93D0;
+inline constexpr GLenum GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR = 0x93D2;
+inline constexpr GLenum GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR = 0x93D4;
+inline constexpr GLenum GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR = 0x93D7;
+inline constexpr GLenum GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR = 0x93DB;
+inline constexpr GLenum GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR = 0x93DD;
 
 // Every function we use: X(return type, name, parameter list).
 #define RR_GL_FUNCTIONS(X)                                                                         \
@@ -111,7 +147,25 @@ inline constexpr GLuint GL_INVALID_INDEX = 0xFFFFFFFFu;
     X(GLuint, glGetUniformBlockIndex, (GLuint, const GLchar*))                                     \
     X(void, glUniformBlockBinding, (GLuint, GLuint, GLuint))                                       \
     X(void, glDrawArrays, (GLenum, GLint, GLsizei))                                                \
-    X(void, glDrawElementsBaseVertex, (GLenum, GLsizei, GLenum, const void*, GLint))
+    X(void, glDrawElementsBaseVertex, (GLenum, GLsizei, GLenum, const void*, GLint))             \
+    X(void, glGetIntegerv, (GLenum, GLint*))                                                       \
+    X(const GLubyte*, glGetStringi, (GLenum, GLuint))                                              \
+    X(void, glGenTextures, (GLsizei, GLuint*))                                                     \
+    X(void, glDeleteTextures, (GLsizei, const GLuint*))                                            \
+    X(void, glBindTexture, (GLenum, GLuint))                                                       \
+    X(void, glActiveTexture, (GLenum))                                                             \
+    X(void, glTexParameteri, (GLenum, GLenum, GLint))                                              \
+    X(void, glTexImage2D, (GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum,          \
+                           const void*))                                                           \
+    X(void, glCompressedTexImage2D, (GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei,      \
+                                     const void*))                                                 \
+    X(void, glGetTexImage, (GLenum, GLint, GLenum, GLenum, void*))                                 \
+    X(void, glGenSamplers, (GLsizei, GLuint*))                                                     \
+    X(void, glDeleteSamplers, (GLsizei, const GLuint*))                                            \
+    X(void, glBindSampler, (GLuint, GLuint))                                                       \
+    X(void, glSamplerParameteri, (GLuint, GLenum, GLint))                                          \
+    X(GLint, glGetUniformLocation, (GLuint, const GLchar*))                                        \
+    X(void, glUniform1i, (GLint, GLint))
 
 struct Api {
 #define RR_GL_DECLARE(ret, name, params) ret(RR_GL_APIENTRY* name) params = nullptr;
