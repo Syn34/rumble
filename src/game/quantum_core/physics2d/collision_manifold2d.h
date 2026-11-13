@@ -13,6 +13,7 @@
 #include "quantum_core/shape2d.h"
 
 #include <cstdint>
+#include <optional>
 
 namespace Quantum::Physics2D {
 
@@ -115,6 +116,8 @@ struct CollisionManifold2D {
 };
 static_assert(sizeof(CollisionManifold2D) == CollisionManifold2D::SIZE);
 
+struct NarrowEntry2D;
+
 // Per-entry pose cached for the narrow phase: position and the sine/cosine of the
 // rotation (so checks don't evaluate trigonometry).
 struct NarrowData2D {
@@ -123,9 +126,11 @@ struct NarrowData2D {
     FP RotSin;
     FP RotCos;
 
-    // TODO(0x7d18fac, Quantum.Physics2D.NarrowData2D.InitFromTransform): fills the pose
-    // from a transform, extrapolated by the body's velocity for CCD; needs Entry2D and
-    // PhysicsBody2D.
+    // 0x7d18fac - pose of `entry` from its transform (tPos, tRot): with a time step the
+    // body's motion over it is applied first (linear velocity, and the angular step about
+    // the rotated centre of mass), then the shape's local offset and rotation.
+    static void InitFromTransform(NarrowData2D* narrow, const NarrowEntry2D* entry,
+                                  FPVector2 tPos, FP tRot, std::optional<FP> deltaTime);
 };
 static_assert(sizeof(NarrowData2D) == NarrowData2D::SIZE);
 

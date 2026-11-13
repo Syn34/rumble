@@ -2,6 +2,7 @@
 #include "collision_manifold3d.h"
 
 #include "photon_deterministic/fp_internal.h"
+#include "photon_deterministic/fp_quaternion.h"
 
 #include <cassert>
 #include <utility>
@@ -58,6 +59,113 @@ void CollisionManifoldInfo3D::InvertEntries() {
     std::swap(Manifold->_m._entryIdxA, Manifold->_m._entryIdxB);
     std::swap(EntryA, EntryB);
     Manifold->_flags ^= CollisionManifold3D::NormalInverted;
+}
+
+// 0x7d7c128
+void NarrowData3D::Init(NarrowData3D* narrow, const NarrowEntry3D* entry, const FPVector3& pos,
+                        const FPQuaternion& rot) {
+    assert(narrow != nullptr && entry != nullptr && entry->Shape != nullptr);
+    narrow->Position = pos;
+    const FP inverseLengthSqr = FP::One() / FP::FromRaw(rot.MagnitudeSqrRaw());
+    narrow->RotationInverse = {-rot.X * inverseLengthSqr, -rot.Y * inverseLengthSqr,
+                               -rot.Z * inverseLengthSqr, rot.W * inverseLengthSqr};
+    // The rotation's matrix columns (multiplying by a unit axis is exact).
+    narrow->RotatedRight = rot * FPVector3::Right();
+    narrow->RotatedUp = rot * FPVector3::Up();
+    narrow->RotatedForward = rot * FPVector3::Forward();
+
+    if (entry->Shape->Type() != Shape3DType::Box) {
+        return;
+    }
+    const FPVector3 e = entry->Shape->Box._extents;
+    const FP x = e.X;
+    const FP y = e.Y;
+    const FP z = e.Z;
+    const CustomLine edges[CustomEdgesBox::COUNT] = {
+        // top face (+y)
+        {{-x, y, z}, {x, y, z}},
+        {{x, y, z}, {x, y, -z}},
+        {{x, y, -z}, {-x, y, -z}},
+        {{-x, y, -z}, {-x, y, z}},
+        // bottom face (-y)
+        {{-x, -y, z}, {x, -y, z}},
+        {{x, -y, z}, {x, -y, -z}},
+        {{x, -y, -z}, {-x, -y, -z}},
+        {{-x, -y, -z}, {-x, -y, z}},
+        // vertical edges
+        {{-x, -y, z}, {-x, y, z}},
+        {{x, -y, z}, {x, y, z}},
+        {{x, -y, -z}, {x, y, -z}},
+        {{-x, -y, -z}, {-x, y, -z}},
+    };
+    for (int i = 0; i < CustomEdgesBox::COUNT; ++i) {
+        narrow->BoxEdges.Edges[i] = edges[i];
+    }
+
+    // Only the single non-zero component of each face normal and face point is written.
+    CustomPlane* planes = narrow->BoxPlanes.Planes;
+    planes[0].normal.X = FPVector3::Right().X;
+    planes[0].pointOnPlane.X = x;
+    planes[1].normal.X = FPVector3::Left().X;
+    planes[1].pointOnPlane.X = -x;
+    planes[2].normal.Y = FPVector3::Up().Y;
+    planes[2].pointOnPlane.Y = y;
+    planes[3].normal.Y = FPVector3::Down().Y;
+    planes[3].pointOnPlane.Y = -y;
+    planes[4].normal.Z = FPVector3::Forward().Z;
+    planes[4].pointOnPlane.Z = z;
+    planes[5].normal.Z = FPVector3::Back().Z;
+    planes[5].pointOnPlane.Z = -z;
+
+    // Rotated copies: local vectors expressed with the rotated axes (per-term products).
+    const auto rotate = [narrow](const FPVector3& v) {
+        return narrow->RotatedRight * v.X + narrow->RotatedUp * v.Y + narrow->RotatedForward * v.Z;
+    };
+    for (int i = 0; i < CustomEdgesBox::COUNT; ++i) {
+        narrow->BoxEdgesRotated.Edges[i] = {rotate(edges[i].start), rotate(edges[i].end)};
+    }
+    const FPVector3 localNormals[CustomPlanesBox::COUNT] = {
+        FPVector3::Right(), FPVector3::Left(), FPVector3::Up(),
+        FPVector3::Down(),  FPVector3::Forward(), FPVector3::Back()};
+    const FP faceExtents[CustomPlanesBox::COUNT] = {x, -x, y, -y, z, -z};
+    for (int i = 0; i < CustomPlanesBox::COUNT; ++i) {
+        CustomPlane& plane = narrow->BoxPlanesRotated.Planes[i];
+        const FPVector3 normal = rotate(localNormals[i]);
+        // The face point is the rotated axis scaled by the (signed) extent.
+        const FPVector3 axis = i < 2 ? narrow->RotatedRight
+                                     : (i < 4 ? narrow->RotatedUp : narrow->RotatedForward);
+        plane.normal = normal;
+        plane.pointOnPlane = axis * faceExtents[i];
+    }
+}
+
+// 0x7d7bdd4
+void NarrowData3D::InitFromTransform(NarrowData3D* narrow, const NarrowEntry3D* entry,
+                                     FPVector3& tPos, FPQuaternion& tRot, bool& useCachedRot,
+                                     std::optional<FP> deltaTime) {
+    assert(entry != nullptr && entry->Shape != nullptr);
+    if (deltaTime.has_value()) {
+        assert(entry->Body != nullptr);
+        const FP dt = *deltaTime;
+        const FPVector3 linearStep = entry->Body->Velocity * dt;
+        const FPVector3 angularStep = entry->Body->AngularVelocity * dt;
+        const FPQuaternion rotationStep =
+            FPQuaternion::CreateFromYawPitchRoll(angularStep.Y, angularStep.X, angularStep.Z);
+        // Rotating about the centre of mass moves the origin by com - step * com.
+        const FPVector3 com = entry->RotatedCenterOfMass;
+        const FPVector3 rotatedCom = com == FPVector3::Zero() ? FPVector3::Zero() : rotationStep * com;
+        tPos = (linearStep - rotatedCom) + (tPos + com);
+        tRot = FPQuaternion::Product(rotationStep, tRot);
+    }
+    const Transform3D& local = entry->Shape->LocalTransform;
+    if (local.Position != FPVector3::Zero()) {
+        tPos = tRot * local.Position + tPos;
+    }
+    useCachedRot = local.Rotation == FPQuaternion::Identity();
+    if (!useCachedRot) {
+        tRot = FPQuaternion::Product(tRot, local.Rotation);
+    }
+    Init(narrow, entry, tPos, tRot);
 }
 
 // 0x7d7b9a8

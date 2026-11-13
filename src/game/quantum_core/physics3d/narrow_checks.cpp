@@ -40,9 +40,16 @@ bool CheckShapes(CollisionManifoldInfo3D* mInfo, bool detailedManifold) {
         mInfo->InvertEntries();
         return SphereTriangle::Check(mInfo, detailedManifold, entryA->UseSmoothSphereMeshCollision);
     }
-    const bool boxPair = is(T::Box, T::Box) || is(T::Box, T::Mesh) || is(T::Mesh, T::Box);
-    assert(!boxPair && "Physics3D NarrowChecks: box-box / box-triangle not implemented yet");
-    (void)boxPair;
+    if (is(T::Box, T::Box)) {
+        return BoxBox::Check(mInfo, detailedManifold);
+    }
+    if (is(T::Box, T::Mesh)) {
+        return BoxTriangle::Check(mInfo, detailedManifold);
+    }
+    if (is(T::Mesh, T::Box)) {
+        mInfo->InvertEntries();
+        return BoxTriangle::Check(mInfo, detailedManifold);
+    }
     return false;
 }
 

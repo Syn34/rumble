@@ -22,6 +22,7 @@ add_executable(rr_tests
     test_navigation_agents.cpp
     test_quantum_narrow2d.cpp
     test_quantum_narrow3d.cpp
+    test_quantum_box3d.cpp
 )
 target_link_libraries(rr_tests PRIVATE rr::game rr::assets)
 rr_set_warnings(rr_tests)

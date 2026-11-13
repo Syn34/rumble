@@ -70,35 +70,115 @@ bool HitBoundingBox(const FPVector3& minB, const FPVector3& maxB, const FPVector
                     FPVector3& normal, FP& normalizedDist);
 } // namespace LinecastBody
 
-// Not implemented yet (CheckShapes asserts on these pairs and reports no collision). Both
-// need NarrowData3D's box edge/plane caches (NarrowData3D.Init).
-// TODO(0x7d70eec, Quantum.Physics3D.NarrowChecks.BoxBox.Check): SAT over face and edge axes.
-// TODO(0x7d7293c, Quantum.Physics3D.NarrowChecks.BoxBox.get_allowedDotDiff)
-// TODO(0x7d72944, Quantum.Physics3D.NarrowChecks.BoxBox.get_extentsExpansionMultiplier)
-// TODO(0x7d72a28, Quantum.Physics3D.NarrowChecks.BoxBox.GetEdgesBox)
-// TODO(0x7d72950, Quantum.Physics3D.NarrowChecks.BoxBox.GetPlanesBox)
-// TODO(0x7d72d44, Quantum.Physics3D.NarrowChecks.BoxBox.GetContactPoints)
-// TODO(0x7d72ec4, Quantum.Physics3D.NarrowChecks.BoxBox.GetContactPointPlaneEdge)
-// TODO(0x7d75a6c, Quantum.Physics3D.NarrowChecks.BoxBox.ClipToPlane)
-// TODO(0x7d75878, Quantum.Physics3D.NarrowChecks.BoxBox.BoxInAABB)
-// TODO(0x7d75bac, Quantum.Physics3D.NarrowChecks.BoxBox.PointInAABB)
-// TODO(0x7d72058, Quantum.Physics3D.NarrowChecks.BoxTriangle.Check): Akenine-Moller
-// box/triangle SAT with edge clipping for the contacts.
-// TODO(0x7d75ca4, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestX01)
-// TODO(0x7d75edc, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestX2)
-// TODO(0x7d75d34, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestY02)
-// TODO(0x7d75f6c, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestY1)
-// TODO(0x7d75dcc, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestZ12)
-// TODO(0x7d75e54, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestZ0)
-// TODO(0x7d76000, Quantum.Physics3D.NarrowChecks.BoxTriangle.PlaneBoxOverlaps)
-// TODO(0x7d763d0, Quantum.Physics3D.NarrowChecks.BoxTriangle.ClipTriEdgesOnBoxPlanes)
-// TODO(0x7d77624, Quantum.Physics3D.NarrowChecks.BoxTriangle.ClipBoxEdgesOnTriPlane)
-// TODO(0x7d77f18, Quantum.Physics3D.NarrowChecks.BoxTriangle.ClipToPlane)
-// TODO(0x7d76368, Quantum.Physics3D.NarrowChecks.BoxTriangle.PointInAabb)
-// TODO(0x7d77fd4, Quantum.Physics3D.NarrowChecks.BoxTriangle.PointInTriangle)
-// TODO(0x7d7619c, Quantum.Physics3D.NarrowChecks.BoxTriangle.ClosestPointOnTriangle)
-// TODO(0x7d78180, Quantum.Physics3D.NarrowChecks.BoxTriangle.CheckForEdge)
-// TODO(0x7d762bc, Quantum.Physics3D.NarrowChecks.BoxTriangle.PointPenetrationRaw)
+namespace BoxBox {
+// 0x7d7293c - largest |cos| between two box axes for which their cross product is still
+// tested as a separating axis (raw 0xf851, about 0.97).
+constexpr FP allowedDotDiff() { return FP::FromRaw(0xf851); }
+// 0x7d72944 - box extents are grown by this factor (raw 0x1051e, about 1.02) when testing
+// whether a contact candidate lies on the box.
+constexpr FP extentsExpansionMultiplier() { return FP::FromRaw(0x1051e); }
+
+// 0x7d70eec - separating-axis test over the 3 + 3 face axes and the 9 edge-pair axes
+// (edge pairs skipped when nearly parallel). Contacts are where one box's edges cross the
+// other's faces; failing that, the centre of a box lying entirely inside the other. With a
+// detailed manifold the normal is the axis of least penetration, oriented from A to B.
+bool Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold);
+// 0x7d72a28 - the edges moved by `translation`.
+CustomEdgesBox GetEdgesBox(CustomEdgesBox edges, const FPVector3& translation);
+// 0x7d72950 - the planes' points moved by `translation`.
+CustomPlanesBox GetPlanesBox(CustomPlanesBox planes, const FPVector3& translation);
+// 0x7d72d44 - contact generation; planes and edges are relative to box A's centre.
+void GetContactPoints(const CustomPlanesBox& planesA, const CustomPlanesBox& planesB,
+                      const CustomEdgesBox& edgesA, const CustomEdgesBox& edgesB,
+                      const NarrowEntry3D* boxEntryA, const NarrowEntry3D* boxEntryB,
+                      const FPVector3& boxAToBoxBOffset, CollisionManifold3D* manifold,
+                      bool detailedManifold);
+// 0x7d72ec4 - for every face plane of `boxEntry` (centre at `offset` from box A) and every
+// edge of the other box: the crossing point, if it lies on `boxEntry` (slightly grown),
+// becomes a contact (translated by `boxAPosition`). Stops after the first contact unless
+// detailed, and once more than three are found.
+void GetContactPointPlaneEdge(const CustomPlanesBox& planes, const CustomEdgesBox& edges,
+                              const NarrowEntry3D* boxEntry, const FPVector3& offset,
+                              const FPVector3& boxAPosition, CollisionManifold3D* manifold,
+                              bool detailedManifold);
+// 0x7d75a6c - where the segment crosses the plane; segments within raw 65 of parallel miss.
+// `intersection` is only written on a hit.
+bool ClipToPlane(const CustomPlane& plane, const CustomLine& line, FPVector3& intersection);
+// 0x7d75878 - all eight corners (from the edges) inside the grown box.
+bool BoxInAABB(const CustomEdgesBox& edges, const NarrowEntry3D* boxEntry, const FPVector3& offset);
+// 0x7d75bac - `point` (relative to box A) inside the box with the given half-extents whose
+// centre is at `offset`; `point` is replaced by its coordinates in the box's frame.
+bool PointInAABB(FPVector3& point, const NarrowEntry3D* box, const FPVector3& extents,
+                 const FPVector3& offset);
+} // namespace BoxBox
+
+namespace BoxTriangle {
+// 0x7d72058 - A is the box, mInfo->Tri the mesh triangle. Akenine-Moller box/triangle
+// overlap in the box's frame (box axes, the 9 edge cross axes, the triangle plane). With a
+// detailed manifold the penetration is the smallest of the axis overlaps and the depth of
+// the deepest box corner; contacts are the triangle's corners when it lies inside the
+// (slightly grown) box, otherwise triangle edges clipped by box faces and box edges clipped
+// by the triangle plane. The normal is the triangle's inverse normal.
+bool Check(CollisionManifoldInfo3D* mInfo, bool detailedManifold);
+
+// The edge cross-axis tests. Each projects two of the triangle's corners onto the axis
+// edge x box-axis, compares with the box's projected radius and lowers `penetrationRaw` to
+// the overlap. Returns true when the axis separates (overlap below raw -64); a zero axis
+// never separates. `fa`/`fb` are the absolute edge components that weight the extents.
+// 0x7d75ca4 - axis x, corners 0 and 2.
+bool AxisTestX01(const CustomVertexTriangle& tri, const FPVector3& extents, const FPVector3& edge,
+                 FP fa, FP fb, FP::Raw& penetrationRaw);
+// 0x7d75edc - axis x, corners 0 and 1.
+bool AxisTestX2(const CustomVertexTriangle& tri, const FPVector3& extents, const FPVector3& edge,
+                FP fa, FP fb, FP::Raw& penetrationRaw);
+// 0x7d75d34 - axis y, corners 0 and 2.
+bool AxisTestY02(const CustomVertexTriangle& tri, const FPVector3& extents, const FPVector3& edge,
+                 FP fa, FP fb, FP::Raw& penetrationRaw);
+// 0x7d75f6c - axis y, corners 0 and 1.
+bool AxisTestY1(const CustomVertexTriangle& tri, const FPVector3& extents, const FPVector3& edge,
+                FP fa, FP fb, FP::Raw& penetrationRaw);
+// 0x7d75dcc - axis z, corners 1 and 2.
+bool AxisTestZ12(const CustomVertexTriangle& tri, const FPVector3& extents, const FPVector3& edge,
+                 FP fa, FP fb, FP::Raw& penetrationRaw);
+// 0x7d75e54 - axis z, corners 0 and 1.
+bool AxisTestZ0(const CustomVertexTriangle& tri, const FPVector3& extents, const FPVector3& edge,
+                FP fa, FP fb, FP::Raw& penetrationRaw);
+// 0x7d76000 - whether the triangle's plane cuts the box. `deepestBoxVertex` is the box
+// corner furthest along the normal; with a detailed manifold `deepestBoxVertexProj` is its
+// projection onto the plane (zero otherwise).
+bool PlaneBoxOverlaps(const FPVector3& triInverseNormal, const CustomVertexTriangle& tri,
+                      const FPVector3& extents, bool detailedManifold, FPVector3& deepestBoxVertex,
+                      FPVector3& deepestBoxVertexProj);
+// 0x7d763d0 - triangle edges clipped by the box's local face planes; crossings inside
+// `boxExtents` become (world space) contacts, at most four.
+void ClipTriEdgesOnBoxPlanes(const NarrowEntry3D* boxEntry, const CustomVertexTriangle& tri,
+                             const FPVector3& boxExtents, CollisionManifold3D* m);
+// 0x7d77f18 - like BoxBox.ClipToPlane, but only segments within raw 6 of parallel miss.
+bool ClipToPlane(const CustomPlane& plane, const CustomLine& line, FPVector3& intersection);
+// 0x7d76368
+bool PointInAabb(const FPVector3& point, const FPVector3& extents);
+// 0x7d77624 - the box's local edges clipped by the triangle's plane; crossings inside the
+// triangle become (world space) contacts, at most four.
+void ClipBoxEdgesOnTriPlane(const NarrowEntry3D* boxEntry, const FPVector3& triNormal,
+                            const CustomVertexTriangle& triVertex, CollisionManifold3D* m);
+// 0x7d77fd4 - `p` (on the triangle's plane) inside the triangle, edges included.
+bool PointInTriangle(const FPVector3& p, const CustomVertexTriangle& tri);
+// 0x7d7619c - the point of the triangle nearest to `pointOnPlane`: on the first edge it
+// lies outside of, or the point itself (pointIsInsideTri). `box` is unused.
+FPVector3 ClosestPointOnTriangle(const TriangleCCW* tri, const FPVector3& pointOnPlane,
+                                 const CustomVertexTriangle& customTri,
+                                 const FPVector3& triInverseNormal, const Shape3D::BoxShape& box,
+                                 bool& pointIsInsideTri);
+// 0x7d78180 - if `pointOnPlane` is outside the edge a->b (of length edgeMagnitude), the
+// nearest point of the edge; zero otherwise.
+bool CheckForEdge(const FPVector3& pointOnPlane, const FPVector3& triInverseNormal,
+                  const FPVector3& vertexA, const FPVector3& vertexB, FP edgeMagnitude,
+                  FPVector3& closestPoint);
+// 0x7d762bc - how far `point` can move along the normal before leaving the box: the
+// smallest non-negative per-axis distance (raw; MaxValue for a zero normal).
+FP::Raw PointPenetrationRaw(const FPVector3& point, const FPVector3& triInvertedNormal,
+                            const FPVector3& boxExtents);
+} // namespace BoxTriangle
 
 // Walks the per-triangle manifolds of a sphere/box-against-mesh collision.
 struct TriangleCollisionIterator {

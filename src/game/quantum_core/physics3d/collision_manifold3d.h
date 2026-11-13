@@ -11,6 +11,7 @@
 #include "quantum_core/triangle_ccw.h"
 
 #include <cstdint>
+#include <optional>
 
 namespace Quantum::Physics3D {
 
@@ -121,20 +122,87 @@ struct CollisionManifold3D {
 };
 static_assert(sizeof(CollisionManifold3D) == CollisionManifold3D::SIZE);
 
-// Per-entry pose cached for the narrow phase. The original also caches the box's edges and
-// planes (CustomEdgesBox / CustomPlanesBox, local and rotated) used by the box-box and
-// box-triangle checks; those are not reproduced yet (see NarrowData3D.Init below).
-// TODO(0x7d7bdd4, Quantum.Physics3D.NarrowData3D.InitFromTransform): pose extrapolated by
-// the body's velocity for CCD; needs Entry3D and PhysicsBody3D.
-// TODO(0x7d7c128, Quantum.Physics3D.NarrowData3D.Init): fills the rotated axes, inverse
-// rotation and the box edge/plane caches.
+struct NarrowEntry3D;
+
+// A plane through `pointOnPlane` with unit `normal`. The distance field is left at zero by
+// the constructor; the box checks fill it in when they need it.
+struct CustomPlane {
+    FPVector3 normal;
+    FP distance;
+    FPVector3 pointOnPlane;
+
+    CustomPlane() = default;
+    // 0x7d70ea0
+    CustomPlane(const FPVector3& normalIn, const FPVector3& pointOnPlaneIn)
+        : normal(normalIn), distance(), pointOnPlane(pointOnPlaneIn) {}
+};
+
+// A segment.
+struct CustomLine {
+    FPVector3 start;
+    FPVector3 end;
+
+    CustomLine() = default;
+    // 0x7d70ec8
+    CustomLine(const FPVector3& startIn, const FPVector3& endIn) : start(startIn), end(endIn) {}
+};
+
+// Quantum.Physics3D.CustomVertexTriangle: a triangle's corners (in the box's local frame
+// for the box-triangle check).
+struct CustomVertexTriangle {
+    FPVector3 v_0;
+    FPVector3 v_1;
+    FPVector3 v_2;
+};
+
+// Quantum.Physics3D.CustomEdgesBox: the twelve edges of a box (fields e_00..e_11 in the
+// original). Order: the four edges of the top face (y = +extent), the four of the bottom
+// face, then the four vertical edges.
+struct CustomEdgesBox {
+    static constexpr int COUNT = 12;
+    CustomLine Edges[COUNT];
+};
+static_assert(sizeof(CustomEdgesBox) == 0x240);
+
+// Quantum.Physics3D.CustomPlanesBox: the six face planes of a box (fields p_0..p_5):
+// +X, -X, +Y, -Y, +Z, -Z.
+struct CustomPlanesBox {
+    static constexpr int COUNT = 6;
+    CustomPlane Planes[COUNT];
+};
+static_assert(sizeof(CustomPlanesBox) == 0x150);
+
+// Per-entry pose cached for the narrow phase. For boxes it also caches the box's edges and
+// face planes, both in the box's local frame and rotated into world orientation (relative
+// to Position, not translated).
 struct NarrowData3D {
     FPVector3 Position;
     FPVector3 RotatedRight;
     FPVector3 RotatedUp;
     FPVector3 RotatedForward;
     FPQuaternion RotationInverse;
+    CustomEdgesBox BoxEdges;
+    CustomPlanesBox BoxPlanes;
+    CustomEdgesBox BoxEdgesRotated;
+    CustomPlanesBox BoxPlanesRotated;
+
+    // 0x7d7c128 - pose from a world position/rotation. RotationInverse is the exact inverse
+    // (conjugate over the squared length). The box caches are only written for box shapes;
+    // of the local planes only the non-zero components of normal and point are written
+    // (the rest keep whatever the entry held, zero in practice).
+    static void Init(NarrowData3D* narrow, const NarrowEntry3D* entry, const FPVector3& pos,
+                     const FPQuaternion& rot);
+
+    // 0x7d7bdd4 - pose from the entity transform: with a time step the body's motion over
+    // it is applied first (linear velocity, and the yaw/pitch/roll angular step about the
+    // rotated centre of mass), then the shape's local offset. `useCachedRot` reports
+    // whether the shape has no local rotation. Both transform arguments are updated in
+    // place, as in the original.
+    static void InitFromTransform(NarrowData3D* narrow, const NarrowEntry3D* entry, FPVector3& tPos,
+                                  FPQuaternion& tRot, bool& useCachedRot,
+                                  std::optional<FP> deltaTime);
 };
+static_assert(sizeof(NarrowData3D) == 0x7a0);
 
 // The parts of the entry's PhysicsBody3D component that the narrow phase reads.
 struct NarrowBody3D {
@@ -170,29 +238,6 @@ struct CollisionManifoldInfo3D {
     // 0x7d7b4d4 - swaps A and B and toggles NormalInverted. As in 2D, the original's
     // refresh of the (symmetric) cached flags from the scene is omitted.
     void InvertEntries();
-};
-
-// A plane through `pointOnPlane` with unit `normal`. The distance field is left at zero by
-// the constructor; the box checks fill it in when they need it.
-struct CustomPlane {
-    FPVector3 normal;
-    FP distance;
-    FPVector3 pointOnPlane;
-
-    CustomPlane() = default;
-    // 0x7d70ea0
-    CustomPlane(const FPVector3& normalIn, const FPVector3& pointOnPlaneIn)
-        : normal(normalIn), distance(), pointOnPlane(pointOnPlaneIn) {}
-};
-
-// A segment.
-struct CustomLine {
-    FPVector3 start;
-    FPVector3 end;
-
-    CustomLine() = default;
-    // 0x7d70ec8
-    CustomLine(const FPVector3& startIn, const FPVector3& endIn) : start(startIn), end(endIn) {}
 };
 
 // FPVector3 packed into three 32-bit raw values (physics bodies store rarely-large vectors
