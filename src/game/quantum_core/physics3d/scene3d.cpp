@@ -2572,14 +2572,7 @@ void Scene3D::ResolveQueryNarrow(FrameBase* frame, HitCollection3D* hits, const 
             return;
         }
         Hit3D hit{};
-        hit._staticColliderIndex = entry->StaticColliderIndex;
-        if (entry->StaticColliderIndex >= 0) {
-            hit._mapGuid = _currentMap;
-        } else {
-            hit._entity = HitEntityRef{entry->Ref.Index, entry->Ref.Version};
-        }
-        hit.SetIsTrigger(entry->Collider3D->_isTrigger == 1);
-        hit.ShapeUserTag = entry->Shape->UserTag;
+        SetHitCollider(hit, entry);
         if (detailed) {
             hit.Point = CollisionManifold3D::GetAverageContactPoint(&m);
             hit.Normal = (m._flags & CollisionManifold3D::NormalInverted) != 0 ? -m.Normal : m.Normal;
@@ -2588,11 +2581,94 @@ void Scene3D::ResolveQueryNarrow(FrameBase* frame, HitCollection3D* hits, const 
         hits->Add(hit, frame->get_Context());
         return;
     }
-    case QueryType::ShapeCast:
-        // TODO(0x7d55ef4, Quantum.Physics3D.Scene3D.ResolveQueryNarrow): shape casts
-        // (LinecastBody.RaySphereProjection for spheres, Gjk3D.ShapeCastManifold otherwise).
+    case QueryType::ShapeCast: {
+        // TODO: mesh triangles go through Gjk3D.ShapeCastManifold with the triangle.
+        Hit3D hit{};
+        const FPVector3& translation = query.End;
+        if (entry->Shape->Type() == Shape3DType::Sphere && query.Shape.Type() == Shape3DType::Sphere) {
+            // Sphere against sphere: a ray against the radii summed.
+            const FPVector3 start = qEntry->Narrow.Position;
+            const FPVector3 end{FP::FromRaw(Raw(start.X) + Raw(translation.X)),
+                                FP::FromRaw(Raw(start.Y) + Raw(translation.Y)),
+                                FP::FromRaw(Raw(start.Z) + Raw(translation.Z))};
+            const FP queryRadius = query.Shape.Sphere.Radius;
+            FPVector3 point;
+            if (!NarrowChecks::LinecastBody::RaySphereProjection(
+                    entry->Narrow.Position, FP::FromRaw(Raw(entry->Shape->Sphere.Radius) + Raw(queryRadius)), start,
+                    end, point, hit.CastDistanceNormalized)) {
+                return;
+            }
+            SetHitCollider(hit, entry);
+            if (detailed) {
+                hit.Normal = FPVector3::Normalize(point - entry->Narrow.Position);
+                hit.Point = FPVector3{FP::FromRaw(Raw(point.X) - Mul(Raw(hit.Normal.X), Raw(queryRadius))),
+                                      FP::FromRaw(Raw(point.Y) - Mul(Raw(hit.Normal.Y), Raw(queryRadius))),
+                                      FP::FromRaw(Raw(point.Z) - Mul(Raw(hit.Normal.Z), Raw(queryRadius)))};
+            }
+        } else {
+            if (!Gjk3D::ShapeCastManifold(_tls.Narrow, entry, qEntry, nullptr, CachedSettings.GJKSettingsValue,
+                                          translation, detailed, hit)) {
+                return;
+            }
+            SetHitCollider(hit, entry);
+        }
+        hits->Add(hit, frame->get_Context());
         return;
     }
+    }
+}
+
+// The collider identity part of a query hit (static index or entity, trigger, user tag).
+void Scene3D::SetHitCollider(Hit3D& hit, const Entry3D* entry) const {
+    hit._staticColliderIndex = entry->StaticColliderIndex;
+    if (entry->StaticColliderIndex >= 0) {
+        hit._mapGuid = _currentMap;
+    } else {
+        hit._entity = HitEntityRef{entry->Ref.Index, entry->Ref.Version};
+    }
+    hit.SetIsTrigger(entry->Collider3D->_isTrigger == 1);
+    hit.ShapeUserTag = entry->Shape->UserTag;
+}
+
+// 0x7d56978 - the query entry carries the shape at its start; its box grows by the
+// translation and the walk follows it.
+void Scene3D::ShapeCast(FrameBase* frame, HitCollection3D* hits, const FPVector3& start, const FPQuaternion& rot,
+                        const Shape3D& shape, const FPVector3& translation, bool firstHitOnly, std::int32_t layerMask,
+                        std::int32_t options) {
+    Query3D query;
+    query.Type = QueryType::ShapeCast;
+    query.FirstHitOnly = firstHitOnly;
+    query.Transform.Position = start;
+    query.Transform.Rotation = rot;
+    query.End = translation;
+    query.Shape = shape;
+    query.Options = options;
+    query.LayerMask = layerMask;
+    hits->Reset();
+    Entry3D* qEntry = &_tls.Entry;
+    qEntry->StaticColliderIndex = -1;
+    if (shape.Type() == Shape3DType::Compound) {
+        // TODO(0x7d56b04, Quantum.Physics3D.Scene3D.CompoundShapeCast): one cast per child
+        // shape; compound shapes are not reimplemented yet.
+        return;
+    }
+    InitShapeCastEntry(query, qEntry);
+    ResolveQuery(frame, hits, query, qEntry);
+}
+
+// 0x7d56c10
+void Scene3D::InitShapeCastEntry(const Query3D& query, Entry3D* qEntry) {
+    InitShapeOverlapEntry(query, qEntry);
+    const FPVector3& t = query.End;
+    const auto grow = [](std::int32_t& bound, FP by) {
+        bound = static_cast<std::int32_t>(static_cast<std::uint32_t>(bound) +
+                                          static_cast<std::uint32_t>(Raw(by)));
+    };
+    grow(Raw(t.X) < 1 ? qEntry->AABB.MinX : qEntry->AABB.MaxX, t.X);
+    grow(Raw(t.Y) > 0 ? qEntry->AABB.MaxY : qEntry->AABB.MinY, t.Y);
+    grow(Raw(t.Z) < 1 ? qEntry->AABB.MinZ : qEntry->AABB.MaxZ, t.Z);
+    const bool backwards = _bucketOnX ? Raw(t.X) < 1 : Raw(t.Z) < 1;
+    qEntry->BucketIncrement = backwards ? -1 : 1;
 }
 
 // 0x7d56464 - the query entry spans the segment; it walks the buckets from the start.

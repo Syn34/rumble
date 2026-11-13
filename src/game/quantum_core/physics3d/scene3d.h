@@ -341,6 +341,10 @@ class Scene3D {
                       const FPQuaternion& rot, const Shape3D& shape, std::int32_t layerMask,
                       std::int32_t options);
 
+    void ShapeCast(Core::FrameBase* frame, HitCollection3D* hits, const FPVector3& start,
+                   const FPQuaternion& rot, const Shape3D& shape, const FPVector3& translation,
+                   bool firstHitOnly, std::int32_t layerMask, std::int32_t options);
+
   private:
     // The query box on the sweep axes while ResolveQuery walks the buckets.
     struct QueryBox {
@@ -360,6 +364,8 @@ class Scene3D {
                             Entry3D* qEntry, Entry3D* entry, bool detailed);
     void InitLinecastEntry(const Query3D& query, Entry3D* qEntry) const;
     void InitShapeOverlapEntry(const Query3D& query, Entry3D* qEntry);
+    void InitShapeCastEntry(const Query3D& query, Entry3D* qEntry);
+    void SetHitCollider(Hit3D& hit, const Entry3D* entry) const;
 
     // Step stages (the original's Task_* functions).
     void CreateEntries(Core::FrameBase* frame);

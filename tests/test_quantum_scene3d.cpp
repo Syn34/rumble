@@ -16,6 +16,7 @@
 #include "quantum_core/transform.h"
 #include "photon_deterministic/fp_math.h"
 
+#include <cstdio>
 #include <memory>
 #include <vector>
 
@@ -433,4 +434,38 @@ TEST_CASE("Scene3D: the hybrid solver rests a box and a stack on the floor") {
     const FP before = w.frame->GetPointer<Quantum::Transform3D>(high)->Position.Y;
     w.Step();
     CHECK(w.frame->GetPointer<Quantum::Transform3D>(high)->Position.Y == before);
+}
+
+TEST_CASE("Scene3D: shape casts against spheres and boxes") {
+    World w;
+    PhysicsQueryConfig config;
+    config.ShapeCastMaxIterations = 16;
+    config.ShapeCastHardTolerance = FP::FromRaw(65);  // ~0.001
+    config.ShapeCastSoftTolerance = FP::FromRaw(655); // ~0.01
+    w.frame->settings.GJKSettingsValue = GJKSettings(config);
+    const EntityRef ball = w.AddBody(V3(0, 0, 10), Shape3D::CreateSphere(F(1)), false);
+    const EntityRef crate = w.AddBody(V3(5, 0, 10), Shape3D::CreateBox(V3(1, 1, 1)), false);
+    w.engine->Init(w.frame.get(), AssetGuid{});
+    w.Step();
+    const int options = QueryOptions::HitAll | QueryOptions::ComputeDetailedInfo;
+    // Sphere against sphere: touches when the centres are 2 apart, at z = 8 (half of 20).
+    HitCollection3D hits(8, HitCollection3D::Temp, w.context.get());
+    w.engine->ShapeCast(w.frame.get(), &hits, V3(0, 0, -2), FPQuaternion::Identity(), Shape3D::CreateSphere(F(1)),
+                        V3(0, 0, 20), false, -1, options);
+    CHECK(hits.Count() == 1);
+    if (hits.Count() != 1) return;
+    CHECK(hits[0].Entity().Index == ball.Index);
+    CHECK(Photon::Deterministic::FPMath::Abs(hits[0].CastDistanceNormalized - FP::_0_50()) < FP::FromRaw(64));
+    CHECK(Photon::Deterministic::FPMath::Abs(hits[0].Point.Z - F(9)) < FP::FromRaw(64));
+    // Box against box through GJK.
+    HitCollection3D boxHits(8, HitCollection3D::Temp, w.context.get());
+    w.engine->ShapeCast(w.frame.get(), &boxHits, V3(5, 0, 0), FPQuaternion::Identity(),
+                        Shape3D::CreateBox(FPVector3{FP::_0_50(), FP::_0_50(), FP::_0_50()}), V3(0, 0, 20), false, -1,
+                        options);
+    CHECK(boxHits.Count() == 1);
+    if (boxHits.Count() != 1) return;
+    CHECK(boxHits[0].Entity().Index == crate.Index);
+    // Front face at z = 9, the cast box's half size 0.5: 8.5 / 20.
+    CHECK(Photon::Deterministic::FPMath::Abs(boxHits[0].CastDistanceNormalized - FP::FromRaw(27853)) <
+          FP::FromRaw(400));
 }
