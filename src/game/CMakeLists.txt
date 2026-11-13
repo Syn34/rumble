@@ -48,3 +48,14 @@ target_sources(rr_game PRIVATE
     quantum_code/systems/killable_systems.cpp
     quantum_code/systems/transform_systems.cpp
 )
+
+# Gameplay asset classes (quantum.code.dll assets).
+target_sources(rr_game PRIVATE
+    quantum_code/assets/asset_value_types.cpp
+    quantum_code/assets/bot_sdk_assets.cpp
+    quantum_code/assets/gameplay_specs.cpp
+    quantum_code/assets/actor_specs.cpp
+    quantum_code/assets/game_mode_specs.cpp
+    quantum_code/assets/level_assets.cpp
+    quantum_code/assets/weapon_specs.cpp
+)

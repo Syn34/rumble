@@ -19,6 +19,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 | Original assembly | Role | Methods | Done |
 |---|---|---:|---:|
 | quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | ~2,860 (data types, Frame, events, signals, system framework, first systems) |
+| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | 3,147 (data types, Frame, events, signals, asset classes) |
 | GameClasses.dll | Shared game types | 1,162 | 0 |
 | Assembly-CSharp.dll | Game client (UI, presentation, flow) | 20,495 | 0 |
 | Fidelio-Framework.dll, FidelioFramework-Core.dll | Developer's client framework | 16,438 | 0 |
@@ -51,7 +52,7 @@ local no-ops with documented behaviour.
 | Renderer interface + Vulkan 1.0 backend | done (first version) |
 | Shader pipeline (one GLSL source → GL text + SPIR-V, embedded) | done |
 | Textures, materials, render targets, text | not started |
-| Asset loading from the user's game files | not started (quantum.core side ready: `IAssetResourceProvider` seam in `src/game/quantum_core/asset_resource_provider.h`) |
+| Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); prefabs/scenes, textures, meshes not started |
 | Audio | not started |
 | Physics / animation | not started |
 
@@ -145,6 +146,24 @@ local no-ops with documented behaviour.
   InputProvider, RuntimeConfig, SimulationConfig, Constants, SystemBase. Pending: frame
   serialisation/checksum/dump (the global block needs quantum.core's physics state and
   scene settings serialisers), player data, component-specific gameplay methods, systems
+- quantum.code assets: all 416 asset classes (weapon/gadget/ultimate specs, enhancements and
+  hero improvements, game modes and their configs, actor and gameplay specs, level data, the
+  bot SDK's HFSM/BT/GOAP/utility graphs and the game's AI actions, decisions and functions)
+  with their exact fields, nested types, base classes and constructor defaults, plus the
+  ~80 value types they store; quantum.core's FPAnimationCurve (Evaluate), LayerMask,
+  Shape3DConfig, QueryOptions. Implemented: every constructor, the Loaded overrides (graph
+  reference resolution, blackboard/event maps, grind rail table), lookup tables, levelled
+  values, getters and default virtuals (~570 methods). Pending (TODO with signatures): the
+  gameplay methods that drive systems (FireWeapon, game mode Init/DeInit/ComputeBattleResult,
+  enhancement/improvement OnInit, actor component Init/Shutdown, power-up effects) and the
+  AI actions/decisions/functions, which need the bot SDK's AIContext and the systems' libraries
+- Content factories (`src/game/content`): typed readers for decoded `Settings` trees (FP,
+  vectors, asset references, enums, lists, nested structs), one reader per asset class and
+  value type, and a factory per engine-side script class (`XAsset` -> `X`) for the gameplay
+  assets and quantum.core's built-ins (Map with static colliders, NavMesh, BinaryData,
+  PhysicsMaterial, character controller configs, EntityView, EntityPrototype, SimulationConfig).
+  `contentindex --load` builds all 1,868 simulation assets of the game's bundles with C++
+  types. Entity prototypes come with empty containers until the prefab reader exists
 
 - quantum.code systems (`src/game/quantum_code/systems/`): the system framework
   (SystemMainThread, SystemMainThreadFilter with filter structs, groups, signal-only systems,
@@ -182,3 +201,5 @@ local no-ops with documented behaviour.
 4. Asset reader for the game's content files (from the user's own copy)
 5. Gameplay systems from quantum.code.dll: damage pipeline and respawning next, then movement,
    weapons and projectiles (need the 3D scene from quantum.core)
+4. Asset reader for the game's content files: prefabs (entity prototype components), scenes, textures, meshes
+5. Gameplay systems from quantum.code.dll, starting with movement and damage

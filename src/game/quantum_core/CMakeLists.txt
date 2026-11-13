@@ -66,3 +66,6 @@ add_library(rr::quantum_core ALIAS rr_quantum_core)
 target_include_directories(rr_quantum_core PUBLIC ..)
 target_link_libraries(rr_quantum_core PUBLIC rr::photon_deterministic)
 rr_set_warnings(rr_quantum_core)
+
+# Asset value types used by the gameplay assets (FPAnimationCurve).
+target_sources(rr_quantum_core PRIVATE fp_animation_curve.cpp)
