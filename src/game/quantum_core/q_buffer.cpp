@@ -68,4 +68,30 @@ std::uint32_t QCollectionsUtils::GetNextPrimeGreaterThanOrEqual(std::uint32_t va
     ThrowNoPrime();
 }
 
+void QBuffer::SerializeMeta(QBuffer* buffer, int stride, FrameSerializer* serializer) {
+    serializer->Stream().Serialize(buffer->Length);
+    if (serializer->Reading()) {
+        buffer->Stride = stride;
+    }
+}
+
+bool QBuffer::Serialize(QBuffer* buffer, int stride, FrameSerializer* serializer,
+                        FrameSerializer::PtrKey& key) {
+    SerializeMeta(buffer, stride, serializer);
+    return serializer->PointerSerialize(&buffer->Ptr, key);
+}
+
+void QBuffer::Serialize(QBuffer* buffer, int stride, FrameSerializer* serializer, int count,
+                        ItemSerializer itemSerializer) {
+    SerializeMeta(buffer, stride, serializer);
+    FrameSerializer::PtrKey key;
+    if (!serializer->PointerSerialize(&buffer->Ptr, key)) {
+        return;
+    }
+    auto* items = static_cast<std::byte*>(serializer->PointerResolve(key, buffer->Length * stride));
+    for (int i = 0; i < count; ++i) {
+        itemSerializer(items + static_cast<std::ptrdiff_t>(i) * stride, serializer);
+    }
+}
+
 } // namespace Quantum::Collections

@@ -256,8 +256,54 @@ struct QHashCollection {
         collection->Entries = entries;
     }
 
-    // TODO(0x5115bc4, Quantum.Collections.QHashCollection.Serialize<EntityRef>): writes the
-    // used entries' keys through a key serializer; needs FrameSerializer.
+    // 0x5115bc4 (instance for EntityRef keys) - Counters, the free-list head, every entry
+    // slot ever used (its own address, chain link, hash, state, and the key of used
+    // entries through `keySerializer`), then the bucket array.
+    template <class TKey>
+    static void Serialize(QHashCollection* collection, FrameSerializer* serializer,
+                          QBuffer::ItemSerializer keySerializer) {
+        Photon::Deterministic::IBitStream& stream = serializer->Stream();
+        stream.Serialize(&collection->UsedCount);
+        stream.Serialize(&collection->FreeCount);
+        serializer->PointerSerialize(&collection->FreeHead);
+
+        int keyStride = static_cast<int>(sizeof(TKey));
+        int entryStride = 0;
+        CalculateStrides(keyStride, entryStride);
+        if (serializer->Reading()) {
+            collection->KeyOffset = entryStride;
+        }
+
+        FrameSerializer::PtrKey key;
+        if (QBuffer::Serialize(&collection->Entries, keyStride + entryStride, serializer, key)) {
+            auto* entries = static_cast<std::byte*>(serializer->PointerResolve(
+                key, collection->Entries.Length * collection->Entries.Stride));
+            for (int i = 0; i < collection->UsedCount; ++i) {
+                auto* entry = reinterpret_cast<Entry*>(
+                    entries + static_cast<std::ptrdiff_t>(collection->Entries.Stride) * i);
+                serializer->PointerSerializeVoid(entry);
+                serializer->PointerSerialize(&entry->Next);
+                stream.Serialize(&entry->Hash);
+                if (serializer->Writing()) {
+                    stream.WriteInt(static_cast<int>(entry->State));
+                } else {
+                    entry->State = static_cast<EntryState>(stream.ReadInt());
+                }
+                if (entry->State == EntryState::Used) {
+                    keySerializer(reinterpret_cast<std::byte*>(entry) + entryStride, serializer);
+                }
+            }
+        }
+
+        FrameSerializer::PtrKey bucketsKey;
+        if (serializer->PointerSerialize(&collection->Buckets, bucketsKey)) {
+            auto* buckets = static_cast<Quantum::Ptr*>(serializer->PointerResolve(
+                bucketsKey, collection->Entries.Length * Quantum::Ptr::SIZE));
+            for (int i = 0; i < collection->Entries.Length; ++i) {
+                serializer->PointerSerialize(&buckets[i]);
+            }
+        }
+    }
     // TODO(0x7d2103c, Quantum.Collections.QHashCollection.Print): needs FramePrinter.
 
   private:

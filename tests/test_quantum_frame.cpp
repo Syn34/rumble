@@ -115,8 +115,14 @@ class TestFrame final : public FrameBase {
                                    this, &stream);
         serializer.Reset();
         stream.SetWriting(true);
-        FrameBase::Serialize(this, &serializer);
+        SerializeAll(&serializer);
         return stream.get_Checksum();
+    }
+    // What the game's frame does: the entity store, then its globals (here only the frame
+    // metadata).
+    void SerializeAll(FrameSerializer* serializer) {
+        FrameBase::Serialize(this, serializer);
+        FrameMetaData::Serialize(&_meta, serializer);
     }
     std::vector<std::uint8_t> Serialize(Photon::Deterministic::DeterministicFrameSerializeMode) override {
         return {};
@@ -396,6 +402,9 @@ TEST_CASE("Frame: copy, serialize round trip and checksum") {
     source->Destroy(EntityRef{4, static_cast<int>(0x80000001u)});
     source->CommitAllCommands();
     source->GetOrAddSingletonPointer<TestGlobal>()->Counter = 77;
+    // Deferred commands still pending when the frame is serialised.
+    source->Destroy(EntityRef{2, static_cast<int>(0x80000001u)});
+    source->Remove<TestTag>(EntityRef{7, static_cast<int>(0x80000001u)});
 
     auto copy = sim.MakeFrame(64);
     FrameBase::Copy(copy.get(), source.get());
@@ -403,7 +412,6 @@ TEST_CASE("Frame: copy, serialize round trip and checksum") {
     CHECK(copy->EntityCount() == source->EntityCount());
     CHECK(copy->Get<TestPosition>(EntityRef{7, static_cast<int>(0x80000001u)}).Y == -6);
     CHECK(copy->GetSingleton<TestGlobal>().Counter == 77);
-    CHECK(copy->CalculateChecksum() == source->CalculateChecksum());
 
     // Serialize into a bit stream and read it into a third frame.
     std::vector<std::uint8_t> bytes(64 * 1024);
@@ -412,7 +420,7 @@ TEST_CASE("Frame: copy, serialize round trip and checksum") {
                                source.get(), std::span<std::uint8_t>(bytes));
         writer.Reset();
         writer.SetWriting(true);
-        FrameBase::Serialize(source.get(), &writer);
+        source->SerializeAll(&writer);
     }
     auto restored = sim.MakeFrame();
     {
@@ -421,12 +429,20 @@ TEST_CASE("Frame: copy, serialize round trip and checksum") {
         // (Reset would also clear the stream's bytes; only the key mapping is reset.)
         reader.Mapping().Reset();
         reader.SetReading(true);
-        FrameBase::Serialize(restored.get(), &reader);
+        restored->SerializeAll(&reader);
         reader.VerifyNoUnresolvedPointers();
     }
     CHECK(restored->EntityCount() == source->EntityCount());
     CHECK(restored->Get<TestTag>(EntityRef{10, static_cast<int>(0x80000001u)}).Value == 18);
     CHECK(restored->GetSingleton<TestGlobal>().Counter == 77);
+    CHECK(restored->CalculateChecksum() == source->CalculateChecksum());
+
+    // The pending commands came along and commit the same way.
+    CHECK(restored->ComponentCount<TestTag>(true) == source->ComponentCount<TestTag>(true));
+    restored->CommitAllCommands();
+    source->CommitAllCommands();
+    CHECK(restored->ComponentCount<TestTag>(true) == 2);
+    CHECK(restored->EntityCount() == source->EntityCount());
     CHECK(restored->CalculateChecksum() == source->CalculateChecksum());
 
     // A change shows in the checksum.

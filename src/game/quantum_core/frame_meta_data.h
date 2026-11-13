@@ -131,9 +131,27 @@ struct FrameMetaData {
             return next;
         }
 
-        // TODO(0x52eb7ac, Quantum.FrameMetaData.QHashCollectionList.Serialize<EntityRef>):
-        // writes the counters and each set in use through QHashCollection.Serialize with a
-        // key serializer; needs QHashCollection.Serialize.
+        // 0x52eb7ac (instance for EntityRef keys) - The counters, then every allocated set
+        // (keys through `keySerializer`).
+        template <class TKey>
+        static void Serialize(void* ptr, FrameSerializer* serializer,
+                              Collections::QBuffer::ItemSerializer keySerializer) {
+            auto* list = static_cast<QHashCollectionList*>(ptr);
+            Photon::Deterministic::IBitStream& stream = serializer->Stream();
+            stream.Serialize(&list->_qHashListUsedCount);
+            stream.Serialize(&list->_qHashListCapacity);
+            stream.Serialize(&list->_qHashListAllocatedCount);
+            stream.Serialize(&list->_qHashListLastBlockAge);
+            FrameSerializer::PtrKey key;
+            if (!serializer->PointerSerialize(&list->_qHashListPtr, key)) {
+                return;
+            }
+            auto* sets = static_cast<Collections::QHashCollection*>(serializer->PointerResolve(
+                key, list->_qHashListCapacity * static_cast<int>(sizeof(Collections::QHashCollection))));
+            for (int i = 0; i < list->_qHashListAllocatedCount; ++i) {
+                Collections::QHashCollection::Serialize<TKey>(&sets[i], serializer, keySerializer);
+            }
+        }
 
       private:
         template <Allocator::FrameHeapLike THeap>
@@ -155,9 +173,9 @@ struct FrameMetaData {
         _trackedInternal.FreeAllTracked(heap);
     }
 
-    // TODO(0x7cef2d8, Quantum.FrameMetaData.Serialize): serialises both lists and the
-    // allocation tracker; needs QHashCollectionList.Serialize and
-    // AllocationTracker.Serialize.
+    // 0x7cef2d8 - Both deferred sets (keys through EntityRef / ComponentReference
+    // serialisation, the original's two lambdas) and the allocation tracker.
+    static void Serialize(void* ptr, FrameSerializer* serializer);
 };
 
 static_assert(sizeof(FrameMetaData::QHashCollectionList) == FrameMetaData::QHashCollectionList::SIZE);
