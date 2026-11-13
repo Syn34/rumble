@@ -160,6 +160,10 @@ struct Tls {
     ActiveEntryList KinematicTrigger;
     ActiveEntryList Static;
     ActiveEntryList StaticTrigger;
+    Entry3D Entry;                 // the entry of an immediate query
+    CollisionManifold3D Manifold;  // scratch manifold of query narrow checks
+    PhysicsCollider3D Collider3D;  // the query entry's collider
+    ::Quantum::Transform3D Transform3D;
     NarrowTls3D Narrow;
     std::uint64_t OverlapSequence = 0;
     // TODO(0x7d7d5e8, Quantum.Physics3D.Tls.Free), TODO(0x7d7d624,
@@ -192,6 +196,26 @@ enum QueryOptions : std::int32_t {
     HitTriggers = 8,
     HitAll = 15,
     ComputeDetailedInfo = 32768,
+};
+
+// Quantum.Physics3D.Query3D.QueryType
+enum class QueryType : std::int32_t {
+    ShapeOverlap = 0,
+    ShapeCast = 1,
+    Linecast = 2,
+};
+
+// Quantum.Physics3D.Query3D with its QueryParameters3D union flattened: the transform's
+// position is the overlap position or the cast/linecast start; End is the linecast end or
+// the shape cast translation.
+struct Query3D {
+    QueryType Type = QueryType::ShapeOverlap;
+    bool FirstHitOnly = false;
+    ::Quantum::Transform3D Transform;
+    FPVector3 End;
+    Shape3D Shape;
+    std::int32_t Options = 0;
+    std::int32_t LayerMask = 0;
 };
 
 // Quantum.Physics3D.StaticComponents3D: the transform and collider of a static entry.
@@ -300,9 +324,29 @@ class Scene3D {
                       std::int32_t options);
 
   private:
+    // The query box on the sweep axes while ResolveQuery walks the buckets.
+    struct QueryBox {
+        std::int32_t SortMin = 0;
+        std::int32_t SortMax = 0;
+        std::int32_t SecondaryMin = 0;
+        std::int32_t SecondaryMax = 0;
+        std::int32_t StabPoint = 0;
+        std::int32_t Bucket = 0;
+        bool FirstBucket = false;
+    };
+    void ResolveQuery(Core::FrameBase* frame, HitCollection3D* hits, const Query3D& query, Entry3D* qEntry);
+    void ScanQueryCandidates(Core::FrameBase* frame, HitCollection3D* hits, const Query3D& query,
+                             Entry3D* qEntry, const StabbingList& stabbing, const QueryBox& q, bool statics,
+                             bool detailed);
+    void ResolveQueryNarrow(Core::FrameBase* frame, HitCollection3D* hits, const Query3D& query,
+                            Entry3D* qEntry, Entry3D* entry, bool detailed);
+    void InitLinecastEntry(const Query3D& query, Entry3D* qEntry) const;
+    void InitShapeOverlapEntry(const Query3D& query, Entry3D* qEntry);
+
     // Step stages (the original's Task_* functions).
     void CreateEntries(Core::FrameBase* frame);
     void UpdateMap(Core::FrameBase* frame, AssetGuid mapGuid);
+    void SetDefaultWorld();
     void ResetBucketsAndTls();
     void TaskIntegrateForcesFirstHalf();
     void TaskBroadPhaseEntryPreStep();

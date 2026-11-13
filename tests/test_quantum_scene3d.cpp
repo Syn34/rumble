@@ -197,9 +197,36 @@ TEST_CASE("Scene3D: a line cast hits the expected entity") {
     CHECK(hits[0].Entity().Index == near.Index && hits[1].Entity().Index == far.Index);
     CHECK(Photon::Deterministic::FPMath::Abs(hits[0].Point.Z - F(4)) < FP::FromRaw(64));
 
+    // First hit only: the walk stops after the first bucket holding a hit, keeping every
+    // hit found in it (both here: one bucket along X covers the whole segment).
     HitCollection3D first(8, HitCollection3D::Temp, w.context.get());
     w.engine->Linecast(w.frame.get(), &first, V3(0, 0, 0), V3(0, 0, 20), true, -1, QueryOptions::HitAll);
+    CHECK(first.Count() == 2);
+}
+
+TEST_CASE("Scene3D: a first-hit line cast stops at the first bucket with a hit") {
+    World w;
+    w.frame->map->BucketingAxis = Map::BucketAxis::Y; // buckets along Z, 16 units each
+    const EntityRef near = w.AddBody(V3(0, 0, 5), Shape3D::CreateSphere(F(1)), false);
+    w.AddBody(V3(0, 0, 40), Shape3D::CreateBox(V3(1, 1, 1)), false);
+    w.engine->Init(w.frame.get(), AssetGuid{});
+    w.Step();
+    HitCollection3D all(8, HitCollection3D::Temp, w.context.get());
+    w.engine->Linecast(w.frame.get(), &all, V3(0, 0, 0), V3(0, 0, 60), false, -1, QueryOptions::HitAll);
+    CHECK(all.Count() == 2);
+    HitCollection3D first(8, HitCollection3D::Temp, w.context.get());
+    w.engine->Linecast(w.frame.get(), &first, V3(0, 0, 0), V3(0, 0, 60), true, -1, QueryOptions::HitAll);
     CHECK(first.Count() == 1 && first[0].Entity().Index == near.Index);
+    // Walking backwards finds the far box first.
+    HitCollection3D back(8, HitCollection3D::Temp, w.context.get());
+    w.engine->Linecast(w.frame.get(), &back, V3(0, 0, 60), V3(0, 0, 0), true, -1, QueryOptions::HitAll);
+    CHECK(back.Count() == 1 && back[0].Entity().Index != near.Index);
+    // Overlap through the buckets: the sphere only.
+    HitCollection3D overlap(8, HitCollection3D::Temp, w.context.get());
+    w.engine->OverlapShape(w.frame.get(), &overlap, V3(0, 0, 6), FPQuaternion::Identity(),
+                           Shape3D::CreateSphere(F(1)), -1, QueryOptions::HitAll | QueryOptions::ComputeDetailedInfo);
+    CHECK(overlap.Count() == 1 && overlap[0].Entity().Index == near.Index);
+    CHECK(overlap[0].OverlapPenetration > FP::Zero());
 }
 
 TEST_CASE("Scene3D: a trigger callback fires once on enter") {

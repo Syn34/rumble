@@ -220,17 +220,21 @@ Scene3D::Scene3D() {
     _buckets[0].Index = 0;
 }
 
-// 0x7d5b2f8
+// 0x7d5b2f8 - a scene that never had a world gets the default one (a single bucket of
+// size 2 centred on the origin) before the map is applied.
 void Scene3D::InitScene(FrameBase* frame, AssetGuid mapGuid) {
-    if (!_mapInitialized) {
-        // No map yet: a single bucket covering everything.
-        _buckets.assign(1, Bucket3D{});
-        _bucketsSizeRaw = FP::Raw{2} << 16;
-        _worldSizeRaw = 0;
-        _worldOffsetRaw = 0;
+    if (_worldSizeRaw == 0) {
+        SetDefaultWorld();
     }
     ResetScene(frame);
     UpdateMap(frame, mapGuid);
+}
+
+void Scene3D::SetDefaultWorld() {
+    _bucketsSizeRaw = FP::Raw{2} << 16;
+    _buckets.assign(1, Bucket3D{});
+    _worldSizeRaw = FP::Raw{2} << 16;
+    _worldOffsetRaw = FP::Raw{1} << 16;
 }
 
 // 0x7d5b354
@@ -247,87 +251,148 @@ void Scene3D::ResetScene(FrameBase* frame) {
     _islands.clear();
 }
 
-// TODO(0x7d5a490, Quantum.Physics3D.Scene3D.UpdateMap): partly reimplemented from the
-// field usage seen elsewhere (bucket sizes, static entries); the original also builds the
-// static stabbing lists, the triangle mesh and tracks static collider enable state.
+namespace {
+// Radix.SortEndPoints (0x7d3d558): a stable LSD radix sort over the low two bytes of Index,
+// then the four bytes of Value - a stable sort by (Value, low 16 bits of Index).
+void SortEndPoints(EndPoint* first, EndPoint* last) {
+    std::stable_sort(first, last, [](const EndPoint& a, const EndPoint& b) {
+        const std::uint64_t ka = (std::uint64_t{static_cast<std::uint32_t>(a.Value)} << 16) |
+                                 static_cast<std::uint16_t>(a.Index);
+        const std::uint64_t kb = (std::uint64_t{static_cast<std::uint32_t>(b.Value)} << 16) |
+                                 static_cast<std::uint16_t>(b.Index);
+        return ka < kb;
+    });
+}
+} // namespace
+
+// 0x7d5a490 - rebuilds the static world when the map changes (never on predicted frames in
+// the original): world size and buckets from the map, one entry per static collider (the
+// map's order; meshes get an entry but no endpoints), the static endpoints sorted once per
+// bucket and swept to build the buckets' static stabbing lists.
+// Two deviations: a map guid that is not valid falls back to the frame's map (the original
+// keeps the default world), and the static colliders' mutable state
+// (StaticCollidersState, toggled colliders) is not tracked.
 void Scene3D::UpdateMap(FrameBase* frame, AssetGuid mapGuid) {
     if (_mapInitialized && mapGuid == _currentMap) {
         return;
     }
-    _currentMap = mapGuid;
-    _mapInitialized = true;
-    Map* map = mapGuid.IsValid() ? frame->FindAsset<Map>(mapGuid) : frame->get_Map();
-    std::int32_t bucketsCount = 1;
-    if (map != nullptr) {
-        bucketsCount = std::max(1, map->BucketsCount);
-        _worldSizeRaw = FP::Raw{map->WorldSize} << 16;
-        _worldOffsetRaw = _worldSizeRaw / 2;
-        _bucketsSizeRaw = std::max<FP::Raw>(1, _worldSizeRaw / bucketsCount);
-        _bucketsSubdivisions = std::max(1, map->BucketsSubdivisions);
-        _bucketOnX = map->BucketingAxis == Map::BucketAxis::X;
-        _sortOnX = map->SortingAxis == Map::SortAxis::X;
-    }
-    _buckets.assign(static_cast<std::size_t>(bucketsCount), Bucket3D{});
-    for (std::int32_t i = 0; i < bucketsCount; ++i) {
-        _buckets[static_cast<std::size_t>(i)].Index = i;
-    }
-    // Static colliders become the first entries.
     _entries.clear();
     _staticComponents.clear();
-    if (map != nullptr) {
-        for (const MapStaticCollider3D& source : map->StaticColliders3D) {
-            if (source.ShapeType != Shape3DType::Sphere && source.ShapeType != Shape3DType::Box) {
-                continue; // TODO: meshes need TriangleMesh
-            }
-            StaticComponents3D& components = _staticComponents.emplace_back();
-            components.Transform3D.Position = source.Position;
-            components.Transform3D.Rotation = source.Rotation;
-            components.Collider3D.Shape = source.ShapeType == Shape3DType::Sphere
-                                              ? Shape3D::CreateSphere(source.SphereRadius)
-                                              : Shape3D::CreateBox(source.BoxExtents);
-            components.Collider3D.SetLayer(source.StaticData.Layer);
-            components.Collider3D.SetIsTrigger(source.StaticData.IsTrigger);
-            components.Collider3D._material.Id = source.PhysicsMaterial.Id;
-        }
+    _staticComponentsCount = 0;
+    SetDefaultWorld();
+    _mapInitialized = true;
+    _currentMap = mapGuid;
+    Map* map = mapGuid.IsValid() ? frame->FindAsset<Map>(mapGuid) : frame->get_Map();
+    if (map == nullptr) {
+        return;
     }
-    _staticComponentsCount = static_cast<std::int32_t>(_staticComponents.size());
-    std::int32_t staticIndex = 0;
-    for (StaticComponents3D& components : _staticComponents) {
+    _bucketOnX = map->BucketingAxis == Map::BucketAxis::X;
+    _sortOnX = map->SortingAxis == Map::SortAxis::X;
+    // The world size is shifted in 32 bits, as the original does.
+    const auto worldSize = static_cast<std::int32_t>(static_cast<std::uint32_t>(map->WorldSize) << 16);
+    _worldSizeRaw = worldSize;
+    _worldOffsetRaw = worldSize >> 1;
+    // TODO: a map with no buckets divides by zero in the original; one bucket here.
+    const std::int32_t bucketsCount = map->BucketsCount > 0 ? map->BucketsCount : 1;
+    _bucketsSizeRaw = _worldSizeRaw / bucketsCount;
+    _bucketsSubdivisions = std::max(1, map->BucketsSubdivisions);
+    _buckets.assign(static_cast<std::size_t>(bucketsCount), Bucket3D{});
+    const auto bucketSize = static_cast<std::int32_t>(_bucketsSizeRaw);
+    for (std::int32_t i = 0; i < bucketsCount; ++i) {
+        Bucket3D& bucket = _buckets[static_cast<std::size_t>(i)];
+        bucket.Index = i;
+        bucket.Min = i * bucketSize;
+        bucket.Max = bucket.Min + bucketSize;
+    }
+    // TODO(0x7d39438, Quantum.TriangleMesh.InitializeFromMap): the map's static triangle mesh.
+
+    // Static colliders become the first entries.
+    const std::int32_t staticCount = static_cast<std::int32_t>(map->StaticColliders3D.size());
+    _staticComponents.reserve(static_cast<std::size_t>(staticCount));
+    for (const MapStaticCollider3D& source : map->StaticColliders3D) {
+        StaticComponents3D& components = _staticComponents.emplace_back();
+        components.Transform3D.Position = source.Position;
+        components.Transform3D.Rotation = source.Rotation;
+        switch (source.ShapeType) {
+        case Shape3DType::Sphere: components.Collider3D.Shape = Shape3D::CreateSphere(source.SphereRadius); break;
+        case Shape3DType::Box: components.Collider3D.Shape = Shape3D::CreateBox(source.BoxExtents); break;
+        case Shape3DType::Mesh:
+            // TODO(0x7d3ac90, Quantum.Shape3D.CreateMesh): mesh shapes need TriangleMesh.
+            components.Collider3D.Shape = Shape3D{};
+            components.Collider3D.Shape._type = Shape3DType::Mesh;
+            break;
+        default: break; // the original logs an error for any other shape
+        }
+        components.Collider3D.SetLayer(source.StaticData.Layer);
+        components.Collider3D.SetIsTrigger(source.StaticData.IsTrigger);
+        components.Collider3D._material.Id = source.PhysicsMaterial.Id;
+    }
+    _staticComponentsCount = staticCount;
+    for (std::int32_t staticIndex = 0; staticIndex < staticCount; ++staticIndex) {
+        StaticComponents3D& components = _staticComponents[static_cast<std::size_t>(staticIndex)];
         std::int32_t index = 0;
         Entry3D* entry = GetNextEntry(index);
         entry->Collider3D = &components.Collider3D;
         entry->Shape = &components.Collider3D.Shape;
+        entry->Body3D = nullptr;
         entry->Transform3D = &components.Transform3D;
         entry->StaticColliderIndex = staticIndex;
-        entry->UseSmoothSphereMeshCollision =
-            map->StaticColliders3D[static_cast<std::size_t>(staticIndex)].SmoothSphereMeshCollisions;
-        Entry3D::InitNarrowData(entry, &components.Transform3D.Position,
-                                &components.Transform3D.Rotation);
-        Entry3D::InitBroadAabb(entry, &components.Transform3D.Position,
-                               &components.Transform3D.Rotation, {});
-        ++staticIndex;
-    }
-    // Static endpoints, sorted once.
-    for (Entry3D& entry : _entries) {
-        std::int32_t flags = entry.Index | EndPoint::STATIC_FLAG;
-        if (entry.IsTriggerCollider()) {
+        if (entry->Shape->Type() == Shape3DType::Mesh) {
+            entry->UseSmoothSphereMeshCollision =
+                map->StaticColliders3D[static_cast<std::size_t>(staticIndex)].SmoothSphereMeshCollisions;
+            continue;
+        }
+        Entry3D::InitNarrowData(entry, &components.Transform3D.Position, &components.Transform3D.Rotation);
+        Entry3D::InitBroadAabb(entry, &components.Transform3D.Position, &components.Transform3D.Rotation, {});
+        std::int32_t flags = index | EndPoint::STATIC_FLAG;
+        if (entry->Collider3D->_isTrigger == 1) {
             flags |= EndPoint::TRIGGER_FLAG;
         }
         std::int32_t minBucket = 0, maxBucket = 0;
-        InsertEndPoints(entry.AABB, flags, minBucket, maxBucket);
-        entry.BucketStart = minBucket;
-        entry.BucketEnd = maxBucket;
-        entry.BucketIncrement = 1;
+        InsertEndPoints(entry->AABB, flags, minBucket, maxBucket);
+        entry->BucketStart = minBucket;
+        entry->BucketEnd = maxBucket;
+        entry->BucketIncrement = 1;
+    }
+
+    // Per bucket: sort the static endpoints and sweep them, taking a snapshot of the open
+    // static intervals every EntriesPerList closed ones (for queries that start mid-bucket).
+    _tls.Static.ResetAndEnsureCapacity(staticCount);
+    _tls.StaticTrigger.ResetAndEnsureCapacity(staticCount);
+    for (Bucket3D& bucket : _buckets) {
+        bucket.StaticsStabbingList.ResetAndEnsureCapacity(_bucketsSubdivisions, staticCount);
     }
     for (Bucket3D& bucket : _buckets) {
-        std::stable_sort(bucket.EndPointsStatic.begin(),
-                         bucket.EndPointsStatic.begin() + bucket.EndPointsStaticCount * 2,
-                         [](const EndPoint& a, const EndPoint& b) {
-                             return static_cast<std::uint32_t>(a.Value) < static_cast<std::uint32_t>(b.Value);
-                         });
+        const std::int32_t pairs = bucket.EndPointsStaticCount;
+        if (pairs < 1) {
+            continue;
+        }
+        SortEndPoints(bucket.EndPointsStatic.data(), bucket.EndPointsStatic.data() + 2 * pairs);
+        StabbingList& stabbing = bucket.StaticsStabbingList;
+        ActiveEntryList* snapshot = stabbing.GetNextEntryList(0);
+        stabbing.EntriesPerList = pairs / _bucketsSubdivisions;
+        for (std::int32_t i = 0; i < 2 * pairs; ++i) {
+            const EndPoint& point = bucket.EndPointsStatic[static_cast<std::size_t>(i)];
+            const std::int32_t entryIndex = point.Index & 0x7ffffff;
+            const bool trigger = (point.Index & EndPoint::TRIGGER_FLAG) != 0;
+            ActiveEntryList& open = trigger ? _tls.StaticTrigger : _tls.Static;
+            if ((point.Index & EndPoint::MIN_FLAG) == 0) {
+                open.Remove(entryIndex);
+                if (stabbing.Count < _bucketsSubdivisions && ++stabbing.EntriesCount >= stabbing.EntriesPerList) {
+                    snapshot = stabbing.GetNextEntryList(point.Value);
+                    snapshot->CopyFrom(_tls.Static);
+                    snapshot->AddRange(_tls.StaticTrigger);
+                    stabbing.EntriesCount = 0;
+                }
+                continue;
+            }
+            const Entry3D& entry = _entries[static_cast<std::size_t>(entryIndex)];
+            const ActiveEntry active{entryIndex, _sortOnX ? entry.AABB.MinZ : entry.AABB.MinX,
+                                     _sortOnX ? entry.AABB.MaxZ : entry.AABB.MaxX};
+            open.Add(active, false);
+            snapshot->Add(active, true);
+        }
     }
-    // Static entry pointers into _staticComponents are stable from here on.
-    (void)frame;
 }
 
 // 0x7d5679c
@@ -652,16 +717,7 @@ void Scene3D::TaskBroadPhase(FrameBase* /*frame*/) {
         StabbingList& stabbing = bucket.DynamicsStabbingList;
         ActiveEntryList* stabList = stabbing.GetNextEntryList(0);
         stabbing.EntriesPerList = n / _bucketsSubdivisions;
-        // Radix.SortEndPoints (0x7d3d558): stable LSD radix over Index bytes 0-1 then Value
-        // bytes 0-3, i.e. a stable sort by (Value, low 16 bits of Index).
-        std::stable_sort(bucket.EndPoints.begin(), bucket.EndPoints.begin() + 2 * n,
-                         [](const EndPoint& a, const EndPoint& b) {
-                             const std::uint64_t ka = (std::uint64_t{static_cast<std::uint32_t>(a.Value)} << 16) |
-                                                      static_cast<std::uint16_t>(a.Index);
-                             const std::uint64_t kb = (std::uint64_t{static_cast<std::uint32_t>(b.Value)} << 16) |
-                                                      static_cast<std::uint16_t>(b.Index);
-                             return ka < kb;
-                         });
+        SortEndPoints(bucket.EndPoints.data(), bucket.EndPoints.data() + 2 * n);
         const std::int32_t dynamicTotal = 2 * n;
         const std::int32_t staticTotal = 2 * bucket.EndPointsStaticCount;
         std::int32_t di = 0, si = 0;
@@ -2015,68 +2071,244 @@ void Scene3D::Update(FrameBase* frame, FP deltaTime, ICollisionCallbacks3D* call
 // ---------------------------------------------------------------------------------------
 // Immediate queries
 
-// TODO(0x7d56464, Quantum.Physics3D.Scene3D.Linecast): the original walks the broad-phase
-// buckets along the segment; here every non-compound entry is tested (same hits, order
-// not guaranteed - callers sort). Static mesh triangles are not tested.
-void Scene3D::Linecast(FrameBase* frame, HitCollection3D* hits, const FPVector3& start,
-                       const FPVector3& end, bool firstHitOnly, std::int32_t layerMask,
-                       std::int32_t options) {
-    const bool detailed = (options & ComputeDetailedInfo) != 0;
-    for (Entry3D& entry : _entries) {
-        if (entry.Collider3D == nullptr || ((layerMask >> entry.Collider3D->Layer()) & 1) == 0) continue;
-        const bool isStatic = !entry.IsDynamic();
-        const bool trigger = entry.IsTriggerCollider();
-        if (trigger && !(options & HitTriggers)) continue;
-        if (isStatic && !(options & HitStatics)) continue;
-        if (!isStatic && entry.HasDynamicBody && !(options & HitDynamics)) continue;
-        if (!isStatic && !entry.HasDynamicBody && !(options & HitKinematics)) continue;
-        Hit3D hit{};
-        if (NarrowChecks::LinecastBody::Check(_currentMap, &entry, start, end, detailed, hit)) {
-            hits->Add(hit, frame->get_Context());
-        }
+// 0x7d5442c - the broad phase of one query: the buckets its box spans are walked in the
+// query's direction; in each, the static and then the dynamic stabbing list is entered at
+// the snapshot covering the box's start on the sort axis, and every candidate that passes
+// the filters (enabled, layer, kind, first bucket of the pair, the other two axes) goes
+// through the narrow phase. A first-hit-only query stops after the first bucket in which a
+// hit point lies (all hits found so far are kept).
+void Scene3D::ResolveQuery(FrameBase* frame, HitCollection3D* hits, const Query3D& query, Entry3D* qEntry) {
+    const IntAABB& box = qEntry->AABB;
+    const auto bucketCount = static_cast<std::int64_t>(_buckets.size());
+    const auto bucketOf = [&](std::int32_t coordinate) {
+        return static_cast<std::int32_t>(std::clamp<std::int64_t>((coordinate + _worldOffsetRaw) / _bucketsSizeRaw, 0,
+                                                                  bucketCount - 1));
+    };
+    const std::int32_t low = bucketOf(_bucketOnX ? box.MinX : box.MinZ);
+    const std::int32_t high = bucketOf(_bucketOnX ? box.MaxX : box.MaxZ);
+    const std::int32_t increment = qEntry->BucketIncrement;
+    const bool forward = increment == 1;
+    qEntry->BucketStart = forward ? low : high;
+    qEntry->BucketEnd = forward ? high : low;
+    if (qEntry->BucketStart != qEntry->BucketEnd && forward == (qEntry->BucketStart > qEntry->BucketEnd)) {
+        return;
     }
-    if (firstHitOnly && hits->Count() > 1) {
-        hits->SortCastDistance();
-        hits->SetCount(1);
+    QueryBox q;
+    q.SortMin = _sortOnX ? box.MinX : box.MinZ;
+    q.SortMax = _sortOnX ? box.MaxX : box.MaxZ;
+    q.SecondaryMin = _sortOnX ? box.MinZ : box.MinX;
+    q.SecondaryMax = _sortOnX ? box.MaxZ : box.MaxX;
+    q.StabPoint = static_cast<std::int32_t>(static_cast<std::uint32_t>(q.SortMin) + 0x3fffffffu);
+    if (q.StabPoint < 0) {
+        return;
+    }
+    // A shape cast's hits lie up to its own extent further along.
+    std::int32_t hitBucketOffset = 0;
+    if (query.Type == QueryType::ShapeCast && query.FirstHitOnly) {
+        const std::int32_t extent = _bucketOnX ? box.MaxX - box.MinX : box.MaxZ - box.MinZ;
+        hitBucketOffset = increment * static_cast<std::int32_t>(extent / _bucketsSizeRaw) + increment;
+    }
+    const std::int32_t options = query.Options;
+    const bool detailed = (options & ComputeDetailedInfo) != 0;
+    // TODO(0x7d55a20, Quantum.Physics3D.Scene3D.TraverseSceneMeshLinecast), TODO(0x7d54f48,
+    // Quantum.Physics3D.Scene3D.TraverseSceneMeshShapeOverlap), TODO(0x7d55208,
+    // Quantum.Physics3D.Scene3D.TraverseSceneMeshShapeCast): with HitStatics the static
+    // triangle mesh is tested first; meshes are not reimplemented yet.
+    const std::int32_t hitsBefore = hits->Count();
+    std::int32_t bucketHitsStart = hitsBefore;
+    std::int32_t b = qEntry->BucketStart - increment;
+    do {
+        b += increment;
+        q.Bucket = b;
+        q.FirstBucket = b == qEntry->BucketStart;
+        Bucket3D& bucket = _buckets[static_cast<std::size_t>(b)];
+        if ((options & HitStatics) != 0 && bucket.StaticsStabbingList.Count >= 1) {
+            ScanQueryCandidates(frame, hits, query, qEntry, bucket.StaticsStabbingList, q, true, detailed);
+        }
+        if ((options & (HitDynamics | HitKinematics)) != 0 && bucket.DynamicsStabbingList.Count >= 1) {
+            ScanQueryCandidates(frame, hits, query, qEntry, bucket.DynamicsStabbingList, q, false, detailed);
+        }
+        if (query.FirstHitOnly && hits->Count() > hitsBefore) {
+            // The new hits remember their bucket (in the hit's sqrDistance slot, as the
+            // original); a hit inside this bucket ends the walk.
+            for (std::int32_t i = bucketHitsStart; i < hits->Count(); ++i) {
+                Hit3D& hit = hits->HitsBuffer()[i];
+                const FP::Raw coordinate = Raw(_bucketOnX ? hit.Point.X : hit.Point.Z);
+                hit.sqrDistance = static_cast<std::int32_t>(hitBucketOffset +
+                                                            static_cast<std::int32_t>((coordinate + _worldOffsetRaw) /
+                                                                                      _bucketsSizeRaw));
+            }
+            for (std::int32_t i = hitsBefore; i < hits->Count(); ++i) {
+                if (hits->HitsBuffer()[i].sqrDistance == b) {
+                    return;
+                }
+            }
+            bucketHitsStart = hits->Count();
+        }
+    } while (b != qEntry->BucketEnd);
+}
+
+// Part of ResolveQuery (0x7d5442c): the candidates of one stabbing list of a bucket. Lists
+// after the first only add the entries that opened after their snapshot (sorted by start),
+// so the scan ends at the first of those starting past the query box.
+void Scene3D::ScanQueryCandidates(FrameBase* frame, HitCollection3D* hits, const Query3D& query, Entry3D* qEntry,
+                                  const StabbingList& stabbing, const QueryBox& q, bool statics, bool detailed) {
+    const std::int32_t options = query.Options;
+    const std::int32_t first = stabbing.Stab(q.StabPoint);
+    for (std::int32_t j = first; j < stabbing.Count; ++j) {
+        const ActiveEntryList& list = stabbing.Lists[static_cast<std::size_t>(j)];
+        for (std::int32_t k = j == first ? 0 : list.CountUnsorted; k < list.Count; ++k) {
+            const ActiveEntry& item = list.Items[static_cast<std::size_t>(k)];
+            Entry3D* entry = &_entries[static_cast<std::size_t>(item.Index)];
+            // TODO: statics disabled through StaticCollidersState are skipped here.
+            const std::int32_t entryMin = _sortOnX ? entry->AABB.MinX : entry->AABB.MinZ;
+            const std::int32_t entryMax = _sortOnX ? entry->AABB.MaxX : entry->AABB.MaxZ;
+            if (k < list.CountUnsorted) {
+                if (q.SortMin > entryMax) continue;
+            } else {
+                if (entryMin > q.SortMax) return;
+                if (entryMax < q.SortMin) continue;
+            }
+            if (!statics && (!frame->Exists(entry->Ref) ||
+                             !frame->ComponentMask(entry->Ref.Index).IsSupersetOf(_minComponentSet) ||
+                             entry->Collider3D->_disabled != 0)) {
+                continue;
+            }
+            if (((query.LayerMask >> entry->Collider3D->Layer()) & 1) == 0) continue;
+            const bool trigger = entry->Collider3D->_isTrigger == 1;
+            if (statics || !entry->HasDynamicBody) {
+                if (!statics && (options & HitKinematics) == 0) continue;
+                if (trigger && (options & HitTriggers) == 0) continue;
+            } else if ((options & HitDynamics) == 0) {
+                continue;
+            }
+            // A pair spanning several buckets is tested in the first one the walk enters.
+            if (!q.FirstBucket &&
+                (qEntry->BucketIncrement == 1 ? entry->BucketStart : entry->BucketEnd) != q.Bucket) {
+                continue;
+            }
+            if (item.Max < q.SecondaryMin || item.Min > q.SecondaryMax) continue;
+            if (qEntry->AABB.MinY > entry->AABB.MaxY || entry->AABB.MinY > qEntry->AABB.MaxY) continue;
+            ResolveQueryNarrow(frame, hits, query, qEntry, entry, detailed);
+        }
     }
 }
 
-// TODO(0x7d56d18, Quantum.Physics3D.Scene3D.OverlapShape): brute force over the entries
-// with the narrow checks (sphere/box query shapes); the original goes through the broad
-// phase and GJK for other pairs.
-void Scene3D::OverlapShape(FrameBase* frame, HitCollection3D* hits, const FPVector3& pos,
-                           const FPQuaternion& rot, const Shape3D& shape, std::int32_t layerMask,
-                           std::int32_t options) {
-    Entry3D query{};
-    PhysicsCollider3D collider{};
-    collider.Shape = shape;
-    query.Collider3D = &collider;
-    query.Shape = &collider.Shape;
-    query.Index = -1;
-    NarrowData3D::Init(&query.Narrow, &query, pos, rot);
-    const bool detailed = (options & ComputeDetailedInfo) != 0;
-    for (Entry3D& entry : _entries) {
-        if (entry.Collider3D == nullptr || ((layerMask >> entry.Collider3D->Layer()) & 1) == 0) continue;
-        if (entry.IsTriggerCollider() && !(options & HitTriggers)) continue;
-        if (!entry.IsDynamic() && !(options & HitStatics)) continue;
-        CollisionManifold3D m{};
-        CollisionManifoldInfo3D info{&m, &query, &entry, nullptr};
-        if (NarrowChecks::CheckShapes(&info, detailed)) {
-            Hit3D hit{};
-            hit._staticColliderIndex = entry.StaticColliderIndex;
-            if (entry.IsDynamic()) {
-                hit._entity = HitEntityRef{entry.Ref.Index, entry.Ref.Version};
-            } else {
-                hit._mapGuid = _currentMap;
-            }
-            hit.SetIsTrigger(entry.IsTriggerCollider());
-            hit.ShapeUserTag = entry.Shape->UserTag;
-            hit.OverlapPenetration = m.Penetration;
-            hit.Normal = m.Normal;
-            if (m._contactPointsCount > 0) hit.Point = m._contactPoints[0];
+// 0x7d55ef4 - the narrow phase of one query against one entry, adding the hit.
+void Scene3D::ResolveQueryNarrow(FrameBase* frame, HitCollection3D* hits, const Query3D& query, Entry3D* qEntry,
+                                 Entry3D* entry, bool detailed) {
+    switch (query.Type) {
+    case QueryType::Linecast: {
+        // TODO: mesh triangles use TriangleCCW.RayIntersectsTriangle.
+        Hit3D hit{};
+        if (NarrowChecks::LinecastBody::Check(_currentMap, entry, query.Transform.Position, query.End, detailed, hit)) {
             hits->Add(hit, frame->get_Context());
         }
+        return;
     }
+    case QueryType::ShapeOverlap: {
+        CollisionManifold3D& m = _tls.Manifold;
+        m = CollisionManifold3D{};
+        m._m._entryIdxA = qEntry->Index;
+        m._m._entryIdxB = entry->Index;
+        m._m._triIdx = -1;
+        CollisionManifoldInfo3D info{&m, qEntry, entry, nullptr};
+        if (!NarrowChecks::Check(_tls.Narrow, CachedSettings.CCDSettingsValue, _deltaTime, &info, detailed)) {
+            return;
+        }
+        Hit3D hit{};
+        hit._staticColliderIndex = entry->StaticColliderIndex;
+        if (entry->StaticColliderIndex >= 0) {
+            hit._mapGuid = _currentMap;
+        } else {
+            hit._entity = HitEntityRef{entry->Ref.Index, entry->Ref.Version};
+        }
+        hit.SetIsTrigger(entry->Collider3D->_isTrigger == 1);
+        hit.ShapeUserTag = entry->Shape->UserTag;
+        if (detailed) {
+            hit.Point = CollisionManifold3D::GetAverageContactPoint(&m);
+            hit.Normal = (m._flags & CollisionManifold3D::NormalInverted) != 0 ? -m.Normal : m.Normal;
+            hit.OverlapPenetration = m.Penetration;
+        }
+        hits->Add(hit, frame->get_Context());
+        return;
+    }
+    case QueryType::ShapeCast:
+        // TODO(0x7d55ef4, Quantum.Physics3D.Scene3D.ResolveQueryNarrow): shape casts
+        // (LinecastBody.RaySphereProjection for spheres, Gjk3D.ShapeCastManifold otherwise).
+        return;
+    }
+}
+
+// 0x7d56464 - the query entry spans the segment; it walks the buckets from the start.
+void Scene3D::Linecast(FrameBase* frame, HitCollection3D* hits, const FPVector3& start, const FPVector3& end,
+                       bool firstHitOnly, std::int32_t layerMask, std::int32_t options) {
+    Query3D query;
+    query.Type = QueryType::Linecast;
+    query.FirstHitOnly = firstHitOnly;
+    query.Transform.Position = start;
+    query.End = end;
+    query.Options = options;
+    query.LayerMask = layerMask;
+    hits->Reset();
+    Entry3D* qEntry = &_tls.Entry;
+    qEntry->StaticColliderIndex = -1;
+    InitLinecastEntry(query, qEntry);
+    ResolveQuery(frame, hits, query, qEntry);
+}
+
+// 0x7d56594 - the segment's box (raw values truncated to 32 bits) and the walk direction on
+// the bucket axis.
+void Scene3D::InitLinecastEntry(const Query3D& query, Entry3D* qEntry) const {
+    const FPVector3& start = query.Transform.Position;
+    const FPVector3& end = query.End;
+    qEntry->StaticColliderIndex = -1;
+    const auto lo = [](FP a, FP b) { return static_cast<std::int32_t>(Raw(a < b ? a : b)); };
+    const auto hi = [](FP a, FP b) { return static_cast<std::int32_t>(Raw(a > b ? a : b)); };
+    qEntry->AABB.MinX = lo(start.X, end.X);
+    qEntry->AABB.MaxX = hi(start.X, end.X);
+    qEntry->AABB.MinY = lo(start.Y, end.Y);
+    qEntry->AABB.MaxY = hi(start.Y, end.Y);
+    qEntry->AABB.MinZ = lo(start.Z, end.Z);
+    qEntry->AABB.MaxZ = hi(start.Z, end.Z);
+    const bool ascending = _bucketOnX ? start.X < end.X : start.Z < end.Z;
+    qEntry->BucketIncrement = ascending ? 1 : -1;
+}
+
+// 0x7d56d18 - the query entry carries the shape at the pose (narrow data and box).
+void Scene3D::OverlapShape(FrameBase* frame, HitCollection3D* hits, const FPVector3& pos, const FPQuaternion& rot,
+                           const Shape3D& shape, std::int32_t layerMask, std::int32_t options) {
+    Query3D query;
+    query.Type = QueryType::ShapeOverlap;
+    query.Transform.Position = pos;
+    query.Transform.Rotation = rot;
+    query.Shape = shape;
+    query.Options = options;
+    query.LayerMask = layerMask;
+    hits->Reset();
+    Entry3D* qEntry = &_tls.Entry;
+    qEntry->StaticColliderIndex = -1;
+    if (shape.Type() == Shape3DType::Compound) {
+        // TODO(0x7d56eb4, Quantum.Physics3D.Scene3D.OverlapCompoundShape): one query per
+        // child shape; compound shapes are not reimplemented yet.
+        return;
+    }
+    InitShapeOverlapEntry(query, qEntry);
+    ResolveQuery(frame, hits, query, qEntry);
+}
+
+// 0x7d57288
+void Scene3D::InitShapeOverlapEntry(const Query3D& query, Entry3D* qEntry) {
+    qEntry->StaticColliderIndex = -1;
+    _tls.Collider3D = PhysicsCollider3D{};
+    _tls.Collider3D.Shape = query.Shape;
+    _tls.Transform3D = query.Transform;
+    qEntry->Collider3D = &_tls.Collider3D;
+    qEntry->Shape = &_tls.Collider3D.Shape;
+    qEntry->Transform3D = &_tls.Transform3D;
+    Entry3D::InitNarrowData(qEntry, &_tls.Transform3D.Position, &_tls.Transform3D.Rotation);
+    Entry3D::InitBroadAabb(qEntry, &_tls.Transform3D.Position, &_tls.Transform3D.Rotation, {});
+    qEntry->BucketIncrement = 1;
 }
 
 } // namespace Quantum::Physics3D
