@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <limits>
 
 namespace Quantum::Physics3D {
 
@@ -207,12 +208,6 @@ void Island3D::Reset() {
     PositionConstraintsSolved = false;
     CollisionManifolds.clear();
     Entries.clear();
-}
-
-// 0x7d7b294
-void Island3D::AddEntry(Entry3D* entry) {
-    Entries.push_back(entry);
-    entry->Island = this;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -447,7 +442,8 @@ void Scene3D::ResetBucketsAndTls() {
 
 // 0x7d5ba7c
 void Scene3D::CreateEntries(FrameBase* frame) {
-    const ComponentSet minComponents = ComponentSet::Create<::Quantum::Transform3D, PhysicsCollider3D>();
+    _minComponentSet = ComponentSet::Create<::Quantum::Transform3D, PhysicsCollider3D>();
+    const ComponentSet& minComponents = _minComponentSet;
     ComponentBlockIterator<PhysicsCollider3D> blocks = frame->GetComponentBlockIterator<PhysicsCollider3D>();
     EntityRef* entities = nullptr;
     PhysicsCollider3D* colliders = nullptr;
@@ -811,268 +807,668 @@ void Scene3D::TaskNarrowPhase() {
 // Callbacks
 
 namespace {
+constexpr std::int32_t DynamicCollisionEnterExit = 0x6;
+constexpr std::int32_t StaticCollisionEnterExit = 0x30;
+constexpr std::int32_t DynamicTriggerEnterExit = 0x180;
+constexpr std::int32_t StaticTriggerEnterExit = 0xc00;
+
+bool Wants(const PhysicsCallbacksData* callbacks, std::int32_t mask) {
+    return (static_cast<std::int32_t>(callbacks->Flags) & mask) != 0;
+}
 bool Wants(const PhysicsCallbacksData* callbacks, CallbackFlags flag) {
-    return callbacks != nullptr && HasFlag(callbacks->Flags, flag);
+    return Wants(callbacks, static_cast<std::int32_t>(flag));
+}
+
+// Static colliders are recorded in the callbacks list with the map's guid in the entity
+// slot (the original stores the AssetRefMap there).
+EntityRef MapAsListEntry(const Map* map) {
+    const auto raw = static_cast<std::uint64_t>(map->Guid.Value);
+    EntityRef ref;
+    ref.Index = static_cast<std::int32_t>(static_cast<std::uint32_t>(raw));
+    ref.Version = static_cast<std::int32_t>(static_cast<std::uint32_t>(raw >> 32));
+    return ref;
+}
+
+// The entity behind an entry no longer has what the scene needs: it is gone, lost its
+// transform or collider, or the collider was disabled.
+bool EntityLost(const FrameBase* f, const Entry3D* entry, const ComponentSet& minComponents) {
+    return !f->Exists(entry->Ref) || !f->ComponentMask(entry->Ref.Index).IsSupersetOf(minComponents) ||
+           entry->Collider3D->_disabled != 0;
+}
+
+// The entry's cached callbacks pointer follows a callbacks component added or removed by a
+// callback.
+void RefreshCallbacks(FrameBase* f, Entry3D* entry) {
+    if (!entry->Ref.IsValid()) {
+        return; // static colliders never have callbacks
+    }
+    const bool has = f->ComponentMask(entry->Ref.Index).IsSet(ComponentTypeId<PhysicsCallbacks3D>::Id);
+    if (has != (entry->Callbacks != nullptr)) {
+        PhysicsCallbacks3D* callbacks = nullptr;
+        f->TryGetPointer<PhysicsCallbacks3D>(entry->Ref, callbacks);
+        entry->Callbacks = callbacks;
+    }
+}
+
+// An enabled, non-kinematic body on the entity.
+bool HasDynamicBody(FrameBase* f, EntityRef entity) {
+    PhysicsBody3D* body = nullptr;
+    return entity.IsValid() && f->TryGetPointer<PhysicsBody3D>(entity, body) &&
+           body->Status != PhysicsBodyStatus::None && !body->GetIsKinematic();
+}
+
+const Map* MapOf(FrameBase* frame, AssetGuid guid) {
+    return guid.IsValid() ? frame->FindAsset<Map>(guid) : frame->get_Map();
 }
 } // namespace
 
-// 0x7d60450 - for each side with callbacks: Enter the first time the pair is seen (when the
-// entity tracks enter/exit), every step OnTrigger; the pair is (re)marked in the list.
-void Scene3D::HandleDynamicTrigger(FrameBase* f, ICollisionCallbacks3D* callbacks,
-                                   ManifoldData3D* /*manifold*/, Entry3D* entryA, Entry3D* entryB) {
-    const auto side = [&](Entry3D* self, Entry3D* other) {
-        PhysicsCallbacks3D* cb = self->Callbacks;
-        if (cb == nullptr || cb->Flags == CallbackFlags::None) {
-            return;
+// 0x7d624e8 - after a callback ran, a trigger pair is dropped when either entity lost its
+// collider (the entry is ignored from then on) or when the pair no longer has exactly one
+// trigger; otherwise the entries' callbacks pointers are refreshed.
+bool Scene3D::CheckIgnoreTriggerManifold(FrameBase* frame, ManifoldData3D* m, Entry3D* entryA,
+                                         Entry3D* entryB) {
+    for (Entry3D* entry : {entryA, entryB}) {
+        if (entry->Ref.IsValid() && EntityLost(frame, entry, _minComponentSet)) {
+            entry->Ignore = true;
         }
-        const TriggerInfo3D info{self->Ref, other->Ref, false, -1};
-        const bool tracks = Wants(cb, CallbackFlags::OnDynamicTriggerEnter) ||
-                            Wants(cb, CallbackFlags::OnDynamicTriggerExit);
-        if (tracks) {
-            std::int32_t index = 0;
-            if (cb->IsCollidingWith(f, other->Ref, index)) {
-                cb->SetEntryIsActive(f, index, true);
-            } else {
-                if (Wants(cb, CallbackFlags::OnDynamicTriggerEnter)) {
-                    callbacks->OnTriggerEnter3D(f, info);
-                    _callbacksWereCalled = true;
-                }
-                cb->AddCollision(f, other->Ref);
+    }
+    if (entryA->Ignore || entryB->Ignore ||
+        (entryA->Collider3D->_isTrigger == 1) == (entryB->Collider3D->_isTrigger == 1)) {
+        m->SetIgnore(true);
+        return true;
+    }
+    RefreshCallbacks(frame, entryA);
+    RefreshCallbacks(frame, entryB);
+    return false;
+}
+
+// 0x7d6279c - as the trigger check, but a collider that became a trigger also ignores its
+// entry, and the pair needs a dynamic (enabled, non-kinematic) body on one side.
+bool Scene3D::CheckIgnoreCollisionManifold(FrameBase* frame, ManifoldData3D* m, Entry3D* entryA,
+                                           Entry3D* entryB) {
+    for (Entry3D* entry : {entryA, entryB}) {
+        if (entry->Ref.IsValid() &&
+            (EntityLost(frame, entry, _minComponentSet) || entry->Collider3D->_isTrigger == 1)) {
+            entry->Ignore = true;
+        }
+    }
+    if (entryA->Ignore || entryB->Ignore ||
+        (!HasDynamicBody(frame, entryA->Ref) && !HasDynamicBody(frame, entryB->Ref))) {
+        m->SetIgnore(true);
+        return true;
+    }
+    RefreshCallbacks(frame, entryA);
+    RefreshCallbacks(frame, entryB);
+    return false;
+}
+
+// 0x7d60450 - each side with callbacks gets Enter the first time the pair is seen (when it
+// tracks enter/exit) and the stay callback every step. Both sides are called before either
+// list is updated, and the lists are left alone when a callback made the pair ignored.
+void Scene3D::HandleDynamicTrigger(FrameBase* f, ICollisionCallbacks3D* callbacks,
+                                   ManifoldData3D* manifold, Entry3D* entryA, Entry3D* entryB) {
+    struct Side {
+        PhysicsCallbacks3D* callbacks = nullptr;
+        bool tracks = false;
+        bool known = false;
+        std::int32_t index = 0;
+    };
+    const auto raise = [&](Entry3D* self, Entry3D* other, bool inverse) {
+        Side side;
+        side.callbacks = self->Callbacks;
+        if (side.callbacks == nullptr || side.callbacks->Flags == CallbackFlags::None) {
+            return side;
+        }
+        const TriggerInfo3D info(manifold, entryA, entryB, nullptr, false, inverse);
+        side.tracks = Wants(side.callbacks, DynamicTriggerEnterExit);
+        if (side.tracks) {
+            if (side.callbacks->IsCollidingWith(f, other->Ref, side.index)) {
+                side.known = true;
+            } else if (Wants(side.callbacks, CallbackFlags::OnDynamicTriggerEnter)) {
+                callbacks->OnTriggerEnter3D(f, info);
+                _callbacksWereCalled = true;
             }
         }
-        if (Wants(cb, CallbackFlags::OnDynamicTrigger)) {
+        if (Wants(side.callbacks, CallbackFlags::OnDynamicTrigger)) {
             callbacks->OnTrigger3D(f, info);
             _callbacksWereCalled = true;
         }
+        return side;
     };
-    side(entryA, entryB);
-    side(entryB, entryA);
+    const Side a = raise(entryA, entryB, false);
+    const Side b = raise(entryB, entryA, true);
+    if (manifold->GetIgnore()) {
+        return;
+    }
+    const auto record = [&](const Side& side, const Entry3D* other) {
+        if (!side.tracks || !Wants(side.callbacks, DynamicTriggerEnterExit)) {
+            return;
+        }
+        if (side.known) {
+            side.callbacks->SetEntryIsActive(f, side.index, true);
+        } else {
+            side.callbacks->AddCollision(f, other->Ref);
+        }
+    };
+    record(a, entryB);
+    record(b, entryA);
 }
 
-// TODO(0x7d60934, Quantum.Physics3D.Scene3D.HandleStaticTrigger): written after the
-// dynamic version (the static entry has no callbacks; the list entry carries the static
-// collider index and the trigger flag); not checked instruction by instruction.
-void Scene3D::HandleStaticTrigger(FrameBase* f, ICollisionCallbacks3D* callbacks,
-                                  ManifoldData3D* /*manifold*/, Entry3D* entryA, Entry3D* entryB) {
-    Entry3D* self = entryA->IsDynamic() ? entryA : entryB;
-    Entry3D* other = self == entryA ? entryB : entryA;
+// 0x7d60934 - only the entity side can have callbacks; the list entry identifies the static
+// collider by the map and its index.
+void Scene3D::HandleStaticTrigger(FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
+                                  ManifoldData3D* manifold, Entry3D* entryA, Entry3D* entryB) {
+    const bool entityIsA = entryA->IsDynamic();
+    Entry3D* self = entityIsA ? entryA : entryB;
+    const Entry3D* other = entityIsA ? entryB : entryA;
     PhysicsCallbacks3D* cb = self->Callbacks;
     if (cb == nullptr || cb->Flags == CallbackFlags::None) {
         return;
     }
-    const TriggerInfo3D info{self->Ref, EntityRef{}, true, other->StaticColliderIndex};
-    const bool tracks = Wants(cb, CallbackFlags::OnStaticTriggerEnter) ||
-                        Wants(cb, CallbackFlags::OnStaticTriggerExit);
+    const TriggerInfo3D info(manifold, entryA, entryB, map, true, !entityIsA);
+    const bool tracks = Wants(cb, StaticTriggerEnterExit);
+    bool known = false;
+    std::int32_t index = 0;
     if (tracks) {
-        std::int32_t index = 0;
-        if (cb->IsCollidingWith(f, EntityRef{}, other->StaticColliderIndex, index)) {
-            cb->SetEntryIsActive(f, index, true);
-        } else {
-            if (Wants(cb, CallbackFlags::OnStaticTriggerEnter)) {
-                callbacks->OnTriggerEnter3D(f, info);
-                _callbacksWereCalled = true;
-            }
-            cb->AddCollision(f, EntityRef{}, other->StaticColliderIndex, true);
+        if (cb->IsCollidingWith(f, MapAsListEntry(map), other->StaticColliderIndex, index)) {
+            known = true;
+        } else if (Wants(cb, CallbackFlags::OnStaticTriggerEnter)) {
+            callbacks->OnTriggerEnter3D(f, info);
+            _callbacksWereCalled = true;
         }
     }
     if (Wants(cb, CallbackFlags::OnStaticTrigger)) {
         callbacks->OnTrigger3D(f, info);
         _callbacksWereCalled = true;
     }
+    if (!tracks || manifold->GetIgnore() || !Wants(cb, StaticTriggerEnterExit)) {
+        return;
+    }
+    if (known) {
+        cb->SetEntryIsActive(f, index, true);
+    } else {
+        cb->AddCollision(f, MapAsListEntry(map), other->StaticColliderIndex,
+                         other->Collider3D->_isTrigger == 1);
+    }
 }
 
-// TODO(0x7d60f3c, Quantum.Physics3D.Scene3D.HandleDynamicCollision): same pattern as the
-// dynamic trigger with the collision flags; the contact info fields are reduced.
+// 0x7d60f3c - the dynamic trigger's pattern with the collision flags.
 void Scene3D::HandleDynamicCollision(FrameBase* f, ICollisionCallbacks3D* callbacks,
                                      CollisionManifold3D* manifold, Entry3D* entryA, Entry3D* entryB) {
-    const auto side = [&](Entry3D* self, Entry3D* other, bool inverse) {
-        PhysicsCallbacks3D* cb = self->Callbacks;
-        if (cb == nullptr || cb->Flags == CallbackFlags::None) {
-            return;
+    struct Side {
+        PhysicsCallbacks3D* callbacks = nullptr;
+        bool tracks = false;
+        bool known = false;
+        std::int32_t index = 0;
+    };
+    const auto raise = [&](Entry3D* self, Entry3D* other, bool inverse) {
+        Side side;
+        side.callbacks = self->Callbacks;
+        if (side.callbacks == nullptr || side.callbacks->Flags == CallbackFlags::None) {
+            return side;
         }
-        const CollisionInfo3D info{self->Ref, other->Ref, false, -1,
-                                   inverse ? -manifold->Normal : manifold->Normal, manifold};
-        if (Wants(cb, CallbackFlags::OnDynamicCollisionEnter) || Wants(cb, CallbackFlags::OnDynamicCollisionExit)) {
-            std::int32_t index = 0;
-            if (cb->IsCollidingWith(f, other->Ref, index)) {
-                cb->SetEntryIsActive(f, index, true);
-            } else {
-                if (Wants(cb, CallbackFlags::OnDynamicCollisionEnter)) {
-                    callbacks->OnCollisionEnter3D(f, info);
-                    _callbacksWereCalled = true;
-                }
-                cb->AddCollision(f, other->Ref);
+        const CollisionInfo3D info(manifold, entryA, entryB, nullptr, nullptr, false, inverse, false,
+                                   nullptr);
+        side.tracks = Wants(side.callbacks, DynamicCollisionEnterExit);
+        if (side.tracks) {
+            if (side.callbacks->IsCollidingWith(f, other->Ref, side.index)) {
+                side.known = true;
+            } else if (Wants(side.callbacks, CallbackFlags::OnDynamicCollisionEnter)) {
+                callbacks->OnCollisionEnter3D(f, info);
+                _callbacksWereCalled = true;
             }
         }
-        if (Wants(cb, CallbackFlags::OnDynamicCollision)) {
+        if (Wants(side.callbacks, CallbackFlags::OnDynamicCollision)) {
             callbacks->OnCollision3D(f, info);
             _callbacksWereCalled = true;
         }
+        return side;
     };
-    side(entryA, entryB, false);
-    side(entryB, entryA, true);
+    const Side a = raise(entryA, entryB, false);
+    const Side b = raise(entryB, entryA, true);
+    if (manifold->GetIgnore()) {
+        return;
+    }
+    const auto record = [&](const Side& side, const Entry3D* other) {
+        if (!side.tracks || !Wants(side.callbacks, DynamicCollisionEnterExit)) {
+            return;
+        }
+        if (side.known) {
+            side.callbacks->SetEntryIsActive(f, side.index, true);
+        } else {
+            side.callbacks->AddCollision(f, other->Ref);
+        }
+    };
+    record(a, entryB);
+    record(b, entryA);
 }
 
-// TODO(0x7d61488, Quantum.Physics3D.Scene3D.HandleStaticCollision): as HandleStaticTrigger
-// with the collision flags; not checked instruction by instruction.
-void Scene3D::HandleStaticCollision(FrameBase* f, ICollisionCallbacks3D* callbacks,
+// 0x7d61488 - the static trigger's pattern with the collision flags.
+void Scene3D::HandleStaticCollision(FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
                                     CollisionManifold3D* manifold, Entry3D* entryA, Entry3D* entryB) {
-    const bool selfIsA = entryA->IsDynamic();
-    Entry3D* self = selfIsA ? entryA : entryB;
-    Entry3D* other = selfIsA ? entryB : entryA;
+    const bool entityIsA = entryA->IsDynamic();
+    Entry3D* self = entityIsA ? entryA : entryB;
+    const Entry3D* other = entityIsA ? entryB : entryA;
     PhysicsCallbacks3D* cb = self->Callbacks;
     if (cb == nullptr || cb->Flags == CallbackFlags::None) {
         return;
     }
-    const CollisionInfo3D info{self->Ref, EntityRef{}, true, other->StaticColliderIndex,
-                               selfIsA ? manifold->Normal : -manifold->Normal, manifold};
-    if (Wants(cb, CallbackFlags::OnStaticCollisionEnter) || Wants(cb, CallbackFlags::OnStaticCollisionExit)) {
-        std::int32_t index = 0;
-        if (cb->IsCollidingWith(f, EntityRef{}, other->StaticColliderIndex, index)) {
-            cb->SetEntryIsActive(f, index, true);
-        } else {
-            if (Wants(cb, CallbackFlags::OnStaticCollisionEnter)) {
-                callbacks->OnCollisionEnter3D(f, info);
-                _callbacksWereCalled = true;
-            }
-            cb->AddCollision(f, EntityRef{}, other->StaticColliderIndex, false);
+    const CollisionInfo3D info(manifold, entryA, entryB, nullptr, map, true, !entityIsA, false, nullptr);
+    const bool tracks = Wants(cb, StaticCollisionEnterExit);
+    bool known = false;
+    std::int32_t index = 0;
+    if (tracks) {
+        if (cb->IsCollidingWith(f, MapAsListEntry(map), other->StaticColliderIndex, index)) {
+            known = true;
+        } else if (Wants(cb, CallbackFlags::OnStaticCollisionEnter)) {
+            callbacks->OnCollisionEnter3D(f, info);
+            _callbacksWereCalled = true;
         }
     }
     if (Wants(cb, CallbackFlags::OnStaticCollision)) {
         callbacks->OnCollision3D(f, info);
         _callbacksWereCalled = true;
     }
-}
-
-// Second half of Task_Callbacks: list entries not seen this step raise their exit callback
-// and are dropped; the rest are reset for the next step.
-void Scene3D::HandleExits(FrameBase* f, ICollisionCallbacks3D* callbacks) {
-    for (std::size_t i = static_cast<std::size_t>(_staticComponentsCount); i < _entries.size(); ++i) {
-        Entry3D& entry = _entries[i];
-        PhysicsCallbacks3D* cb = entry.Callbacks;
-        if (cb == nullptr || cb->ListCount() == 0) {
-            continue;
-        }
-        PhysicsCallbacksEntry* items = cb->Entries(f);
-        std::int32_t count = cb->ListCount();
-        for (std::int32_t k = 0; k < count;) {
-            PhysicsCallbacksEntry& item = items[k];
-            if ((item._flags & PhysicsCallbacksEntry::IsActive) != 0) {
-                item._flags &= ~PhysicsCallbacksEntry::IsActive;
-                ++k;
-                continue;
-            }
-            const bool isStatic = (item._flags & PhysicsCallbacksEntry::IsStatic) != 0;
-            const bool isTrigger = (item._flags & PhysicsCallbacksEntry::IsTrigger) != 0 ||
-                                   (!isStatic && entry.Collider3D->IsTrigger());
-            const ExitInfo3D info{entry.Ref, item.Other, isStatic, isStatic ? item.StaticColliderIndex : -1};
-            const CallbackFlags flag = isStatic ? (isTrigger ? CallbackFlags::OnStaticTriggerExit
-                                                             : CallbackFlags::OnStaticCollisionExit)
-                                                : (isTrigger ? CallbackFlags::OnDynamicTriggerExit
-                                                             : CallbackFlags::OnDynamicCollisionExit);
-            if (HasFlag(cb->Flags, flag)) {
-                if (isTrigger) {
-                    callbacks->OnTriggerExit3D(f, info);
-                } else {
-                    callbacks->OnCollisionExit3D(f, info);
-                }
-                _callbacksWereCalled = true;
-            }
-            items[k] = items[count - 1];
-            --count;
-        }
-        cb->SetListCount(count);
+    if (!tracks || manifold->GetIgnore() || !Wants(cb, StaticCollisionEnterExit)) {
+        return;
+    }
+    if (known) {
+        cb->SetEntryIsActive(f, index, true);
+    } else {
+        cb->AddCollision(f, MapAsListEntry(map), other->StaticColliderIndex, false);
     }
 }
 
-// TODO(0x7d617a0, Quantum.Physics3D.Scene3D.Task_Callbacks): per bucket, collision
-// manifolds (static or dynamic by the manifold's IsDynamic flag), then trigger manifolds,
-// then the exit pass. Missing: mesh manifolds, the CheckIgnore* component filters (pairs
-// whose entities lost their components during callbacks) and CCD callbacks.
+// Part of the exit pass of Task_Callbacks (0x7d617a0) for one list item no longer seen.
+bool Scene3D::RaiseExit(FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
+                        const Entry3D& entry, const PhysicsCallbacksEntry& item) {
+    constexpr std::int32_t AnyExit = 0x924;
+    constexpr std::int32_t DynamicExits = 0x104;
+    constexpr std::int32_t StaticExits = 0x820;
+    const PhysicsCallbacks3D* cb = entry.Callbacks;
+    const std::int32_t flags = static_cast<std::int32_t>(cb->Flags);
+    if ((flags & AnyExit) == 0) {
+        return false;
+    }
+    const bool selfTrigger = entry.Collider3D->_isTrigger == 1;
+    if ((item._flags & PhysicsCallbacksEntry::IsStatic) != 0) {
+        if ((flags & StaticExits) == 0 || static_cast<std::int64_t>(item.Other.Raw()) != _currentMap.Value) {
+            return false;
+        }
+        const bool itemTrigger = (item._flags & PhysicsCallbacksEntry::IsTrigger) != 0;
+        if (itemTrigger && selfTrigger) {
+            return false;
+        }
+        if (itemTrigger != selfTrigger) {
+            if (HasFlag(cb->Flags, CallbackFlags::OnStaticTriggerExit)) {
+                callbacks->OnTriggerExit3D(f, ExitInfo3D(map, entry.Ref, item.StaticColliderIndex));
+                _callbacksWereCalled = true;
+            }
+        } else if (HasFlag(cb->Flags, CallbackFlags::OnStaticCollisionExit) && HasDynamicBody(f, entry.Ref)) {
+            callbacks->OnCollisionExit3D(f, ExitInfo3D(map, entry.Ref, item.StaticColliderIndex));
+            _callbacksWereCalled = true;
+        }
+        return false;
+    }
+    if ((flags & DynamicExits) == 0 || !f->Exists(item.Other) ||
+        !f->ComponentMask(item.Other.Index).IsSupersetOf(_minComponentSet)) {
+        return false;
+    }
+    const PhysicsCollider3D* otherCollider = f->GetPointer<PhysicsCollider3D>(item.Other);
+    if (otherCollider->_disabled != 0) {
+        return false;
+    }
+    const bool otherTrigger = otherCollider->_isTrigger == 1;
+    if (selfTrigger && otherTrigger) {
+        return false;
+    }
+    if (selfTrigger != otherTrigger) {
+        if (HasFlag(cb->Flags, CallbackFlags::OnDynamicTriggerExit)) {
+            callbacks->OnTriggerExit3D(f, ExitInfo3D(map, entry.Ref, item.Other));
+            _callbacksWereCalled = true;
+        }
+        return false;
+    }
+    if (!HasFlag(cb->Flags, CallbackFlags::OnDynamicCollisionExit)) {
+        return false;
+    }
+    PhysicsBody3D* otherBody = nullptr;
+    f->TryGetPointer<PhysicsBody3D>(item.Other, otherBody);
+    const bool otherDynamic = otherBody != nullptr && otherBody->Status != PhysicsBodyStatus::None &&
+                              !otherBody->GetIsKinematic();
+    if (!otherDynamic && !HasDynamicBody(f, entry.Ref)) {
+        return false;
+    }
+    if (otherBody != nullptr && otherBody->Status == PhysicsBodyStatus::Asleep) {
+        return true;
+    }
+    callbacks->OnCollisionExit3D(f, ExitInfo3D(map, entry.Ref, item.Other));
+    _callbacksWereCalled = true;
+    return false;
+}
+
+// Last part of Task_Callbacks (0x7d617a0): every awake entity entry with a callbacks list
+// walks it. Pairs seen this step are reset for the next one (except against a sleeping
+// body, which stays marked as seen); the others raise their exit callback when it is still
+// meaningful (the other entity alive with an enabled collider, a trigger exit for exactly
+// one trigger, a collision exit when a dynamic body is involved) and are removed by moving
+// the last item into their place.
+void Scene3D::HandleExits(FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map) {
+    for (std::size_t i = static_cast<std::size_t>(_staticComponentsCount + _queriesCount - 1);
+         i < _entries.size(); ++i) {
+        Entry3D& entry = _entries[i];
+        PhysicsCallbacks3D* cb = entry.Callbacks;
+        if (cb == nullptr || cb->_listCount == 0 || entry._compoundRootIndexPlusOne >= 1) {
+            continue;
+        }
+        if (entry.Body3D != nullptr && entry.Body3D->Status == PhysicsBodyStatus::Asleep) {
+            continue;
+        }
+        PhysicsCallbacksEntry* items = cb->Entries(f);
+        std::int32_t k = 0;
+        while (k < cb->_listCount) {
+            if (_callbacksWereCalled &&
+                (!f->ComponentMask(entry.Ref.Index).IsSupersetOf(_minComponentSet) ||
+                 entry.Collider3D->_disabled != 0)) {
+                // The entity itself lost its collider: forget everything, no exits.
+                cb->_listCount = 0;
+                entry.Ignore = true;
+                break;
+            }
+            PhysicsCallbacksEntry& item = items[k];
+            if ((item._flags & PhysicsCallbacksEntry::IsActive) != 0) {
+                PhysicsBody3D* otherBody = nullptr;
+                const bool otherAsleep = f->TryGetPointer<PhysicsBody3D>(item.Other, otherBody) &&
+                                         otherBody->Status == PhysicsBodyStatus::Asleep;
+                if (!otherAsleep) {
+                    item._flags &= ~PhysicsCallbacksEntry::IsActive;
+                }
+                ++k;
+                continue;
+            }
+            // Raises the exit callback if it applies; true when the pair must stay listed
+            // (a collision with a body that fell asleep).
+            const bool keepActive = RaiseExit(f, callbacks, map, entry, item);
+            if (keepActive) {
+                item._flags |= PhysicsCallbacksEntry::IsActive;
+                ++k;
+                continue;
+            }
+            // Removed: the last item takes this slot, which is examined next.
+            const std::int32_t last = cb->_listCount - 1;
+            if (last >= 0) {
+                cb->_listCount = last;
+                if (k < last) {
+                    items[k] = items[last];
+                }
+            }
+        }
+    }
+}
+
+// 0x7d617a0 - per bucket: collision manifolds (dynamic or static pair), then the trigger
+// manifolds; once any callback ran, each further pair is first checked against what the
+// callbacks may have changed. CCD pairs are raised by Task_CcdCallbacks instead.
 void Scene3D::TaskCallbacks(FrameBase* frame, ICollisionCallbacks3D* callbacks) {
     if (callbacks == nullptr) {
         return;
     }
+    const Map* map = MapOf(frame, _currentMap);
+    constexpr std::int32_t Skip = ManifoldData3D::Ignore | ManifoldData3D::UsesCcd;
     for (Bucket3D& bucket : _buckets) {
         for (std::size_t i = 1; i < bucket.CollisionManifolds.size(); ++i) {
             CollisionManifold3D* m = &bucket.CollisionManifolds[i];
-            if (m->GetIgnore()) continue;
+            if ((m->_m._flags & Skip) != 0) {
+                continue;
+            }
             Entry3D* a = &_entries[static_cast<std::size_t>(m->_m._entryIdxA)];
             Entry3D* b = &_entries[static_cast<std::size_t>(m->_m._entryIdxB)];
+            if (_callbacksWereCalled && CheckIgnoreCollisionManifold(frame, &m->_m, a, b)) {
+                continue;
+            }
             if (m->_m.GetIsDynamic()) {
                 HandleDynamicCollision(frame, callbacks, m, a, b);
             } else {
-                HandleStaticCollision(frame, callbacks, m, a, b);
+                HandleStaticCollision(frame, callbacks, map, m, a, b);
             }
         }
+        // TODO(0x7d60c38, Quantum.Physics3D.Scene3D.HandleMeshCollision) and
+        // TODO(0x7d62ad0, Quantum.Physics3D.Scene3D.CheckIgnoreMeshCollisionManifold): mesh
+        // collision manifolds come here; static triangle meshes are not reimplemented yet.
         for (std::size_t i = 1; i < bucket.TriggerManifolds.size(); ++i) {
             ManifoldData3D* m = &bucket.TriggerManifolds[i];
-            if (m->GetIgnore()) continue;
+            if ((m->_flags & Skip) != 0) {
+                continue;
+            }
             Entry3D* a = &_entries[static_cast<std::size_t>(m->_entryIdxA)];
             Entry3D* b = &_entries[static_cast<std::size_t>(m->_entryIdxB)];
+            if (_callbacksWereCalled && CheckIgnoreTriggerManifold(frame, m, a, b)) {
+                continue;
+            }
             if (m->GetIsDynamic()) {
                 HandleDynamicTrigger(frame, callbacks, m, a, b);
             } else {
-                HandleStaticTrigger(frame, callbacks, m, a, b);
+                HandleStaticTrigger(frame, callbacks, map, m, a, b);
             }
         }
     }
-    HandleExits(frame, callbacks);
+    HandleExits(frame, callbacks, map);
 }
 
-// ---------------------------------------------------------------------------------------
-// Islands, solver, integration, sleeping
+// 0x7d62ca8 - runs only when callbacks ran: the dynamic entries re-read their body (it may
+// have been added, removed, disabled or made kinematic); entries whose entity lost its
+// collider are ignored, triggers lose their body.
+void Scene3D::TaskPostCallbacksUpdateEntries(FrameBase* frame) {
+    if (!_callbacksWereCalled) {
+        return;
+    }
+    for (std::size_t i = static_cast<std::size_t>(_staticComponentsCount + _queriesCount - 1);
+         i < _entries.size(); ++i) {
+        Entry3D& entry = _entries[i];
+        entry.ShouldIntegrateVelocity = false;
+        entry.HasDynamicBody = false;
+        entry.Body3D = nullptr;
+        if (EntityLost(frame, &entry, _minComponentSet)) {
+            entry.Ignore = true;
+        }
+        if (entry.Ignore || entry.Collider3D->_isTrigger == 1) {
+            continue;
+        }
+        PhysicsBody3D* body = nullptr;
+        if (!frame->TryGetPointer<PhysicsBody3D>(entry.Ref, body) || body->Status == PhysicsBodyStatus::None) {
+            continue;
+        }
+        entry.Body3D = body;
+        if (body->GetIsKinematic()) {
+            continue;
+        }
+        entry.HasDynamicBody = true;
+        if (entry._compoundRootIndexPlusOne >= 1) {
+            continue;
+        }
+        entry.ShouldIntegrateVelocity = body->Status == PhysicsBodyStatus::Active;
+        PhysicsJoints3D* joints = nullptr;
+        if (frame->TryGetPointer<PhysicsJoints3D>(entry.Ref, joints) && joints->_count != 0) {
+            entry.Joints = joints;
+        }
+    }
+}
 
-// TODO(0x7d6351c, Quantum.Physics3D.Scene3D.Task_BuildIslands): union of dynamic bodies
-// through their non-trigger contacts (static/kinematic bodies don't join islands); the
-// original's traversal order and the joint islands (Task_BuildJointIslands) are not
-// reproduced exactly.
-void Scene3D::TaskBuildIslands() {
-    _islands.clear();
-    const std::size_t first = static_cast<std::size_t>(_staticComponentsCount);
-    const std::size_t count = _entries.size();
-    // Contacts per dynamic entry.
-    std::vector<std::vector<CollisionManifold3D*>> contacts(count);
+// 0x7d63188 - per bucket, the collision manifolds the solver works on: every pair still
+// active, minus (when callbacks ran) pairs with an ignored entry or without a dynamic body.
+void Scene3D::TaskPostCallbacksUpdateManifolds() {
     for (Bucket3D& bucket : _buckets) {
         for (std::size_t i = 1; i < bucket.CollisionManifolds.size(); ++i) {
             CollisionManifold3D* m = &bucket.CollisionManifolds[i];
-            if (m->GetIgnore()) continue;
-            Entry3D* a = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxA)]);
-            Entry3D* b = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxB)]);
-            if (a->HasDynamicBody) contacts[static_cast<std::size_t>(a->Index)].push_back(m);
-            if (b->HasDynamicBody) contacts[static_cast<std::size_t>(b->Index)].push_back(m);
-        }
-    }
-    std::vector<char> visited(count, 0);
-    std::vector<char> manifoldAdded;
-    std::vector<Entry3D*> stack;
-    _islands.reserve(count);
-    for (std::size_t i = first; i < count; ++i) {
-        Entry3D* start = &_entries[i];
-        start->Island = nullptr;
-        if (!start->HasDynamicBody || visited[i] || start->_compoundRootIndexPlusOne >= 1) continue;
-        Island3D& island = _islands.emplace_back();
-        stack.assign(1, start);
-        visited[i] = 1;
-        while (!stack.empty()) {
-            Entry3D* e = stack.back();
-            stack.pop_back();
-            island.AddEntry(e);
-            for (CollisionManifold3D* m : contacts[static_cast<std::size_t>(e->Index)]) {
-                if (std::find(island.CollisionManifolds.begin(), island.CollisionManifolds.end(), m) ==
-                    island.CollisionManifolds.end()) {
-                    island.AddManifold(m);
-                }
-                Entry3D* a = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxA)]);
-                Entry3D* b = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxB)]);
-                Entry3D* other = a == e ? b : a;
-                if (other->HasDynamicBody && !visited[static_cast<std::size_t>(other->Index)]) {
-                    visited[static_cast<std::size_t>(other->Index)] = 1;
-                    stack.push_back(other);
+            if (m->GetIgnore()) {
+                continue;
+            }
+            if (_callbacksWereCalled) {
+                const Entry3D& a = _entries[static_cast<std::size_t>(m->_m._entryIdxA)];
+                const Entry3D& b = _entries[static_cast<std::size_t>(m->_m._entryIdxB)];
+                if (a.Ignore || b.Ignore || (!a.HasDynamicBody && !b.HasDynamicBody)) {
+                    m->SetIgnore(true);
+                    continue;
                 }
             }
+            bucket.SolverManifolds.push_back(m);
         }
+        // TODO(0x7d63188, Quantum.Physics3D.Scene3D.Task_PostCallbacksUpdateManifolds): mesh
+        // manifolds (their live triangle manifolds join the list and set the earliest time
+        // of impact); static triangle meshes are not reimplemented yet.
     }
+}
+
+// 0x7d5b754
+Island3D* Scene3D::GetNextIsland() {
+    Island3D& island = _islands.emplace_back();
+    island.Reset();
+    return &island;
+}
+
+// 0x7d6351c - in bucket order over the solver manifolds: a pair whose bodies have no island
+// starts one, a pair touching one island joins it, a pair bridging two islands merges the
+// second into the first (which is then ignored). Only dynamic bodies (compound roots) join
+// islands; every body that joins is also listed as a solver entry.
+void Scene3D::TaskBuildIslands() {
+    _islands.clear();
+    _solverEntries.clear();
+    const auto join = [this](Island3D* island, Entry3D* root) {
+        if (root->HasDynamicBody) {
+            island->AddEntry(root);
+            root->Island = island;
+            _solverEntries.push_back(root);
+        }
+    };
+    for (Bucket3D& bucket : _buckets) {
+        for (CollisionManifold3D* m : bucket.SolverManifolds) {
+            if (m->_m._triIdx != 0) {
+                continue; // triangle manifolds come with their mesh manifold
+            }
+            Entry3D* rootA = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxA)]);
+            Entry3D* rootB = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxB)]);
+            Island3D* islandA = rootA->Island;
+            Island3D* islandB = rootB->Island;
+            if (islandA == nullptr && islandB == nullptr) {
+                Island3D* island = GetNextIsland();
+                join(island, rootA);
+                join(island, rootB);
+                island->AddManifold(m);
+            } else if (islandA == nullptr) {
+                join(islandB, rootA);
+                islandB->AddManifold(m);
+            } else if (islandB == nullptr) {
+                join(islandA, rootB);
+                islandA->AddManifold(m);
+            } else if (islandA == islandB) {
+                islandA->AddManifold(m);
+            } else {
+                for (Entry3D* entry : islandB->Entries) {
+                    entry->Island = islandA;
+                    islandA->AddEntry(entry);
+                }
+                for (CollisionManifold3D* other : islandB->CollisionManifolds) {
+                    islandA->AddManifold(other);
+                }
+                islandA->AddManifold(m);
+                islandB->Ignore = true;
+                rootB->Island = islandA;
+            }
+        }
+        // TODO(0x7d6351c, Quantum.Physics3D.Scene3D.Task_BuildIslands): mesh manifolds (the
+        // entity joins or starts an island); static triangle meshes are not reimplemented yet.
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Solver, integration, sleeping
+
+namespace {
+// Raw fixed-point helpers for the solver: every product is shifted on its own, as the
+// original computes them.
+FP::Raw Dot(const FPVector3& a, const FPVector3& b) {
+    return Mul(Raw(a.Y), Raw(b.Y)) + Mul(Raw(a.X), Raw(b.X)) + Mul(Raw(a.Z), Raw(b.Z));
+}
+FP::Raw LengthSquared(const FPVector3& v) { return Dot(v, v); }
+// a / b with the sign rules of the original's division; a zero divisor gives zero (what the
+// hardware division of the original returns).
+FP::Raw Divide(FP::Raw numerator, FP::Raw divisor) { return divisor == 0 ? 0 : numerator / divisor; }
+} // namespace
+
+// 0x7d6e2e0
+void AccumulatedImpulse::Accumulate(const AccumulatedImpulse& impulse, std::int32_t flags) {
+    const auto accumulate = [flags](FPVector3& sum, const FPVector3& add) {
+        if ((flags & ImpulseAdd) != 0) {
+            sum = FPVector3{FP::FromRaw(Raw(sum.X) + Raw(add.X)), FP::FromRaw(Raw(sum.Y) + Raw(add.Y)),
+                            FP::FromRaw(Raw(sum.Z) + Raw(add.Z))};
+            return;
+        }
+        const FP::Raw along = Dot(add, sum);
+        if (along <= 0) {
+            sum = FPVector3{FP::FromRaw(Raw(sum.X) + Raw(add.X)), FP::FromRaw(Raw(sum.Y) + Raw(add.Y)),
+                            FP::FromRaw(Raw(sum.Z) + Raw(add.Z))};
+            return;
+        }
+        // Only the part of the new impulse beyond what the sum already covers.
+        const FP::Raw lengthSq = LengthSquared(add);
+        const FP::Raw beyond = lengthSq - along;
+        if (beyond <= 0) {
+            return;
+        }
+        const FP::Raw share = (beyond << 16) / lengthSq;
+        sum.X = FP::FromRaw(Raw(sum.X) + Mul(share, Raw(add.X)));
+        sum.Y = FP::FromRaw(Raw(sum.Y) + Mul(Raw(add.Y), share));
+        sum.Z = FP::FromRaw(Raw(sum.Z) + Mul(Raw(add.Z), share));
+    };
+    if ((flags & ImpulseLinear) != 0) {
+        accumulate(Velocity, impulse.Velocity);
+    }
+    if ((flags & ImpulseAngular) != 0) {
+        accumulate(AngularVelocity, impulse.AngularVelocity);
+    }
+}
+
+// 0x7d6e494
+void AccumulatedImpulse::Integrate(const PhysicsBody3D* body, const FPVector3& impulse, const FPVector3& r,
+                                   bool useRotation) {
+    const FP::Raw massInverse = body->_massInverseRawInt;
+    Velocity.X = FP::FromRaw(Raw(Velocity.X) + Mul(Raw(impulse.X), massInverse));
+    Velocity.Y = FP::FromRaw(Raw(Velocity.Y) + Mul(Raw(impulse.Y), massInverse));
+    Velocity.Z = FP::FromRaw(Raw(Velocity.Z) + Mul(Raw(impulse.Z), massInverse));
+    if (!useRotation) {
+        return;
+    }
+    const FP::Raw inertiaInverse = body->_inertiaTensorInverse.RawIntX;
+    const FP::Raw cx = Mul(Raw(impulse.Z), Raw(r.Y)) - Mul(Raw(impulse.Y), Raw(r.Z));
+    const FP::Raw cy = Mul(Raw(impulse.X), Raw(r.Z)) - Mul(Raw(r.X), Raw(impulse.Z));
+    const FP::Raw cz = Mul(Raw(r.X), Raw(impulse.Y)) - Mul(Raw(impulse.X), Raw(r.Y));
+    AngularVelocity.X = FP::FromRaw(Raw(AngularVelocity.X) + Mul(cx, inertiaInverse));
+    AngularVelocity.Y = FP::FromRaw(Raw(AngularVelocity.Y) + Mul(cy, inertiaInverse));
+    AngularVelocity.Z = FP::FromRaw(Raw(AngularVelocity.Z) + Mul(cz, inertiaInverse));
+}
+
+// 0x7d6e564
+void AccumulatedImpulse::Apply(Entry3D* entry) const {
+    const bool linear = Raw(Velocity.X) != 0 || Raw(Velocity.Y) != 0 || Raw(Velocity.Z) != 0;
+    const bool angular = Raw(AngularVelocity.X) != 0 || Raw(AngularVelocity.Y) != 0 ||
+                         Raw(AngularVelocity.Z) != 0;
+    if (!linear && !angular) {
+        return;
+    }
+    PhysicsBody3D* body = entry->Body3D;
+    if (body->Status == PhysicsBodyStatus::Asleep) {
+        body->Status = PhysicsBodyStatus::Active;
+        body->_sleepTimeRawInt = 0;
+    }
+    Entry3D* root = entry->_compoundRoot != nullptr ? entry->_compoundRoot : entry;
+    root->ShouldIntegrateVelocity = true;
+    body->Velocity.X = FP::FromRaw(Raw(body->Velocity.X) + Raw(Velocity.X));
+    body->Velocity.Y = FP::FromRaw(Raw(body->Velocity.Y) + Raw(Velocity.Y));
+    body->Velocity.Z = FP::FromRaw(Raw(body->Velocity.Z) + Raw(Velocity.Z));
+    const auto freeze = static_cast<std::uint8_t>(body->RotationFreeze);
+    if ((freeze & 1) == 0) body->AngularVelocity.X = FP::FromRaw(Raw(body->AngularVelocity.X) + Raw(AngularVelocity.X));
+    if ((freeze & 2) == 0) body->AngularVelocity.Y = FP::FromRaw(Raw(body->AngularVelocity.Y) + Raw(AngularVelocity.Y));
+    if ((freeze & 4) == 0) body->AngularVelocity.Z = FP::FromRaw(Raw(body->AngularVelocity.Z) + Raw(AngularVelocity.Z));
 }
 
 namespace {
@@ -1095,24 +1491,22 @@ FP Combine(PhysicsCombineFunction a, PhysicsCombineFunction b, FP va, FP vb) {
     }
 }
 
-// The perceived-mass term of one body for a contact offset r along the normal (n squared
-// terms precomputed): (|r x n|^2) * |Right|^2 * inverseInertia.x, as the original computes
-// it (an isotropic approximation of the inertia).
-FP::Raw AngularMassTerm(const Entry3D* entry, const FPVector3& r, FP::Raw nxx, FP::Raw nyy,
-                        FP::Raw nzz, FP::Raw nzx, FP::Raw nyx, FP::Raw nzy) {
+// The rotational part of a body's perceived mass for a contact offset r along a unit
+// direction d (products of d's components precomputed): |r x d|^2 * |Right|^2 * the inverse
+// inertia's X entry, the original's isotropic approximation of the inertia.
+FP::Raw AngularMassTerm(const Entry3D* entry, const FPVector3& r, FP::Raw dxx, FP::Raw dyy,
+                        FP::Raw dzz, FP::Raw dzx, FP::Raw dyx, FP::Raw dzy) {
     const FP::Raw rx = Raw(r.X), ry = Raw(r.Y), rz = Raw(r.Z);
     const FP::Raw zz = Mul(rz, rz), yy = Mul(ry, ry), xx = Mul(rx, rx);
     const FP::Raw yz = Mul(ry, rz), xy = Mul(rx, ry), xz = Mul(rx, rz);
-    FP::Raw cross = Mul(zz, nyy) + Mul(zz, nxx);
-    cross += Mul(yy, nxx);
-    cross += Mul(yy, nzz);
-    cross -= (yz * nzy) >> 15;
-    cross += Mul(xx, nyy);
-    cross += Mul(xx, nzz);
-    cross -= ((xy * nyx) >> 15) + ((xz * nzx) >> 15);
-    const FPVector3& right = entry->Narrow.RotatedRight;
-    const FP::Raw rightSq = Mul(Raw(right.Y), Raw(right.Y)) + Mul(Raw(right.X), Raw(right.X)) +
-                            Mul(Raw(right.Z), Raw(right.Z));
+    FP::Raw cross = Mul(zz, dyy) + Mul(zz, dxx);
+    cross += Mul(yy, dxx);
+    cross += Mul(yy, dzz);
+    cross -= (yz * dzy) >> 15;
+    cross += Mul(xx, dyy);
+    cross += Mul(xx, dzz);
+    cross -= ((xy * dyx) >> 15) + ((xz * dzx) >> 15);
+    const FP::Raw rightSq = LengthSquared(entry->Narrow.RotatedRight);
     const FP::Raw inertia = Mul(rightSq, entry->Body3D->_inertiaTensorInverse.RawIntX);
     return Mul(inertia, cross);
 }
@@ -1166,92 +1560,212 @@ void Scene3D::TaskCollisionSolverInitLegacyGS(FrameBase* frame) {
                 }
                 return contact - centre;
             };
-            c.RA = offset(rootA);
-            c.RB = offset(rootB);
+            c.Ra = offset(rootA);
+            c.Rb = offset(rootB);
             if (rootA->HasDynamicBody) {
-                c.DynamicA = true;
+                c.HasDynamicBodyA = true;
                 k += rootA->Body3D->_massInverseRawInt;
-                k += AngularMassTerm(entryA, c.RA, nxx, nyy, nzz, nzx, nyx, nzy);
+                k += AngularMassTerm(entryA, c.Ra, nxx, nyy, nzz, nzx, nyx, nzy);
             }
             if (rootB->HasDynamicBody) {
-                c.DynamicB = true;
+                c.HasDynamicBodyB = true;
                 k += rootB->Body3D->_massInverseRawInt;
-                k += AngularMassTerm(entryB, c.RB, nxx, nyy, nzz, nzx, nyx, nzy);
+                k += AngularMassTerm(entryB, c.Rb, nxx, nyy, nzz, nzx, nyx, nzy);
             }
-            c.PerceivedMass = FP::FromRaw(k);
+            c.NormalMass = FP::FromRaw(k);
         }
     }
 }
 
-namespace {
-FPVector3 Cross(const FPVector3& a, const FPVector3& b) { return FPVector3::Cross(a, b); }
+// 0x7d589b0 - the impulses for one contact: relative velocity at the contact (every body
+// counts, kinematic ones too); a separating contact gets nothing. Otherwise the island is
+// marked unsolved, the normal impulse is -(1 + restitution) * vn / normalMass (restitution
+// dropped when the relative speed is within what gravity adds in a step) and friction acts
+// along the tangent: the full tangential impulse while within the static coefficient,
+// else dynamic friction * the normal impulse. The changes are only collected here.
+AccumulatedImpulseCollection Scene3D::ComputeImpulse(const ContactConstraint* cst, const CollisionManifold3D* m,
+                                                     Entry3D* entryA, Entry3D* entryB, bool useRotation,
+                                                     bool& solved) {
+    AccumulatedImpulseCollection result{};
+    const FPVector3& ra = cst->Ra;
+    const FPVector3& rb = cst->Rb;
+    const FP::Raw nx = Raw(m->Normal.X), ny = Raw(m->Normal.Y), nz = Raw(m->Normal.Z);
+    const PhysicsBody3D* bodyA = entryA->Body3D;
+    const PhysicsBody3D* bodyB = entryB->Body3D;
+    const bool dynamicA = entryA->HasDynamicBody;
+    const bool dynamicB = entryB->HasDynamicBody;
 
-void ApplyImpulse(Entry3D* entry, const FPVector3& linear, const FPVector3& r, bool useRotation) {
-    PhysicsBody3D* body = entry->Body3D;
-    const FP massInv = body->MassInverse();
-    body->Velocity = body->Velocity + linear * massInv;
-    if (useRotation) {
-        const FPVector3 angular = Cross(r, linear);
-        const FPMatrix3x3& m = entry->WorldInertiaTensorInverse;
-        const FPVector3 dw{m.M00 * angular.X + m.M01 * angular.Y + m.M02 * angular.Z,
-                           m.M10 * angular.X + m.M11 * angular.Y + m.M12 * angular.Z,
-                           m.M20 * angular.X + m.M21 * angular.Y + m.M22 * angular.Z};
-        const auto freeze = static_cast<std::uint8_t>(body->RotationFreeze);
-        if (!(freeze & 1)) body->AngularVelocity.X += dw.X;
-        if (!(freeze & 2)) body->AngularVelocity.Y += dw.Y;
-        if (!(freeze & 4)) body->AngularVelocity.Z += dw.Z;
+    // Relative velocity at the contact: (vB + wB x rB) - (vA + wA x rA).
+    FP::Raw vx = 0, vy = 0, vz = 0;
+    if (bodyA != nullptr) {
+        const FPVector3& v = bodyA->Velocity;
+        if (useRotation) {
+            const FPVector3& w = bodyA->AngularVelocity;
+            vx = Mul(Raw(ra.Y), Raw(w.Z)) - (Raw(v.X) + Mul(Raw(ra.Z), Raw(w.Y)));
+            vy = Mul(Raw(ra.Z), Raw(w.X)) - (Raw(v.Y) + Mul(Raw(ra.X), Raw(w.Z)));
+            vz = Mul(Raw(ra.X), Raw(w.Y)) - (Raw(v.Z) + Mul(Raw(ra.Y), Raw(w.X)));
+        } else {
+            vx = -Raw(v.X);
+            vy = -Raw(v.Y);
+            vz = -Raw(v.Z);
+        }
     }
-}
-} // namespace
+    if (bodyB != nullptr) {
+        const FPVector3& v = bodyB->Velocity;
+        vx += Raw(v.X);
+        vy += Raw(v.Y);
+        vz += Raw(v.Z);
+        if (useRotation) {
+            const FPVector3& w = bodyB->AngularVelocity;
+            vx = vx + Mul(Raw(rb.Z), Raw(w.Y)) - Mul(Raw(rb.Y), Raw(w.Z));
+            vy = vy - Mul(Raw(rb.Z), Raw(w.X)) + Mul(Raw(rb.X), Raw(w.Z));
+            vz = vz + Mul(Raw(rb.Y), Raw(w.X)) - Mul(Raw(rb.X), Raw(w.Y));
+        }
+    }
+    const FP::Raw vn = Mul(vy, ny) + Mul(vx, nx) + Mul(vz, nz);
+    if (vn >= 1) {
+        return result; // separating
+    }
+    solved = false;
 
-// TODO(0x7d57ebc, Quantum.Physics3D.Scene3D.Task_VelocitySolverLegacyGS): the iteration
-// loop is not studied yet. The impulse per contact follows ComputeImpulse (0x7d589b0):
-// relative velocity at the contact; separating contacts get nothing; normal impulse
-// -(1 + restitution) * vn / k (restitution dropped below the resting threshold); friction
-// along the tangent clamped by the static coefficient, else dynamic friction * normal
-// impulse. ApplyImpulse/AccumulateImpulses are approximated with plain velocity updates.
+    // Tangent direction (unit when long enough) and its component products.
+    const FP::Raw tx = vx - Mul(vn, nx);
+    const FP::Raw ty = vy - Mul(vn, ny);
+    const FP::Raw tz = vz - Mul(vn, nz);
+    const FP::Raw tangentSq = Mul(ty, ty) + Mul(tx, tx) + Mul(tz, tz);
+    const bool hasTangent = tangentSq > 0x41;
+    FP::Raw ux = tx, uy = ty, uz = tz; // unit tangent (left unnormalised when too short)
+    FP::Raw txx = 0, tyy = 0, tzz = 0, txy = 0, txz = 0, tyz = 0;
+    if (tangentSq >= 0x42) {
+        const FP::Raw inverseLength = (FP::Raw{1} << 32) / Photon::Deterministic::FPMath::SqrtRaw(tangentSq);
+        ux = Mul(inverseLength, tx);
+        uy = Mul(inverseLength, ty);
+        uz = Mul(inverseLength, tz);
+        txx = Mul(ux, ux);
+        tyy = Mul(uy, uy);
+        tzz = Mul(uz, uz);
+        txy = Mul(uy, ux);
+        txz = Mul(uz, ux);
+        tyz = Mul(uz, uy);
+    }
+    FP::Raw tangentMass = 0;
+    if (hasTangent && dynamicA) {
+        tangentMass = bodyA->_massInverseRawInt + AngularMassTerm(entryA, ra, txx, tyy, tzz, txz, txy, tyz);
+    }
+    if (hasTangent && dynamicB) {
+        tangentMass = tangentMass + bodyB->_massInverseRawInt +
+                      AngularMassTerm(entryB, rb, txx, tyy, tzz, txz, txy, tyz);
+    }
+
+    // Normal impulse.
+    const FPVector3& g = CachedSettings.Gravity;
+    const FP::Raw restingSpeedSq = Mul(LengthSquared(g), Raw(_deltaTime)) + 0x41;
+    const FP::Raw speedSq = Mul(vy, vy) + Mul(vx, vx) + Mul(vz, vz);
+    const FP::Raw factor = speedSq < restingSpeedSq ? -(FP::Raw{1} << 16)
+                                                    : -(FP::Raw{1} << 16) - Raw(m->CombinedRestitution);
+    const FP::Raw jn = Divide((factor * vn) & ~FP::Raw{0xffff}, Raw(cst->NormalMass));
+    const FPVector3 normalImpulse{FP::FromRaw(Mul(jn, nx)), FP::FromRaw(Mul(jn, ny)), FP::FromRaw(Mul(jn, nz))};
+    if (dynamicA) {
+        result.A.Integrate(bodyA, -normalImpulse, ra, useRotation);
+    }
+    if (dynamicB) {
+        result.B.Integrate(bodyB, normalImpulse, rb, useRotation);
+    }
+
+    // Friction.
+    if (!hasTangent) {
+        return result;
+    }
+    const FP::Raw along = Mul(uy, vy) + Mul(uz, vz) + Mul(ux, vx);
+    const FP::Raw jt = Divide(-(along << 16), tangentMass);
+    if (jt == 0) {
+        return result;
+    }
+    FPVector3 friction;
+    const FP::Raw staticLimit = Mul(Raw(m->CombinedStaticFriction), jn);
+    if ((jt < 0 ? -jt : jt) < staticLimit) {
+        friction = FPVector3{FP::FromRaw(Mul(jt, ux)), FP::FromRaw(Mul(jt, uy)), FP::FromRaw(Mul(jt, uz))};
+    } else {
+        const FP::Raw dynamicFriction = Raw(m->CombinedDynamicFriction);
+        friction = FPVector3{FP::FromRaw(Mul(dynamicFriction, (-(jn * ux)) >> 16)),
+                             FP::FromRaw(Mul(dynamicFriction, (-(jn * uy)) >> 16)),
+                             FP::FromRaw(Mul(dynamicFriction, (-(jn * uz)) >> 16))};
+    }
+    if (dynamicA) {
+        result.A.Integrate(bodyA, -friction, ra, useRotation);
+    }
+    if (dynamicB) {
+        result.B.Integrate(bodyB, friction, rb, useRotation);
+    }
+    return result;
+}
+
+// 0x7d58768 - a single contact point gives the whole impulse; with several, the angular
+// parts of the per-point impulses are averaged (only with rotation) and the linear part
+// comes from the average contact point. `flags` chooses how the result joins the sum.
+void Scene3D::AccumulateImpulses(const ContactConstraint* cst, CollisionManifold3D* m, Entry3D* entryA,
+                                 Entry3D* entryB, bool useRotation, AccumulatedImpulseCollection& accumulated,
+                                 bool& solved, std::int32_t flags) {
+    const std::int32_t points = m->_contactPointsCount;
+    if (points == 1) {
+        accumulated.Accumulate(ComputeImpulse(cst, m, entryA, entryB, useRotation, solved),
+                               flags | ImpulseLinear | ImpulseAngular);
+        return;
+    }
+    if (useRotation) {
+        AccumulatedImpulseCollection angular{};
+        for (std::int32_t p = 0; p < points; ++p) {
+            angular.Accumulate(ComputeImpulse(cst + p, m, entryA, entryB, true, solved),
+                               ImpulseAngular | ImpulseAdd);
+        }
+        const auto average = [points](FPVector3& v) {
+            v = FPVector3{FP::FromRaw(Raw(v.X) / points), FP::FromRaw(Raw(v.Y) / points),
+                          FP::FromRaw(Raw(v.Z) / points)};
+        };
+        if (entryA->HasDynamicBody && points != 0) {
+            average(angular.A.AngularVelocity);
+        }
+        if (entryB->HasDynamicBody && points != 0) {
+            average(angular.B.AngularVelocity);
+        }
+        accumulated.Accumulate(angular, flags | ImpulseAngular);
+    }
+    // The constraint after the points is the one at the average contact point.
+    accumulated.Accumulate(ComputeImpulse(cst + points, m, entryA, entryB, useRotation, solved),
+                           flags | ImpulseLinear);
+}
+
+// 0x7d57ebc - one solver iteration (the task runs once per SolverIterations, each pass over
+// the islands). An island is solved again only while its previous pass still found
+// approaching contacts: the pass marks it solved and any impulse clears the mark. Per
+// manifold the impulses are computed from the current velocities and applied right away
+// (Gauss-Seidel).
 void Scene3D::TaskVelocitySolverLegacyGS() {
     const bool useRotation = CachedSettings.UseAngularVelocityEnabled();
-    const FPVector3 gravityStep = CachedSettings.Gravity * _deltaTime;
-    const FP::Raw restThreshold = Mul(Raw(FPVector3::Dot(gravityStep, gravityStep)), 1 << 16) + 0x41;
-    const int iterations = std::max<int>(1, CachedSettings.SolverIterations);
-    for (int iteration = 0; iteration < iterations; ++iteration) {
-        for (ContactConstraint& c : _collisionSolverData) {
-            CollisionManifold3D* m = c.Manifold;
-            if (Raw(c.PerceivedMass) == 0) continue;
-            Entry3D* a = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxA)]);
-            Entry3D* b = Root(&_entries[static_cast<std::size_t>(m->_m._entryIdxB)]);
-            FPVector3 vRel = FPVector3::Zero();
-            if (c.DynamicA) {
-                vRel = vRel - a->Body3D->Velocity;
-                if (useRotation) vRel = vRel - Cross(a->Body3D->AngularVelocity, c.RA);
+    for (Island3D& island : _islands) {
+        if (island.Ignore || island.VelocityConstraintsSolved) {
+            continue;
+        }
+        island.VelocityConstraintsSolved = true;
+        // TODO(0x7d57ebc, Quantum.Physics3D.Scene3D.Task_VelocitySolverLegacyGS): the island's
+        // joint constraints are solved first (Distance/Spring/HingeJointConstraint
+        // SolveVelocityConstraint); joints are not reimplemented yet.
+        for (CollisionManifold3D* m : island.CollisionManifolds) {
+            Entry3D* entryA = &_entries[static_cast<std::size_t>(m->_m._entryIdxA)];
+            Entry3D* entryB = &_entries[static_cast<std::size_t>(m->_m._entryIdxB)];
+            AccumulatedImpulseCollection impulses{};
+            // TODO: a mesh manifold (NextInMesh != 0) adds the impulses of its triangle
+            // manifolds (the first added, the rest accumulated) and applies them to A only;
+            // static triangle meshes are not reimplemented yet.
+            AccumulateImpulses(&_collisionSolverData[static_cast<std::size_t>(m->_constraintDataIdx)], m, entryA,
+                               entryB, useRotation, impulses, island.VelocityConstraintsSolved, ImpulseAdd);
+            if (entryA->HasDynamicBody) {
+                impulses.A.Apply(entryA);
             }
-            if (c.DynamicB) {
-                vRel = vRel + b->Body3D->Velocity;
-                if (useRotation) vRel = vRel + Cross(b->Body3D->AngularVelocity, c.RB);
+            if (entryB->HasDynamicBody) {
+                impulses.B.Apply(entryB);
             }
-            const FPVector3 n = m->Normal;
-            const FP vn = FPVector3::Dot(vRel, n);
-            if (Raw(vn) >= 1) continue; // separating
-            const FP::Raw speedSq = Raw(FPVector3::Dot(vRel, vRel));
-            const FP factor = speedSq < restThreshold ? -FP::One()
-                                                      : FP::FromRaw(-(FP::Raw{1} << 16) - Raw(m->CombinedRestitution));
-            const FP jn = (factor * vn) / c.PerceivedMass;
-            FPVector3 impulse = n * jn;
-            // Friction along the tangent.
-            FPVector3 tangent = vRel - n * vn;
-            if (Raw(FPVector3::Dot(tangent, tangent)) > 0x41) {
-                tangent = tangent.Normalized();
-                const FP jt = -FPVector3::Dot(tangent, vRel) / c.PerceivedMass;
-                const FP limit = m->CombinedStaticFriction * jn;
-                if (Photon::Deterministic::FPMath::Abs(jt) < limit) {
-                    impulse = impulse + tangent * jt;
-                } else {
-                    impulse = impulse - tangent * (jn * m->CombinedDynamicFriction);
-                }
-            }
-            if (c.DynamicA) ApplyImpulse(a, -impulse, c.RA, useRotation);
-            if (c.DynamicB) ApplyImpulse(b, impulse, c.RB, useRotation);
+            m->_flags |= CollisionManifold3D::Solved;
         }
     }
 }
@@ -1380,35 +1894,87 @@ void Scene3D::TaskIntegrateVelocity() {
     }
 }
 
-// TODO(0x7d68798, Quantum.Physics3D.Scene3D.Task_SleepDetectionEntries) and
-// TODO(0x7d68cdc, Quantum.Physics3D.Scene3D.Task_SleepDetectionIslands): written from the
-// settings' meaning, not from the original's code: a body below both sleep tolerances
-// accumulates sleep time; an island whose bodies all reached SleepTimeSec falls asleep.
-void Scene3D::TaskSleepDetection() {
-    if (!CachedSettings.AllowSleepingEnabled()) {
-        return;
+// 0x7d68798 - per awake dynamic entry allowed to sleep: while it stays within the linear
+// tolerance of its last recorded position and the angular tolerance of its last recorded
+// rotation it accumulates sleep time (an entry without an island falls asleep on its own
+// once past SleepTimeSec); otherwise the timer restarts and whichever reference was left
+// behind is recorded anew.
+void Scene3D::TaskSleepDetectionEntries() {
+    const PhysicsSceneSettings& s = CachedSettings;
+    const FP::Raw linearToleranceSq = Mul(Raw(s.LinearSleepTolerance), Raw(s.LinearSleepTolerance));
+    const FP::Raw angularTolerance = Raw(s.AngularSleepToleranceInRad);
+    const auto deltaTime = static_cast<std::int32_t>(Raw(_deltaTime));
+    for (std::size_t i = static_cast<std::size_t>(_staticComponentsCount + _queriesCount - 1);
+         i < _entries.size(); ++i) {
+        Entry3D& entry = _entries[i];
+        if (!entry.ShouldIntegrateVelocity) {
+            continue;
+        }
+        PhysicsBody3D* body = entry.Body3D;
+        if (!body->AllowSleeping()) {
+            body->_sleepTimeRawInt = 0;
+            continue;
+        }
+        const FPVector3& position = entry.Transform3D->Position;
+        const FPQuaternion& rotation = entry.Transform3D->Rotation;
+        // Angle of the rotation since the recorded one: 2 acos(w) of inverse(last) * now.
+        const FPQuaternion last = static_cast<FPQuaternion>(body->_lastRotation);
+        const FP::Raw lengthSq = Mul(Raw(last.Y), Raw(last.Y)) + Mul(Raw(last.X), Raw(last.X)) +
+                                 Mul(Raw(last.Z), Raw(last.Z)) + Mul(Raw(last.W), Raw(last.W));
+        const FP::Raw inverseLengthSq = Divide(FP::Raw{1} << 32, lengthSq);
+        const FP::Raw ix = (-(Raw(last.X) * inverseLengthSq)) >> 16;
+        const FP::Raw iy = (-(Raw(last.Y) * inverseLengthSq)) >> 16;
+        const FP::Raw iz = (-(Raw(last.Z) * inverseLengthSq)) >> 16;
+        const FP::Raw iw = (inverseLengthSq * Raw(last.W)) >> 16;
+        const FP::Raw w = Mul(iw, Raw(rotation.W)) -
+                          (Mul(iy, Raw(rotation.Y)) + Mul(ix, Raw(rotation.X)) + Mul(iz, Raw(rotation.Z)));
+        const FP::Raw angle = Raw(Photon::Deterministic::FPMath::Acos(FP::FromRaw(w))) << 1;
+        const FPVector3 lastPosition = static_cast<FPVector3>(body->_lastPosition);
+        const FP::Raw dx = Raw(lastPosition.X) - Raw(position.X);
+        const FP::Raw dy = Raw(lastPosition.Y) - Raw(position.Y);
+        const FP::Raw dz = Raw(lastPosition.Z) - Raw(position.Z);
+        const FP::Raw distanceSq = Mul(dy, dy) + Mul(dx, dx) + Mul(dz, dz);
+        if (distanceSq < linearToleranceSq && angle < angularTolerance) {
+            body->_sleepTimeRawInt = static_cast<std::int32_t>(static_cast<std::uint32_t>(body->_sleepTimeRawInt) +
+                                                               static_cast<std::uint32_t>(deltaTime));
+            if (entry.Island == nullptr && Raw(s.SleepTimeSec) < FP::Raw{body->_sleepTimeRawInt}) {
+                body->Status = PhysicsBodyStatus::Asleep;
+                body->_sleepTimeRawInt = 0;
+            }
+            continue;
+        }
+        body->_sleepTimeRawInt = 0;
+        if (distanceSq >= linearToleranceSq) {
+            body->_lastPosition = FPVector3RawInt::FromFPVector3(position);
+        }
+        if (angle >= angularTolerance) {
+            body->_lastRotation = FPQuaternionRawInt::FromFPQuaternion(rotation);
+        }
     }
-    const FP linearTol = CachedSettings.LinearSleepTolerance;
-    const FP angularTol = CachedSettings.AngularSleepToleranceInRad;
+}
+
+// 0x7d68cdc - an island falls asleep when its least-rested body reached SleepTimeSec: its
+// bodies that may sleep stop (velocities cleared) and their timers restart.
+void Scene3D::TaskSleepDetectionIslands() {
+    const auto sleepTime = static_cast<std::int32_t>(Raw(CachedSettings.SleepTimeSec));
     for (Island3D& island : _islands) {
-        bool allAsleep = true;
+        if (island.Ignore) {
+            continue;
+        }
+        std::int32_t leastRested = std::numeric_limits<std::int32_t>::max();
+        for (const Entry3D* entry : island.Entries) {
+            leastRested = std::min(leastRested, entry->Body3D->_sleepTimeRawInt);
+        }
+        if (leastRested < sleepTime) {
+            continue;
+        }
         for (Entry3D* entry : island.Entries) {
             PhysicsBody3D* body = entry->Body3D;
-            const bool slow = body->Velocity.SqrMagnitude() <= linearTol * linearTol &&
-                              body->AngularVelocity.SqrMagnitude() <= angularTol * angularTol;
-            if (!body->AllowSleeping() || !slow) {
+            if (body->AllowSleeping()) {
+                body->Status = PhysicsBodyStatus::Asleep;
                 body->_sleepTimeRawInt = 0;
-                allAsleep = false;
-                continue;
-            }
-            body->_sleepTimeRawInt = static_cast<std::int32_t>(Raw(body->SleepTime()) + Raw(_deltaTime));
-            if (body->SleepTime() < CachedSettings.SleepTimeSec) {
-                allAsleep = false;
-            }
-        }
-        if (allAsleep && !island.Entries.empty()) {
-            for (Entry3D* entry : island.Entries) {
-                entry->Body3D->Sleep();
+                body->Velocity = FPVector3::Zero();
+                body->AngularVelocity = FPVector3::Zero();
             }
         }
     }
@@ -1425,19 +1991,25 @@ void Scene3D::Update(FrameBase* frame, FP deltaTime, ICollisionCallbacks3D* call
     TaskBroadPhase(frame);
     TaskNarrowPhase();
     TaskCallbacks(frame, callbacks);
-    // TODO: CCD manifolds (Task_SortCcdManifolds, Task_CcdCallbacks, Task_IntegrateFirstTOI)
-    // and Task_PostCallbacksUpdateEntries/Manifolds (entities changed by callbacks).
+    // TODO: CCD manifolds (Task_SortCcdManifolds, Task_CcdCallbacks, Task_IntegrateFirstTOI).
+    TaskPostCallbacksUpdateEntries(frame);
+    TaskPostCallbacksUpdateManifolds();
     TaskBuildIslands();
     if (CachedSettings.SolverIterations != 0) {
         // TODO(0x7d65098, Quantum.Physics3D.Scene3D.Task_CollisionSolverInit) and the rest
         // of the hybrid Jacobi/Gauss-Seidel solver: not ported; both solver types use the
         // legacy Gauss-Seidel solver here.
         TaskCollisionSolverInitLegacyGS(frame);
-        TaskVelocitySolverLegacyGS();
+        for (int iteration = 0; iteration < CachedSettings.SolverIterations; ++iteration) {
+            TaskVelocitySolverLegacyGS();
+        }
     }
     TaskPenetrationCorrection();
     TaskIntegrateVelocity();
-    TaskSleepDetection();
+    if (CachedSettings.AllowSleepingEnabled()) {
+        TaskSleepDetectionEntries();
+        TaskSleepDetectionIslands();
+    }
 }
 
 // ---------------------------------------------------------------------------------------

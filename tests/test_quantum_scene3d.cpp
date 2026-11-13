@@ -267,3 +267,116 @@ TEST_CASE("Scene3D: physics body and callbacks prototypes materialise") {
     PhysicsEngine3D::SetCallbacks(w.frame.get(), e, CallbackFlags::None);
     CHECK(!w.frame->Has<PhysicsCallbacks3D>(e));
 }
+
+namespace {
+struct ContactRecorder final : ICollisionCallbacks3D {
+    int enter = 0, stay = 0, exit = 0;
+    bool lastStatic = false;
+    EntityRef lastEntity, lastOther;
+    std::int32_t lastStaticIndex = -2;
+    void OnCollision3D(FrameBase*, const CollisionInfo3D&) override { ++stay; }
+    void OnCollisionEnter3D(FrameBase*, const CollisionInfo3D& info) override {
+        ++enter;
+        lastStatic = info.IsStatic();
+        lastEntity = info.Entity();
+        lastOther = info.Other();
+    }
+    void OnCollisionExit3D(FrameBase*, const ExitInfo3D& info) override {
+        ++exit;
+        lastStatic = info.IsStatic();
+        lastStaticIndex = info._staticIndex;
+        lastEntity = info.Entity;
+    }
+    void OnTrigger3D(FrameBase*, const TriggerInfo3D&) override {}
+    void OnTriggerEnter3D(FrameBase*, const TriggerInfo3D&) override {}
+    void OnTriggerExit3D(FrameBase*, const ExitInfo3D&) override {}
+};
+} // namespace
+
+TEST_CASE("Scene3D: accumulated impulses add or extend") {
+    AccumulatedImpulse sum{};
+    AccumulatedImpulse unit{};
+    unit.Velocity = V3(1, 0, 0);
+    sum.Accumulate(unit, ImpulseLinear | ImpulseAdd);
+    sum.Accumulate(unit, ImpulseLinear | ImpulseAccumulate); // already covered: no change
+    CHECK(sum.Velocity.X == F(1));
+    AccumulatedImpulse twice{};
+    twice.Velocity = V3(2, 0, 0);
+    sum.Accumulate(twice, ImpulseLinear | ImpulseAccumulate); // only the share beyond 1
+    CHECK(sum.Velocity.X == F(2));
+    AccumulatedImpulse back{};
+    back.Velocity = V3(-1, 0, 0);
+    back.AngularVelocity = V3(0, 3, 0);
+    sum.Accumulate(back, ImpulseLinear | ImpulseAccumulate); // opposing: added in full
+    CHECK(sum.Velocity.X == F(1) && sum.AngularVelocity.Y == FP::Zero());
+    sum.Accumulate(back, ImpulseAngular | ImpulseAdd);
+    CHECK(sum.Velocity.X == F(1) && sum.AngularVelocity.Y == F(3));
+}
+
+TEST_CASE("Scene3D: static collision enter and exit callbacks") {
+    World w;
+    w.AddStaticBox(V3(0, -1, 0), V3(10, 1, 10));
+    const EntityRef ball = w.AddBody(V3(0, 1, 0), Shape3D::CreateSphere(FP::_0_50()), true);
+    PhysicsEngine3D::SetCallbacks(w.frame.get(), ball,
+                                  CallbackFlags::OnStaticCollisionEnter | CallbackFlags::OnStaticCollisionExit |
+                                      CallbackFlags::OnStaticCollision);
+    w.engine->Init(w.frame.get(), AssetGuid{});
+    ContactRecorder recorder;
+    for (int i = 0; i < 60; ++i) {
+        w.Step(&recorder);
+    }
+    CHECK(recorder.enter == 1);
+    CHECK(recorder.stay > 1);
+    CHECK(recorder.lastStatic && recorder.lastEntity == ball && !recorder.lastOther.IsValid());
+    CHECK(recorder.exit == 0);
+    // Lifted away: one exit from static collider 0.
+    w.frame->GetPointer<Quantum::Transform3D>(ball)->Position = V3(0, 5, 0);
+    w.frame->GetPointer<PhysicsBody3D>(ball)->Velocity = FPVector3::Zero();
+    w.Step(&recorder);
+    w.Step(&recorder);
+    CHECK(recorder.exit == 1);
+    CHECK(recorder.lastStatic && recorder.lastStaticIndex == 0 && recorder.lastEntity == ball);
+}
+
+TEST_CASE("Scene3D: stacked bodies share one island") {
+    World w;
+    w.frame->settings.SetAllowSleeping(false);
+    w.AddStaticBox(V3(0, -1, 0), V3(10, 1, 10));
+    const Shape3D cube = Shape3D::CreateBox(FPVector3{FP::_0_50(), FP::_0_50(), FP::_0_50()});
+    w.AddBody(V3(0, 0, 0) + FPVector3{FP::Zero(), FP::_0_50(), FP::Zero()}, cube, true);
+    w.AddBody(V3(0, 1, 0) + FPVector3{FP::Zero(), FP::_0_50(), FP::Zero()}, cube, true);
+    w.AddBody(V3(5, 0, 0) + FPVector3{FP::Zero(), FP::_0_50(), FP::Zero()}, cube, true); // apart
+    w.engine->Init(w.frame.get(), AssetGuid{});
+    for (int i = 0; i < 3; ++i) {
+        w.Step();
+    }
+    const Scene3D* scene = w.engine->Scene();
+    int live = 0;
+    std::size_t largest = 0;
+    for (const Island3D& island : scene->_islands) {
+        if (!island.Ignore) {
+            ++live;
+            largest = std::max(largest, island.Entries.size());
+        }
+    }
+    CHECK(live == 2);
+    CHECK(largest == 2);
+    CHECK(scene->_solverEntries.size() == 3);
+}
+
+TEST_CASE("Scene3D: a resting body without contacts falls asleep on its own") {
+    World w;
+    w.frame->settings.Gravity = FPVector3::Zero();
+    const EntityRef e = w.AddBody(V3(0, 0, 0), Shape3D::CreateSphere(F(1)), true);
+    w.engine->Init(w.frame.get(), AssetGuid{});
+    PhysicsBody3D* body = w.frame->GetPointer<PhysicsBody3D>(e);
+    for (int i = 0; i < 30 && !body->IsSleeping(); ++i) {
+        w.Step();
+    }
+    CHECK(!body->IsSleeping()); // half a second: not yet
+    for (int i = 0; i < 60 && !body->IsSleeping(); ++i) {
+        w.Step();
+    }
+    CHECK(body->IsSleeping());
+    CHECK(body->SleepTime() == FP::Zero());
+}

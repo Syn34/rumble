@@ -66,3 +66,8 @@ add_library(rr::quantum_core ALIAS rr_quantum_core)
 target_include_directories(rr_quantum_core PUBLIC ..)
 target_link_libraries(rr_quantum_core PUBLIC rr::photon_deterministic)
 rr_set_warnings(rr_quantum_core)
+
+# 3D/2D physics scene (agent/qcore-physics2)
+target_sources(rr_quantum_core PRIVATE
+    physics3d/collision_info3d.cpp
+)
