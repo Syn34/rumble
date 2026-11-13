@@ -2,6 +2,7 @@
 #include "map.h"
 
 #include "photon_deterministic/log.h"
+#include "quantum_core/byte_stream.h"
 #include "quantum_core/resource_manager.h"
 
 #include <algorithm>
@@ -44,13 +45,48 @@ void Map::Loaded(IResourceManager* resourceManager, Allocator* /*allocator*/) {
             if (dynamic_cast<const BinaryData*>(asset.get()) == nullptr) {
                 throw std::bad_cast();
             }
-            // (Reading the triangles - SerializeStaticColliderTriangles - is missing.)
+            const auto data = static_cast<const BinaryData*>(asset.get())->CreateByteStream();
+            SerializeStaticColliderTriangles(data->Stream, false);
             if (!dataGuid.IsDynamic()) {
                 resourceManager->DisposeAsset(dataGuid);
             }
         }
     }
     InitNavMeshes(resourceManager);
+}
+
+void Map::SerializeStaticColliderTriangles(ByteStream& stream, bool write) {
+    if (write) {
+        stream.WriteInt(static_cast<std::int32_t>(StaticColliders3DTriangles.size()));
+        OptionalTriangleMetadataSerializationEnabled = true;
+        for (auto& [key, triangles] : StaticColliders3DTriangles) {
+            stream.WriteInt(key);
+            stream.WriteInt(static_cast<std::int32_t>(triangles.size()));
+            for (TriangleCCW& triangle : triangles) {
+                triangle.Serialize(stream, true, SerializeTrianglesMetadata);
+            }
+        }
+        return;
+    }
+    StaticColliders3DTriangles.clear();
+    const std::int32_t count = stream.ReadInt();
+    for (std::int32_t entry = 0; entry < count; ++entry) {
+        const std::int32_t key = stream.ReadInt();
+        const std::int32_t length = stream.ReadInt();
+        if (length < 0) {
+            throw std::out_of_range("negative static mesh triangle count");
+        }
+        std::vector<TriangleCCW> triangles(static_cast<std::size_t>(length));
+        const bool withMetadata =
+            OptionalTriangleMetadataSerializationEnabled ? SerializeTrianglesMetadata : true;
+        for (TriangleCCW& triangle : triangles) {
+            triangle.Serialize(stream, false, withMetadata);
+        }
+        // Dictionary.Add: a repeated key throws.
+        if (!StaticColliders3DTriangles.emplace(key, std::move(triangles)).second) {
+            throw std::invalid_argument("static mesh triangle key repeated");
+        }
+    }
 }
 
 void Map::InitNavMeshes(IResourceManager* resourceManager) {

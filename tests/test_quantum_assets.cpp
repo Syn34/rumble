@@ -510,6 +510,7 @@ TEST_CASE("Map values, navmeshes and regions") {
     navmesh->Name = "Ground";
     auto triangles = std::make_shared<BinaryData>();
     triangles->Guid = AssetGuid(61);
+    triangles->Data = {0, 0, 0, 0}; // no triangle entries
     auto mapAsset = std::make_shared<Map>();
     mapAsset->Guid = AssetGuid(62);
     mapAsset->BucketsCount = 0;

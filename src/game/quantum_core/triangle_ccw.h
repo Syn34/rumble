@@ -10,6 +10,8 @@
 
 namespace Quantum {
 
+class ByteStream;
+
 using Photon::Deterministic::FP;
 using Photon::Deterministic::FPVector3;
 
@@ -50,8 +52,11 @@ struct TriangleCCW {
     // A over B over C).
     void GetSupportOffset(const FPVector3& worldDir, FPVector3& supportOffset) const;
 
-    // TODO(0x7d39e5c, Quantum.TriangleCCW.Serialize): vertices (and optionally the derived
-    // metadata) through the map's ByteStream, which is not reimplemented yet.
+    // 0x7d39e5c - the vertices, then either the derived data (MaxY, MinY, BroadRadius, the
+    // edges, the centre offsets, the edge lengths, Normal, InverseNormal, Center) when
+    // `serializeTrianglesMetadata`, or nothing and ComputeNormal derives it again; then
+    // StaticDataIndex. Reads overwrite the fields in place.
+    void Serialize(ByteStream& stream, bool write, bool serializeTrianglesMetadata);
 };
 
 } // namespace Quantum

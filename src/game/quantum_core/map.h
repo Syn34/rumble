@@ -107,21 +107,21 @@ class Map final : public AssetObject, public IBuiltInAssetObject {
     // 0x7ce1720 - the grid's lower-left corner (it is centred on the origin).
     FPVector2 WorldOffset() const;
 
-    // TODO(0x7ce1790, Quantum.Map.SerializeStaticColliderTriangles): reads or writes
-    // StaticColliders3DTriangles to the BinaryData stream: entry count, then per entry the
-    // key, the triangle count and each TriangleCCW (TriangleCCW.Serialize, metadata if
-    // SerializeTrianglesMetadata - when reading only if
-    // OptionalTriangleMetadataSerializationEnabled, otherwise always). Writing also sets
-    // OptionalTriangleMetadataSerializationEnabled. Needs TriangleCCW.Serialize.
+    // 0x7ce1790 - StaticColliders3DTriangles to or from the baked BinaryData stream: entry
+    // count, then per entry (in key order) the key, the triangle count and each
+    // TriangleCCW. Writing serialises the metadata if SerializeTrianglesMetadata and sets
+    // OptionalTriangleMetadataSerializationEnabled; reading (into a fresh dictionary) takes
+    // the metadata as stored when OptionalTriangleMetadataSerializationEnabled, otherwise
+    // expects it always.
+    void SerializeStaticColliderTriangles(ByteStream& stream, bool write);
 
     // TODO(0x7ce1b84, Quantum.Map.Disposed): frees the native buffers of the polygon
     // colliders inside StaticColliders2D; needs MapStaticCollider2D.
 
     // TODO(0x7ce1c70, Quantum.Map.Loaded): the StaticColliders2D polygon setup (radius and
-    // native buffers per polygon collider) and reading the triangles
-    // (SerializeStaticColliderTriangles) are missing. Done: world size and bucket values
-    // made valid, the triangle data asset fetched (a warning when missing) and released
-    // afterwards, the navmeshes and regions resolved (InitNavMeshes).
+    // native buffers per polygon collider) is missing. Done: world size and bucket values
+    // made valid, the triangles read from their data asset (a warning when it is missing)
+    // which is released afterwards, the navmeshes and regions resolved (InitNavMeshes).
     void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
 
     // 0x7ce22b0 - RegionMap from Regions (name -> index; more than 64 regions logs an
