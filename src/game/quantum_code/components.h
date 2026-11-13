@@ -26,6 +26,11 @@
 namespace Quantum {
 
 class Frame;
+// Asset classes named by component methods (see systems/asset_decls.h).
+class EnergyCellManagerSpec;
+namespace Prototypes {
+class Killable_Prototype;
+}
 
 // Every type below, so that collection accessors can name element types declared later.
 struct AIBlackboardComponent;
@@ -2401,6 +2406,14 @@ struct alignas(8) EnergyCellManager {
 
     AssetRefEnergyCellManagerSpec Spec;
 
+    // 0x7c45bd8 - Gives the charge of an energy cell of the given type (per the manager's
+    // spec) to the collector (implemented in systems/game_mode_libs.cpp).
+    static void TryGiveEnergyCell(Frame* frame, EntityRef collectorEntity, DroppableType energyCellType);
+    // 0x7c45d30 - Positive charges go to the collector's ultimate, with an event.
+    static void TryGiveEnergyCell(Frame* frame, EntityRef collectorEntity, std::int32_t charge);
+    // 0x7c45cdc - The charge of one cell type; 0 for other droppables.
+    static std::int32_t GetCharge(DroppableType energyCellType, const EnergyCellManagerSpec* spec);
+
     // 0x7c45ba8
     std::int32_t GetHashCode() const;
     // 0x7c45bc4
@@ -2737,6 +2750,12 @@ struct alignas(8) GameModeHandler {
     // 0x7c476ec
     void set_playersSkinsIDs(Collections::QListPtr<std::int32_t> value) { playersSkinsIDsPtr = value.Ptr; }
 
+    // 0x7c4839c - Time since the current state began, minus the time spent paused, in
+    // unscaled time (implemented in systems/game_mode_libs.cpp).
+    FP GetCurrentStateElapsedTime(Frame* f) const;
+    // 0x7c483cc - Same, including paused time.
+    FP GetCurrentStateElapsedTimeNoPause(Frame* f) const;
+
     // 0x7c476f4
     std::int32_t GetHashCode() const;
     // 0x7c47cec
@@ -3020,6 +3039,10 @@ struct alignas(8) Health {
     // 0x7c4ca34
     std::span<FP> get_MaxHpMultArray() { return _MaxHpMultArray_; }
     std::span<const FP> get_MaxHpMultArray() const { return _MaxHpMultArray_; }
+
+    // 0x7c4d1c8 - Lowers the overhealth cap, trimming current overhealth to fit
+    // (implemented in systems/health_systems.cpp).
+    void DecreaseOverhealth(FP amount);
 
     // 0x7c4ca9c
     std::int32_t GetHashCode() const;
@@ -3411,6 +3434,10 @@ struct alignas(8) Killable {
     AssetRefDeathAnimationSpec deathAnimationSpec;
     ComponentPrototypeRef Prototype;
     KilledByData killedBy;
+
+    // 0x7c560fc - The Killable prototype the component was made from (implemented in
+    // systems/combat_libs.cpp; see systems/asset_decls.h).
+    Prototypes::Killable_Prototype* GetPrototype(Frame* frame) const;
 
     // 0x7c55d7c
     std::int32_t GetHashCode() const;
@@ -3816,6 +3843,13 @@ struct alignas(8) Ownership {
     EntityRef Source;
     EntityRef Weapon;
 
+    // 0x7c5999c - Adds or updates the entity's ownership; owner, weapon and source are
+    // only overwritten by valid entities (implemented in systems/combat_libs.cpp).
+    static void SetOwnerShip(Frame* frame, EntityRef entity, EntityRef owner, EntityRef weapon,
+                             EntityRef directSource, bool isOwnerUltimate);
+    // 0x7c59ab0
+    static bool TryGetOwnership(Frame* frame, EntityRef entity, Ownership*& ownership);
+
     // 0x7c598f8
     std::int32_t GetHashCode() const;
     // 0x7c59944
@@ -3961,6 +3995,9 @@ struct alignas(8) PlayerActor {
     FP noActionPushForceThreshold;
     FP noActionTimeAfterPush;
     FP timeWithoutCombatActivity;
+
+    // 0x7c5ad84 - Not a bot (implemented in systems/combat_libs.cpp).
+    bool get_IsHuman() const;
 
     // 0x7c5a3ac
     std::int32_t GetHashCode() const;
@@ -5087,6 +5124,22 @@ struct alignas(4) Team {
     std::int32_t TeamID;
     std::int32_t eliminationFrame;
     QBoolean isLeader;
+
+    // The team id the systems give neutral entities (a literal -2 in the original).
+    static constexpr std::int32_t NeutralTeamID = -2;
+
+    // 0x7c642cc - Gives the entity a Team (adding the component if needed) with `teamID`;
+    // it becomes the team's leader if no player of that team leads it yet. Implemented in
+    // systems/team.cpp.
+    static void JoinTeam(Frame* f, EntityRef newTeamMember, std::int32_t teamID);
+    // 0x7c643f4 - The first player (PlayerActor with a Team) of `teamId` that leads it.
+    static bool TryGetPlayerTeamLeader(Frame* f, std::int32_t teamId, EntityRef& leader);
+
+    // 0x7c6454c - -1 without a Team.
+    static std::int32_t GetTeamID(Frame* f, EntityRef teamMember);
+
+    // 0x7c6478c - teamId is -1 without a Team (implemented in systems/team.cpp).
+    static bool TryGetTeamID(Frame* f, EntityRef teamMember, std::int32_t& teamId);
 
     // 0x7c6404c
     std::int32_t GetHashCode() const;
@@ -6633,6 +6686,17 @@ struct alignas(8) Overhealth {
     FP DecreaseTickRate;
     FP Duration;
     FP Value;
+
+    // 0x7b9a0d4 - Seconds between two decay ticks (implemented in systems/health_systems.cpp).
+    FP get_DecreaseInterval() const;
+    // 0x7b9a108 - HP lost per decay tick.
+    FP get_DecreaseByTick() const;
+
+    // Value equality, as the original's default struct comparison (QList.Remove).
+    friend bool operator==(const Overhealth& a, const Overhealth& b) {
+        return a.StartFrame == b.StartFrame && a.DecreaseDuration == b.DecreaseDuration &&
+               a.DecreaseTickRate == b.DecreaseTickRate && a.Duration == b.Duration && a.Value == b.Value;
+    }
 
     // 0x7b99f48
     std::int32_t GetHashCode() const;
