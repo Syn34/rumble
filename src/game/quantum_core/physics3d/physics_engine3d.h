@@ -40,8 +40,10 @@ class PhysicsEngine3D {
 
     Scene3D* Scene() { return _scene3D.get(); }
 
-    // TODO(0x7d487c8, Quantum.Physics3D.PhysicsEngine3D.SetCallbacks): sets an entity's
-    // PhysicsCallbacks3D flags (adding the component when needed).
+    // 0x7d487c8 - no flags removes the entity's PhysicsCallbacks3D; otherwise adds it when
+    // missing and, if the flags change, stores them and forgets the tracked collisions.
+    static void SetCallbacks(Core::FrameBase* frame, EntityRef entity, CallbackFlags flags);
+
     // TODO(0x7d48988, Quantum.Physics3D.PhysicsEngine3D.AllocatePersistentHitCollection3D),
     // TODO(0x7d48a04, Quantum.Physics3D.PhysicsEngine3D.GetQueryHits),
     // TODO(0x7d48afc, Quantum.Physics3D.PhysicsEngine3D.TryGetQueryHits),

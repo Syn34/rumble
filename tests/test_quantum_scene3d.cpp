@@ -4,6 +4,7 @@
 #include "math_tables.h"
 
 #include "photon_deterministic/system_allocator.h"
+#include "quantum_core/component_prototypes.h"
 #include "quantum_core/frame_base.h"
 #include "quantum_core/frame_checksumer_bit_stream.h"
 #include "quantum_core/frame_context.h"
@@ -244,4 +245,25 @@ TEST_CASE("Scene3D: inertia from shape factors and the context's engine") {
     args.UsePhysics3D = true;
     FrameContext withPhysics(args);
     CHECK(withPhysics.get_Physics3D() != nullptr && w.context->get_Physics3D() == nullptr);
+}
+
+TEST_CASE("Scene3D: physics body and callbacks prototypes materialise") {
+    World w;
+    const EntityRef e = w.frame->Create();
+    PhysicsCollider3D collider{};
+    collider.Shape = Shape3D::CreateSphere(F(1));
+    w.frame->Add(e, collider); // the body's OnAdded resets inertia from the collider
+    Prototypes::PhysicsBody3D_Prototype bodyPrototype;
+    bodyPrototype.Mass = F(4);
+    PrototypeMaterializationContext materialization{};
+    CHECK(bodyPrototype.AddToEntity(w.frame.get(), e, materialization));
+    const PhysicsBody3D* body = w.frame->GetPointer<PhysicsBody3D>(e);
+    CHECK(body->MassInverse() == FP::_0_25() && body->GravityScale() == F(1));
+    CHECK(body->Drag() == FP::_0_50());
+    CHECK(body->InertiaTensorInverse().X > FP::Zero());
+
+    PhysicsEngine3D::SetCallbacks(w.frame.get(), e, CallbackFlags::OnDynamicCollision);
+    CHECK(w.frame->Get<PhysicsCallbacks3D>(e).Flags == CallbackFlags::OnDynamicCollision);
+    PhysicsEngine3D::SetCallbacks(w.frame.get(), e, CallbackFlags::None);
+    CHECK(!w.frame->Has<PhysicsCallbacks3D>(e));
 }

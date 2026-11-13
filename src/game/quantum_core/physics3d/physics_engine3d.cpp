@@ -25,4 +25,24 @@ void PhysicsEngine3D::OverlapShape(Core::FrameBase* frame, HitCollection3D* coll
     _scene3D->OverlapShape(frame, collection, pos, rot, shape, layerMask, options);
 }
 
+// 0x7d487c8
+void PhysicsEngine3D::SetCallbacks(Core::FrameBase* frame, EntityRef entity, CallbackFlags flags) {
+    if (frame->Has<PhysicsCallbacks3D>(entity)) {
+        if (flags == CallbackFlags::None) {
+            frame->Remove<PhysicsCallbacks3D>(entity);
+            return;
+        }
+    } else {
+        if (flags == CallbackFlags::None) {
+            return;
+        }
+        frame->Add<PhysicsCallbacks3D>(entity);
+    }
+    PhysicsCallbacks3D* callbacks = frame->GetPointer<PhysicsCallbacks3D>(entity);
+    if (callbacks != nullptr && callbacks->Flags != flags) {
+        callbacks->Flags = flags;
+        callbacks->_listCount = 0;
+    }
+}
+
 } // namespace Quantum::Physics3D
