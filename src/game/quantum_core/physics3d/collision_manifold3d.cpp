@@ -1,6 +1,8 @@
 // collision_manifold3d.cpp - Quantum.Physics3D manifold helpers and raw-int vectors.
 #include "collision_manifold3d.h"
 
+#include "photon_deterministic/fp_math.h"
+
 #include "quantum_core/physics_components.h"
 #include "quantum_core/physics_scene_settings.h"
 
@@ -437,6 +439,16 @@ void FPQuaternionRawInt::Serialize(void* ptr, Photon::Deterministic::IDeterminis
     stream.Serialize(&q->RawIntY);
     stream.Serialize(&q->RawIntZ);
     stream.Serialize(&q->RawIntW);
+}
+
+// 0x7d7d5a4
+FP::Raw IntAABB::GetBroadRadiusRaw() const {
+    const auto halfSquared = [](std::int32_t min, std::int32_t max) {
+        const std::int64_t half = static_cast<std::int32_t>(static_cast<std::uint32_t>(max) - static_cast<std::uint32_t>(min)) >> 1;
+        return static_cast<FP::Raw>(static_cast<std::uint64_t>(half * half) >> 16);
+    };
+    return Photon::Deterministic::FPMath::SqrtRaw(halfSquared(MinY, MaxY) + halfSquared(MinX, MaxX) +
+                                                  halfSquared(MinZ, MaxZ));
 }
 
 } // namespace Quantum::Physics3D

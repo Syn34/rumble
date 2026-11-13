@@ -38,7 +38,10 @@ const CharacterController3DConfig* ConfigOf(FrameBase* frame, const AssetRefChar
 // Hit3D.GetStaticCollider (0x7d6d870) reduced to what the controller asks: whether the
 // static collider of a hit is a mesh.
 bool IsMeshStatic(FrameBase* frame, const Hit3D& hit) {
-    const Map* map = hit._mapGuid.IsValid() ? frame->FindAsset<Map>(hit._mapGuid) : frame->get_Map();
+    const Map* map = frame->get_Map();
+    if (hit._mapGuid.IsValid() && (map == nullptr || map->Guid != hit._mapGuid)) {
+        map = frame->FindAsset<Map>(hit._mapGuid);
+    }
     return map->StaticColliders3D.at(static_cast<std::size_t>(hit._staticColliderIndex)).ShapeType ==
            Shape3DType::Mesh;
 }

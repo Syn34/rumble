@@ -7,6 +7,7 @@
 #include "quantum_core/map.h"
 #include "quantum_core/triangle_ccw.h"
 
+#include <cstdio>
 #include <vector>
 
 using namespace Quantum;
@@ -167,4 +168,340 @@ TEST_CASE("TriangleMesh: built from a map with immutable and toggleable collider
     const std::int32_t* tris = nullptr;
     std::int32_t count = 0;
     CHECK(mesh.TryGetTriangles(0, 0, 0, tris, count) && count == 1 && mesh.GetTriangle(tris[0])->CCWTri.StaticDataIndex == 0);
+}
+
+// ---------------------------------------------------------------------------------------
+// The 3D scene against static meshes
+
+#include "photon_deterministic/fp_math.h"
+#include "photon_deterministic/system_allocator.h"
+#include "quantum_core/frame_base.h"
+#include "quantum_core/frame_context.h"
+#include "quantum_core/component_prototypes.h"
+#include "quantum_core/physics3d/character_controller3d.h"
+#include "quantum_core/resource_manager.h"
+#include "quantum_core/builtin_assets.h"
+#include "quantum_core/physics3d/physics_engine3d.h"
+#include "quantum_core/physics_components.h"
+#include "quantum_core/physics_scene_settings.h"
+#include "quantum_core/transform.h"
+
+#include <memory>
+
+using namespace Quantum::Core;
+using namespace Quantum::Physics3D;
+using Photon::Deterministic::FPMath::Abs;
+
+namespace {
+
+struct MeshRegistryScope {
+    bool owned = false;
+    MeshRegistryScope() {
+        if (!ComponentTypeId<>::IsSetUp()) {
+            ComponentTypeId<>::Setup({});
+            owned = true;
+        }
+    }
+    ~MeshRegistryScope() {
+        if (owned) ComponentTypeId<>::ResetForTests();
+    }
+};
+
+class MeshTestFrame final : public FrameBase {
+  public:
+    explicit MeshTestFrame(FrameContext* context) : FrameBase(context) {}
+    FrameMetaData* get_FrameMetaData() override { return &_meta; }
+    CommitCommandsModes get_CommitCommandsMode() const override { return CommitCommandsModes::OnFrameSimulationBegin; }
+    FP get_DeltaTime() const override { return FP::FromRaw(65536 / 60); }
+    void set_DeltaTime(FP) override {}
+    std::string DumpFrame(int) override { return {}; }
+    std::uint64_t CalculateChecksum() override { return 0; }
+    std::vector<std::uint8_t> Serialize(Photon::Deterministic::DeterministicFrameSerializeMode) override { return {}; }
+    void Deserialize(std::span<const std::uint8_t>) override {}
+    void Copy(const Photon::Deterministic::DeterministicFrame&) override {}
+    Map* get_Map() const override { return map.get(); }
+    const PhysicsSceneSettings* get_PhysicsSceneSettings() const override { return &settings; }
+
+    std::shared_ptr<Map> map = std::make_shared<Map>();
+    PhysicsSceneSettings settings;
+
+  private:
+    FrameMetaData _meta{};
+};
+
+// A world whose map has a 20 x 20 floor at y = 0 made of one mesh collider (two triangles
+// facing up), plus whatever mesh colliders a test adds.
+struct MeshWorld {
+    std::unique_ptr<ResourceManagerStatic> resources; // outlives the context
+    MeshRegistryScope registry;
+    Photon::Deterministic::SystemAllocator allocator;
+    Photon::Deterministic::DeterministicPlatformInfo platform;
+    std::unique_ptr<FrameContext> context;
+    std::unique_ptr<MeshTestFrame> frame;
+    std::unique_ptr<PhysicsEngine3D> engine;
+
+    explicit MeshWorld(std::vector<std::shared_ptr<AssetObject>> assets = {}) {
+        rr::test::InstallMathDerivedTables();
+        platform.Allocator = &allocator;
+        FrameContext::Args args;
+        if (!assets.empty()) {
+            resources = std::make_unique<ResourceManagerStatic>(assets, nullptr);
+            args.AssetDatabase = resources->CreateAssetDatabase();
+            args.UsePhysics3D = true; // the controller queries the context's engine
+        }
+        args.PlatformInfo = &platform;
+        args.HeapConfig = Quantum::Allocator::Heap::Config(12, 256, 4);
+        context = std::make_unique<FrameContext>(args);
+        frame = std::make_unique<MeshTestFrame>(context.get());
+        Core::EntitiesConfig config;
+        config.DefaultEntityCapacity = 32;
+        config.DefaultComponentBlockCapacity = 8;
+        FrameBase::Initialize(frame.get(), config);
+        frame->Verified = true; // the static mesh only takes triangles on verified frames
+        frame->map->Guid = AssetGuid(77);
+        PhysicsSceneSettings& s = frame->settings;
+        s.SetAllLayersColliding();
+        s.SetAllowSleeping(true);
+        s.SetUseAngularVelocity(true);
+        s.SolverType = ConstraintsSolverType::LegacyGaussSeidel;
+        s.SolverIterations = 4;
+        s.Gravity = {FP::Zero(), F(-10), FP::Zero()};
+        s.PenetrationAllowance = FP::FromRaw(655);
+        s.PenetrationCorrection = FP::FromRaw(26214);
+        s.SleepTimeSec = FP::_1();
+        s.LinearSleepTolerance = FP::FromRaw(6553);
+        s.AngularSleepToleranceInRad = FP::FromRaw(6553);
+        PhysicsQueryConfig queries;
+        queries.ShapeCastMaxIterations = 16;
+        queries.ShapeCastHardTolerance = FP::FromRaw(65);
+        queries.ShapeCastSoftTolerance = FP::FromRaw(655);
+        s.GJKSettingsValue = GJKSettings(queries);
+        engine = std::make_unique<PhysicsEngine3D>(context.get());
+        AddMesh({MakeTriangle(V3(-10, 0, -10), V3(10, 0, -10), V3(-10, 0, 10), 0),
+                 MakeTriangle(V3(10, 0, -10), V3(10, 0, 10), V3(-10, 0, 10), 0)});
+    }
+
+    // A mesh collider; the triangles' static index is set to the collider's.
+    std::int32_t AddMesh(std::vector<TriangleCCW> tris, bool trigger = false) {
+        const auto index = static_cast<std::int32_t>(frame->map->StaticColliders3D.size());
+        MapStaticCollider3D collider;
+        collider.ShapeType = Shape3DType::Mesh;
+        collider.StaticData.IsTrigger = trigger;
+        frame->map->StaticColliders3D.push_back(collider);
+        for (TriangleCCW& tri : tris) tri.StaticDataIndex = index;
+        frame->map->StaticColliders3DTriangles[index] = std::move(tris);
+        return index;
+    }
+
+    EntityRef AddBody(FPVector3 position, Shape3D shape, bool dynamic, bool trigger = false) {
+        const EntityRef e = frame->Create();
+        frame->Add(e, Quantum::Transform3D{position, FPQuaternion::Identity()});
+        PhysicsCollider3D collider{};
+        collider.Shape = shape;
+        collider.SetIsTrigger(trigger);
+        frame->Add(e, collider);
+        if (dynamic) {
+            PhysicsBody3D body{};
+            body.InitBody(F(1), FP::Zero(), FP::Zero(), PhysicsBody3D::ConfigFlags::Default,
+                          RotationFreezeFlags::FreezeAll, {}, {});
+            frame->Add(e, body);
+        }
+        return e;
+    }
+
+    void Init() {
+        engine->OnFrameSimulationBegin(frame.get());
+        engine->Init(frame.get(), AssetGuid{});
+    }
+    void Step(ICollisionCallbacks3D* callbacks = nullptr) {
+        engine->OnFrameSimulationBegin(frame.get());
+        engine->Update(frame.get(), callbacks, frame->get_DeltaTime());
+        engine->OnFrameSimulationEnd();
+    }
+};
+
+struct MeshCallbacks final : ICollisionCallbacks3D {
+    int collisionEnter = 0, collision = 0, collisionExit = 0, triggerEnter = 0, trigger = 0, triggerExit = 0;
+    FPVector3 lastNormal;
+    std::int32_t lastStatic = -1;
+    void OnCollision3D(FrameBase*, const CollisionInfo3D& info) override {
+        ++collision;
+        lastNormal = info.ContactNormal();
+    }
+    void OnCollisionEnter3D(FrameBase*, const CollisionInfo3D& info) override {
+        ++collisionEnter;
+        lastStatic = info._entryB->StaticColliderIndex;
+    }
+    void OnCollisionExit3D(FrameBase*, const ExitInfo3D&) override { ++collisionExit; }
+    void OnTrigger3D(FrameBase*, const TriggerInfo3D&) override { ++trigger; }
+    void OnTriggerEnter3D(FrameBase*, const TriggerInfo3D& info) override {
+        ++triggerEnter;
+        lastStatic = info._entryA->IsDynamic() ? info._entryB->StaticColliderIndex : info._entryA->StaticColliderIndex;
+    }
+    void OnTriggerExit3D(FrameBase*, const ExitInfo3D&) override { ++triggerExit; }
+};
+
+} // namespace
+
+TEST_CASE("Scene3D mesh: map mesh colliders build the scene's triangle mesh") {
+    MeshWorld w;
+    w.AddMesh({MakeTriangle(V3(0, 5, 0), V3(1, 5, 0), V3(0, 5, 1), 0)});
+    w.Init();
+    TriangleMesh* mesh = w.engine->SceneMesh();
+    CHECK(mesh->TriangleCount() == 4); // slot 0 + three triangles
+    CHECK(w.engine->Scene()->StaticEntriesCount() == 2);
+    CHECK(w.engine->Scene()->GetEntry(1)->Shape->Mesh.MeshIndex == 1);
+    // Predicted frames add nothing: a second map loaded while predicted stays empty.
+    TriangleMesh fresh;
+    CHECK(fresh.Predicted());
+}
+
+TEST_CASE("Scene3D mesh: bodies fall and rest on a static mesh floor") {
+    MeshWorld w;
+    const EntityRef box = w.AddBody(V3(0, 3, 0), Shape3D::CreateBox(FPVector3{FP::_0_50(), FP::_0_50(), FP::_0_50()}), true);
+    const EntityRef ball = w.AddBody(V3(4, 2, 4), Shape3D::CreateSphere(FP::_0_50()), true);
+    w.frame->Add(box, PhysicsCallbacks3D{});
+    w.frame->GetPointer<PhysicsCallbacks3D>(box)->Flags = CallbackFlags::OnStaticCollisionEnter |
+                                                         CallbackFlags::OnStaticCollision |
+                                                         CallbackFlags::OnStaticCollisionExit;
+    w.Init();
+    MeshCallbacks recorder;
+    for (int i = 0; i < 240; ++i) {
+        w.Step(&recorder);
+    }
+    const Quantum::Transform3D* t = w.frame->GetPointer<Quantum::Transform3D>(box);
+    CHECK(t->Position.Y > FP::FromRaw(26214) && t->Position.Y < FP::FromRaw(39322));
+    CHECK(w.frame->GetPointer<PhysicsBody3D>(box)->IsSleeping());
+    const Quantum::Transform3D* b = w.frame->GetPointer<Quantum::Transform3D>(ball);
+    CHECK(b->Position.Y > FP::FromRaw(26214) && b->Position.Y < FP::FromRaw(39322));
+    CHECK(recorder.collisionEnter == 1 && recorder.lastStatic == 0);
+    CHECK(recorder.collision > 1);
+    CHECK(recorder.lastNormal.Y > FP::FromRaw(60000)); // from the floor towards the box
+    CHECK(recorder.collisionExit == 0);
+}
+
+TEST_CASE("Scene3D mesh: queries hit mesh triangles") {
+    MeshWorld w;
+    w.AddMesh({MakeTriangle(V3(20, 3, 20), V3(21, 3, 20), V3(20, 3, 21), 0)}); // far away
+    w.Init();
+    w.Step();
+    const int detailed = QueryOptions::HitAll | QueryOptions::ComputeDetailedInfo;
+
+    HitCollection3D ray(8, HitCollection3D::Temp, w.context.get());
+    w.engine->Linecast(w.frame.get(), &ray, V3(1, 5, 1), V3(1, -5, 1), false, -1, detailed);
+    CHECK(ray.Count() == 1);
+    if (ray.Count() == 1) {
+        CHECK(ray[0]._staticColliderIndex == 0 && !ray[0].IsDynamic());
+        CHECK(Abs(ray[0].Point.Y) < FP::FromRaw(64) && Abs(ray[0].CastDistanceNormalized - FP::_0_50()) < FP::FromRaw(64));
+        CHECK(ray[0].Normal.Y > FP::FromRaw(65000));
+    }
+    // From below the floor's back face: no hit; statics excluded: no hit.
+    HitCollection3D back(8, HitCollection3D::Temp, w.context.get());
+    w.engine->Linecast(w.frame.get(), &back, V3(1, -5, 1), V3(1, 5, 1), false, -1, detailed);
+    CHECK(back.Count() == 0);
+    w.engine->Linecast(w.frame.get(), &back, V3(1, 5, 1), V3(1, -5, 1), false, -1, QueryOptions::HitDynamics);
+    CHECK(back.Count() == 0);
+    // A long diagonal ray crossing many cells, first hit only.
+    HitCollection3D diagonal(8, HitCollection3D::Temp, w.context.get());
+    w.engine->Linecast(w.frame.get(), &diagonal, V3(-9, 9, -9), V3(9, -9, 9), true, -1, detailed);
+    CHECK(diagonal.Count() == 1 && Abs(diagonal[0].Point.X) < FP::FromRaw(256));
+
+    HitCollection3D overlap(8, HitCollection3D::Temp, w.context.get());
+    w.engine->OverlapShape(w.frame.get(), &overlap, V3(2, 0, 2), FPQuaternion::Identity(), Shape3D::CreateSphere(FP::_0_50()),
+                           -1, detailed);
+    CHECK(overlap.Count() >= 1);
+    if (overlap.Count() >= 1) {
+        CHECK(overlap[0]._staticColliderIndex == 0 && overlap[0].OverlapPenetration > FP::Zero());
+        CHECK(overlap[0].Normal.Y > FP::FromRaw(60000)); // from the floor towards the sphere
+    }
+    HitCollection3D boxOverlap(8, HitCollection3D::Temp, w.context.get());
+    w.engine->OverlapShape(w.frame.get(), &boxOverlap, V3(-3, 0, 5), FPQuaternion::Identity(),
+                           Shape3D::CreateBox(V3(1, 1, 1)), -1, detailed);
+    CHECK(boxOverlap.Count() >= 1);
+    HitCollection3D none(8, HitCollection3D::Temp, w.context.get());
+    w.engine->OverlapShape(w.frame.get(), &none, V3(2, 3, 2), FPQuaternion::Identity(), Shape3D::CreateSphere(FP::_0_50()),
+                           -1, detailed);
+    CHECK(none.Count() == 0);
+
+    // A sphere cast down onto the floor: contact after 4 of 10 units.
+    HitCollection3D cast(8, HitCollection3D::Temp, w.context.get());
+    w.engine->ShapeCast(w.frame.get(), &cast, V3(3, 5, 3), FPQuaternion::Identity(), Shape3D::CreateSphere(F(1)),
+                        V3(0, -10, 0), true, -1, detailed);
+    CHECK(cast.Count() >= 1);
+    if (cast.Count() >= 1) {
+        CHECK(cast[0]._staticColliderIndex == 0);
+        CHECK(Abs(cast[0].CastDistanceNormalized - FP::FromRaw(26214)) < FP::FromRaw(700));
+    }
+}
+
+TEST_CASE("Scene3D mesh: triggers against a static mesh trigger") {
+    MeshWorld w;
+    w.frame->settings.Gravity = FPVector3::Zero();
+    // A vertical trigger wall at x = 3 (normal towards -x).
+    const std::int32_t wall = w.AddMesh({MakeTriangle(V3(3, -2, -2), V3(3, -2, 2), V3(3, 2, -2), 0),
+                                         MakeTriangle(V3(3, -2, 2), V3(3, 2, 2), V3(3, 2, -2), 0)},
+                                        true);
+    const EntityRef mover = w.AddBody(V3(0, 1, 0), Shape3D::CreateSphere(FP::_0_50()), true);
+    w.frame->Add(mover, PhysicsCallbacks3D{});
+    w.frame->GetPointer<PhysicsCallbacks3D>(mover)->Flags =
+        CallbackFlags::OnStaticTriggerEnter | CallbackFlags::OnStaticTrigger | CallbackFlags::OnStaticTriggerExit;
+    w.frame->GetPointer<PhysicsBody3D>(mover)->Velocity = V3(3, 0, 0);
+    w.Init();
+    MeshCallbacks recorder;
+    for (int i = 0; i < 60; ++i) { // reaches x = 2.5 after 50 steps
+        w.Step(&recorder);
+    }
+    CHECK(recorder.triggerEnter == 1 && recorder.lastStatic == wall);
+    CHECK(recorder.trigger >= 1);
+    for (int i = 0; i < 60; ++i) { // past x = 3.5
+        w.Step(&recorder);
+    }
+    CHECK(recorder.triggerExit == 1);
+    // The trigger did not stop the sphere.
+    CHECK(w.frame->GetPointer<Quantum::Transform3D>(mover)->Position.X > F(5));
+}
+
+TEST_CASE("Scene3D mesh: the hybrid solver rests a box on a mesh") {
+    MeshWorld w;
+    w.frame->settings.SolverType = ConstraintsSolverType::HybridJacobiGaussSeidel;
+    const EntityRef box = w.AddBody(V3(1, 2, -1), Shape3D::CreateBox(FPVector3{FP::_0_50(), FP::_0_50(), FP::_0_50()}), true);
+    w.Init();
+    for (int i = 0; i < 240; ++i) {
+        w.Step();
+    }
+    const Quantum::Transform3D* t = w.frame->GetPointer<Quantum::Transform3D>(box);
+    CHECK(t->Position.Y > FP::FromRaw(26214) && t->Position.Y < FP::FromRaw(39322));
+}
+
+TEST_CASE("Scene3D mesh: the character controller stands and walks on a mesh floor") {
+    auto config = std::make_shared<CharacterController3DConfig>();
+    config->Guid = AssetGuid(500);
+    config->Loaded(nullptr, nullptr);
+    MeshWorld w({config});
+    const EntityRef hero = w.frame->Create();
+    w.frame->Add(hero, Quantum::Transform3D{V3(0, 1, 0), FPQuaternion::Identity()});
+    Prototypes::CharacterController3D_Prototype prototype;
+    prototype.Config.Id = AssetGuid(500);
+    PrototypeMaterializationContext materialization{};
+    CHECK(prototype.AddToEntity(w.frame.get(), hero, materialization));
+    PhysicsEngine3D* engine = w.context->get_Physics3D();
+    engine->OnFrameSimulationBegin(w.frame.get());
+    engine->Init(w.frame.get(), AssetGuid{});
+    engine->Update(w.frame.get(), nullptr, w.frame->get_DeltaTime());
+    CHECK(engine->SceneMesh()->TriangleCount() == 3);
+    for (int i = 0; i < 90; ++i) {
+        w.frame->GetPointer<CharacterController3D>(hero)->Move(w.frame.get(), hero, FPVector3::Zero());
+    }
+    const Quantum::Transform3D* t = w.frame->GetPointer<Quantum::Transform3D>(hero);
+    CharacterController3D* kcc = w.frame->GetPointer<CharacterController3D>(hero);
+    CHECK(kcc->Grounded());
+    CHECK(Abs(t->Position.Y) < FP::FromRaw(6554));
+    const FP startX = t->Position.X;
+    for (int i = 0; i < 60; ++i) {
+        w.frame->GetPointer<CharacterController3D>(hero)->Move(w.frame.get(), hero, V3(1, 0, 0));
+    }
+    kcc = w.frame->GetPointer<CharacterController3D>(hero);
+    CHECK(kcc->Grounded());
+    CHECK(t->Position.X - startX > F(2));
+    CHECK(Abs(t->Position.Y) < FP::FromRaw(6554));
 }

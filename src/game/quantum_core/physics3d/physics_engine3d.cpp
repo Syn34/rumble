@@ -6,7 +6,14 @@
 namespace Quantum::Physics3D {
 
 PhysicsEngine3D::PhysicsEngine3D(Core::FrameContext* context)
-    : _scene3D(std::make_unique<Scene3D>()), _context(context) {}
+    : _scene3D(std::make_unique<Scene3D>()), _sceneMesh(std::make_unique<TriangleMesh>()), _context(context) {
+    _scene3D->SetSceneMesh(_sceneMesh.get());
+}
+
+void PhysicsEngine3D::OnFrameSimulationBegin(Core::FrameBase* frame) {
+    _sceneMesh->SetPredicted(frame->IsPredicted());
+    _scene3D->ResetScene(frame);
+}
 
 void PhysicsEngine3D::Update(Core::FrameBase* frame, ICollisionCallbacks3D* callbacks, FP dt) {
     _scene3D->Update(frame, dt, callbacks);

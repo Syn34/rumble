@@ -8,9 +8,14 @@
 // first (kept between steps), then the entries of broad-phase queries, then the entities'
 // colliders. Every per-bucket manifold array reserves index 0, as in the original.
 //
-// Not reimplemented yet (TODOs in scene3d.cpp): static meshes (TriangleMesh), broad-phase
-// queries resolved during the step, compound shapes, joints (and the joint position
-// solver) and the static colliders' mutable state.
+// Static meshes: the map's mesh colliders are one TriangleMesh owned by the engine. A
+// dynamic entry meets it through one "mesh manifold" per (bucket, mesh collider, entity)
+// whose triangle manifolds are chained through NextInMesh; the solvers work on the
+// triangle manifolds, the callbacks and islands on the mesh manifold.
+//
+// Not reimplemented yet (TODOs in scene3d.cpp): broad-phase queries resolved during the
+// step, compound shapes, joints (and the joint position solver) and the static colliders'
+// mutable state.
 #pragma once
 
 #include "quantum_core/physics3d/collision_info3d.h"
@@ -28,6 +33,7 @@
 
 namespace Quantum {
 class Map;
+class TriangleMesh;
 struct PhysicsCallbacksData;
 namespace Core {
 class FrameBase;
@@ -123,6 +129,13 @@ struct Bucket3D {
     std::vector<ManifoldData3D> TriggerManifolds; // index 0 reserved
     std::int32_t TriggerManifoldsProcessCount = 1;
     std::vector<QueryManifold3D> QueryManifolds; // index 0 reserved
+    // Static mesh pairs: one mesh manifold per (mesh collider, entity), its triangle
+    // manifolds chained through NextInMesh; triggers likewise. Index 0 reserved in each.
+    std::vector<CollisionManifold3D> MeshCollisionManifolds;
+    std::int32_t MeshCollisionManifoldsProcessCount = 1;
+    std::vector<CollisionManifold3D> TriangleCollisionManifolds;
+    std::int32_t TriangleCollisionManifoldsProcessCount = 1;
+    std::vector<ManifoldData3D> TriangleTriggerManifolds;
 
     // 0x7d798d0 - room for both endpoints of every entry and query.
     void EnsureEndPointsCapacity(std::int32_t entryCapacity, std::int32_t queryCapacity);
@@ -139,11 +152,13 @@ struct Bucket3D {
     // 0x7d79d64 / 0x7d79db8 - the next unprocessed manifold index.
     std::int32_t GetNextCollisionManifoldToProcess() { return CollisionManifoldsProcessCount++; }
     std::int32_t GetNextTriggerManifoldToProcess() { return TriggerManifoldsProcessCount++; }
-    // TODO(0x7d79b34, Quantum.Physics3D.Bucket3D.GetNextMeshCollisionManifold),
-    // TODO(0x7d79bf4, Quantum.Physics3D.Bucket3D.GetNextTriangleCollisionManifold),
-    // TODO(0x7d79d80, Quantum.Physics3D.Bucket3D.GetNextMeshManifoldToProcess),
-    // TODO(0x7d79d9c, Quantum.Physics3D.Bucket3D.GetNextTriangleManifoldToProcess): static
-    // mesh manifolds; need TriangleMesh.
+    // 0x7d79b34 - a zeroed mesh manifold tagged with this bucket; `index` receives its slot.
+    CollisionManifold3D* GetNextMeshCollisionManifold(std::int32_t& index);
+    // 0x7d79bf4 - likewise for a triangle manifold.
+    CollisionManifold3D* GetNextTriangleCollisionManifold(std::int32_t& index);
+    // 0x7d79d80 / 0x7d79d9c
+    std::int32_t GetNextMeshManifoldToProcess() { return MeshCollisionManifoldsProcessCount++; }
+    std::int32_t GetNextTriangleManifoldToProcess() { return TriangleCollisionManifoldsProcessCount++; }
 };
 
 // Quantum.Physics3D.Tls: per-thread scratch of the scene - the sweep's active lists and
@@ -166,9 +181,23 @@ struct Tls {
     ::Quantum::Transform3D Transform3D;
     NarrowTls3D Narrow;
     std::uint64_t OverlapSequence = 0;
-    // TODO(0x7d7d5e8, Quantum.Physics3D.Tls.Free), TODO(0x7d7d624,
-    // Quantum.Physics3D.Tls.GetTrianglesMailboxes), TODO(0x7d7d63c,
-    // Quantum.Physics3D.Tls.EnsureMailboxesCapacity): triangle mailboxes for static meshes.
+    // Per mesh triangle, the OverlapSequence of the last pass that tested it (a triangle in
+    // several cells is tested once per pass).
+    std::vector<std::uint64_t> _trianglesMailboxes;
+
+    // 0x7d7d5e8
+    void Free() { _trianglesMailboxes.clear(); }
+    // 0x7d7d624
+    std::uint64_t* GetTrianglesMailboxes(std::int32_t capacity) {
+        EnsureMailboxesCapacity(capacity);
+        return _trianglesMailboxes.data();
+    }
+    // 0x7d7d63c - a bigger buffer starts zeroed (the old stamps are dropped).
+    void EnsureMailboxesCapacity(std::int32_t capacity) {
+        if (static_cast<std::int32_t>(_trianglesMailboxes.size()) < capacity) {
+            _trianglesMailboxes.assign(static_cast<std::size_t>(capacity), 0u);
+        }
+    }
 };
 
 // Quantum.Physics3D.Island3D: bodies connected by contacts, solved and put to sleep
@@ -216,6 +245,20 @@ struct Query3D {
     Shape3D Shape;
     std::int32_t Options = 0;
     std::int32_t LayerMask = 0;
+};
+
+// Scene3D.QueryContextInfo3D: what a static mesh traversal hands to the per-triangle test
+// of a query (the triangle found and the query's state).
+struct QueryContextInfo3D {
+    Core::FrameBase* Frame = nullptr;
+    HitCollection3D* HitCollection = nullptr;
+    const Query3D* Query = nullptr;
+    bool ComputeDetailedInfo = false;
+    Entry3D* QueryEntry = nullptr;
+    Entry3D* MeshEntry = nullptr;
+    const TriangleCCW* Tri = nullptr;
+    std::int32_t TriIndex = 0;
+    const GJKSettings* GjkSettings = nullptr;
 };
 
 // Quantum.Physics3D.StaticComponents3D: the transform and collider of a static entry.
@@ -333,6 +376,10 @@ class Scene3D {
     void InsertEndPoints(const IntAABB& aabb, std::int32_t index, std::int32_t& minBucket,
                          std::int32_t& maxBucket);
 
+    // The engine's static mesh (set by PhysicsEngine3D; null leaves meshes out).
+    void SetSceneMesh(TriangleMesh* mesh) { _sceneMesh = mesh; }
+    TriangleMesh* SceneMesh() const { return _sceneMesh; }
+
     // Immediate queries (see scene3d.cpp for how they differ from the original's).
     void Linecast(Core::FrameBase* frame, HitCollection3D* hits, const FPVector3& start,
                   const FPVector3& end, bool firstHitOnly, std::int32_t layerMask,
@@ -362,6 +409,13 @@ class Scene3D {
                              bool detailed);
     void ResolveQueryNarrow(Core::FrameBase* frame, HitCollection3D* hits, const Query3D& query,
                             Entry3D* qEntry, Entry3D* entry, bool detailed);
+    using TriTraversalDelegate = void (Scene3D::*)(QueryContextInfo3D& info);
+    void TraverseSceneMeshLinecast(QueryContextInfo3D& info, TriTraversalDelegate triDelegate);
+    void TraverseSceneMeshShapeCast(QueryContextInfo3D& info, TriTraversalDelegate triDelegate);
+    void TraverseSceneMeshShapeOverlap(QueryContextInfo3D& info, TriTraversalDelegate triDelegate);
+    void ResolveQueryTriangleOverlap(QueryContextInfo3D& info);
+    void ResolveQueryTriangleShapeCast(QueryContextInfo3D& info);
+    void ResolveQueryTriangleLinecast(QueryContextInfo3D& info);
     void InitLinecastEntry(const Query3D& query, Entry3D* qEntry) const;
     void InitShapeOverlapEntry(const Query3D& query, Entry3D* qEntry);
     void InitShapeCastEntry(const Query3D& query, Entry3D* qEntry);
@@ -378,7 +432,11 @@ class Scene3D {
     void EntryCheckEntryList(const ActiveEntryList& list, std::int32_t bucket, Entry3D* entry,
                              bool isTriggerManifold, bool isSleeping, bool isKinematic,
                              bool isStatic);
+    void EntryCheckTriangles(std::int32_t entryIdx, std::int32_t bucketIdx, bool entryIsTrigger, bool isKinematic);
     void TaskNarrowPhase();
+    void TaskNarrowPhaseMeshes();
+    void PruneTriangleChain(Bucket3D& bucket, CollisionManifold3D& mesh,
+                            std::vector<CollisionManifold3D*>* liveTriangles);
     void TaskCallbacks(Core::FrameBase* frame, ICollisionCallbacks3D* callbacks);
     bool CheckIgnoreTriggerManifold(Core::FrameBase* frame, ManifoldData3D* m, Entry3D* entryA,
                                     Entry3D* entryB);
@@ -392,6 +450,10 @@ class Scene3D {
                                 CollisionManifold3D* manifold, Entry3D* entryA, Entry3D* entryB);
     void HandleStaticCollision(Core::FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
                                CollisionManifold3D* manifold, Entry3D* entryA, Entry3D* entryB);
+    bool CheckIgnoreMeshCollisionManifold(Core::FrameBase* frame, CollisionManifold3D* m, Entry3D* entryA);
+    void HandleMeshCollision(Core::FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
+                             CollisionManifold3D* manifold, Entry3D* entryA, Entry3D* entryB,
+                             CollisionManifold3D* triManifolds);
     void HandleExits(Core::FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map);
     bool RaiseExit(Core::FrameBase* f, ICollisionCallbacks3D* callbacks, const Map* map,
                    const Entry3D& entry, const PhysicsCallbacksEntry& item);
@@ -408,6 +470,7 @@ class Scene3D {
     void TaskCollisionSolverInit(Core::FrameBase* frame);
     void TaskCollisionSolverCompute();
     void TaskCollisionSolverAggregateContacts();
+    void TaskCollisionSolverAggregateMesh();
     void TaskVelocitySolverAggregate();
     void TaskVelocitySolverApply();
     void TaskVelocitySolverLegacyGS();
@@ -444,6 +507,11 @@ class Scene3D {
     std::vector<Entry3D*> _solverEntries; // the dynamic entries that joined an island
     std::vector<Entry3D> _entries;
     std::int32_t _queriesCount = 1;
+    TriangleMesh* _sceneMesh = nullptr;
+    std::int32_t _meshEntriesCount = 0; // mesh colliders of the map (Shape3D.Mesh.MeshIndex)
+    // Per (bucket, mesh collider): [0] the collision and [1] the trigger mesh manifold of
+    // the current step (0 = none), at (mesh * 2 + kind) * bucket count + bucket.
+    std::vector<std::int32_t> _meshPerBucketManifolds;
     std::vector<StaticComponents3D> _staticComponents;
     std::int32_t _staticComponentsCount = 0;
     FP _deltaTime;
