@@ -8,6 +8,9 @@
 
 namespace Quantum {
 
+class DamageSpec;
+class PusherSpec;
+
 // Quantum.PhysicsAbstraction: the moving parts of an entity, whichever it has - a
 // physics body, or a kinematic character (KccExtension, with its controller and grind
 // state), or a level button.
@@ -50,6 +53,9 @@ class PushableLib {
   public:
     // 0x7bc43b0 - The latest push, if the entity is pushable and has been pushed.
     static bool TryGetPushedBy(Frame* frame, EntityRef entity, PushedByData& pushedBy);
+    // 0x7bba4b4 - Queues a push request (pushes without impulse are dropped) after
+    // signalling it (implemented in systems/damage_specs.cpp).
+    static void AddPush(Frame* frame, Pushable* pushable, const PushData& pushData);
 };
 
 class DamageLib {
@@ -97,11 +103,20 @@ class DamageLib {
                                        FP& damageMultiplier);
     // 0x7bbaf48 - The product of the live multipliers; expired ones are removed.
     static FP GetTotalDamageMultiplier(Frame* frame, EntityRef entity);
-    // TODO(0x7bb9c7c, Quantum.DamageLib.Hit): queues a hit built by DamageSpec.CreateHitData
-    //   on a damageable target (filters, Damageable_OnBeforeHit, area-of-effect continuity);
-    //   waits for DamageSpec.CreateHitData.
-    // TODO(0x7bba074, Quantum.DamageLib.Push): pushes a pushable target with a pusher spec.
-    // TODO(0x7bb5d40, Quantum.DamageLib.HitAndPush): Hit then Push.
+    // 0x7bb9c7c - Hits a damageable target with a hit built by the damage spec (the source's
+    // own spec when null): checks invulnerability, the spec's entity filter and the target's
+    // damage filter, marks area-of-effect hits continuous, signals Damageable_OnBeforeHit
+    // and applies it. Implemented in systems/damage_specs.cpp, as are Push and HitAndPush.
+    static bool Hit(Frame* frame, EntityRef sourceEntity, EntityRef targetEntity, FPVector3 position,
+                    FPVector3 direction, const DamageSpec* damageSpec);
+    // 0x7bba074 - Pushes a pushable target with the pusher spec (the source's own when null)
+    // unless it is push-invulnerable, grinding or filtered out.
+    static bool Push(Frame* frame, EntityRef sourceEntity, EntityRef targetEntity, FPVector3 position,
+                     FPVector3 direction, const PusherSpec* pusherSpec);
+    // 0x7bb5d40 - Hit then Push along the normalised direction; nothing on a fully
+    // invulnerable target.
+    static bool HitAndPush(Frame* frame, EntityRef sourceEntity, EntityRef targetEntity, FPVector3 position,
+                           FPVector3 direction, const DamageSpec* damageSpec, const PusherSpec* pusherSpec);
     // TODO(0x7bbb0cc, Quantum.DamageLib.DamageableCanBuildUpDamageOfType): elemental build-up
     //   check (fire damage effects).
 };

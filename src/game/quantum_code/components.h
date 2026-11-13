@@ -2851,6 +2851,10 @@ struct alignas(8) GameModeHandler {
     GameModeHandlerLevelConfig* GetLevelConfig(Frame* frame) const;
 
     // 0x7c476f4
+    // 0x7c48368
+    bool get_AverageHumanHeroLevelRatioAvailable() const { return averageHumanHeroLevelIsComputed; }
+    // 0x7c48374 - The average human hero level (0..9) as a 0..1 ratio.
+    FP get_AverageHumanHeroLevelRatio() const { return FP::FromInt(averageHumanHeroLevel) / 9; }
     std::int32_t GetHashCode() const;
     // 0x7c47cec
     static void Serialize(void* ptr, FrameSerializer* serializer);
@@ -3039,6 +3043,11 @@ struct alignas(8) GrinderActor {
     FPVector3 grindVelocity;
     FPVector3 snapEndPos;
     FPVector3 snapStartPos;
+
+    // 0x7c4ae54 - Not disabled and no disable timer running.
+    bool get_CanGrind() const { return !disabled && disableTimer <= FP{}; }
+    // 0x7c4ae88
+    bool get_IsGrinding() const { return isGrinding; }
 
     // 0x7c4aa8c
     std::int32_t GetHashCode() const;
@@ -4153,6 +4162,9 @@ struct alignas(8) Ownership {
                              EntityRef directSource, bool isOwnerUltimate);
     // 0x7c59ab0
     static bool TryGetOwnership(Frame* frame, EntityRef entity, Ownership*& ownership);
+    // 0x7c59c8c - The entity's ownership, or one naming the entity as its own owner and
+    // source (implemented in systems/damage_specs.cpp).
+    static Ownership GetOwnershipOrDefault(Frame* frame, EntityRef entity);
 
     // 0x7c598f8
     std::int32_t GetHashCode() const;

@@ -87,6 +87,8 @@ class BalancingLib {
     // 0x7cda428 - The human players' average weapon level as a 0..1 ratio (levels 0..9);
     // false without a game mode handler.
     static bool TryGetHumanWeaponsLevelRatio(Frame* f, FP& ratio);
+    // 0x7cda36c - The game mode handler's average human hero level ratio, once computed.
+    static bool TryGetHumanHeroesLevelRatio(Frame* f, FP& ratio);
 };
 
 class WeaponLib {
@@ -94,6 +96,23 @@ class WeaponLib {
     // 0x7c10e24 - The level of `weapon` in its owner's loadout; 0 when either entity is
     // gone, the owner has no loadout or the weapon is not in it.
     static std::int32_t GetWeaponLevel(Frame* frame, EntityRef owner, EntityRef weapon);
+    // 0x7c10fa0 - The weapon's level in its owner's loadout (0 when it has no ownership).
+    static bool TryGetWeaponLevel(Frame* frame, EntityRef weapon, std::int32_t& level);
+};
+
+// The game's Quantum.Unsafe helpers.
+class Unsafe {
+  public:
+    // 0x7c041a8 - A weapon user that is not disabled.
+    static bool TryGetWeaponUser(Frame* frame, EntityRef entity, WeaponUser*& weaponUser);
+};
+
+class ProjectileLib {
+  public:
+    // 0x7c095a8 - A projectile's headshot on a precise-hit receiver adds the receiver's
+    // headshot bonus to the multiplier.
+    static void ComputeProjectileDamageMultiplier(Frame* frame, EntityRef projectileEntity, EntityRef targetEntity,
+                                                  FP& damageMultiplier);
 };
 
 class CallbackActionLib {

@@ -304,7 +304,19 @@ void DamageableSystem::OnAdded(Frame* frame, EntityRef entity, Damageable* damag
 }
 
 void DamageableSystem::Damageable_OnBeforeHit(Frame* f, EntityRef targetEntity, HitData* hitData) {
-    // The projectile-headshot rebuild of the hit belongs here (see the TODO in the header).
+    // A projectile headshot drops the pending critical-hit bonus and rebuilds the hit from the
+    // source's damage spec (its headshot multiplier then comes from CalculateDamages).
+    Projectile* projectile = nullptr;
+    if (f->TryGetPointer<Projectile>(hitData->source, projectile) && projectile->IsImpactHeadshot(f)) {
+        DamageSource damageSource{};
+        DamageSpec* damageSpec = nullptr;
+        if (f->TryGet<DamageSource>(hitData->source, damageSource) &&
+            f->TryFindAssetInternal(damageSource.Spec.Id, true, damageSpec)) {
+            DamageLib::ClearDamageMultiplier(f, hitData->source, DAMAGE_MULTIPLIER_ORIGIN::CriticalHit);
+            *hitData = damageSpec->CreateHitData(f, hitData->position, hitData->direction, hitData->source,
+                                                 targetEntity);
+        }
+    }
     if (EntityInfoLib::EntityHasTypeMatching(f, targetEntity, ENTITY_INFO_FILTER::Boss)) {
         WeaponUser* attacker = nullptr;
         if (f->TryGetPointer<WeaponUser>(hitData->owner, attacker)) {

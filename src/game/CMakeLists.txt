@@ -92,3 +92,8 @@ target_sources(rr_game PRIVATE
 target_sources(rr_game PRIVATE
     quantum_code/systems/kcc_extension.cpp
 )
+
+# quantum.code systems: damage computation (DamageSpec and helper libraries)
+target_sources(rr_game PRIVATE
+    quantum_code/systems/damage_specs.cpp
+)

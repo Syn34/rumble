@@ -719,3 +719,103 @@ TEST_CASE("quantum.code systems: KCC modifier lists") {
     CHECK(kcc->forceInputBlend == FP::One());
     CHECK(kcc->forceInputCounter == FP::One() - f.get_DeltaTime());
 }
+
+TEST_CASE("quantum.code systems: damage specs, DamageLib hit and push") {
+    auto damageableSpec = MakeAsset<DamageableSpec>(900);
+    auto healthSpec = MakeAsset<HealthSpec>(901);
+    healthSpec->Mode = HealthSpecMode::FIXED;
+    healthSpec->FixedHP = FP::FromInt(100);
+    auto damageSpec = MakeAsset<DamageSpec>(902);
+    damageSpec->Mode = DamageSpec::DamageAmountMode::FIXED;
+    damageSpec->Amount = FP::FromInt(10);
+    damageSpec->BaseUnscaledAmount = FP::FromInt(7);
+    auto pushableSpec = MakeAsset<PushableSpec>(903);
+    pushableSpec->PushFilters = PUSH_FILTERS::PLAYER;
+    auto pusherSpec = MakeAsset<PusherSpec>(904);
+    pusherSpec->PushFilters = PUSH_FILTERS::PLAYER;
+    pusherSpec->PushForce = FP::FromInt(5);
+    auto table = MakeAsset<ElementalDamageTable>(905);
+    SystemsSimulation sim(MakeSystems<DamageableSystem, HealthSystem>(),
+                          {damageableSpec, healthSpec, damageSpec, pushableSpec, pusherSpec, table});
+    sim.runtime.elementalDamageTable.Id = AssetGuid(905);
+    Frame& f = *sim.frame;
+    StartSystems(&f);
+    f.Number = 1;
+
+    const EntityRef attacker = f.Create();
+    WeaponUser weaponUser{};
+    weaponUser.DamageMultiplier = FP::FromInt(2);
+    f.Add<WeaponUser>(attacker, weaponUser);
+    const EntityRef source = f.Create();
+    Ownership ownership{};
+    ownership.Owner = attacker;
+    ownership.Source = source;
+    f.Add<Ownership>(source, ownership);
+    DamageSource damageSource{};
+    damageSource.Spec.Id = AssetGuid(902);
+    f.Add<DamageSource>(source, damageSource);
+    Pusher pusher{};
+    pusher.Spec.Id = AssetGuid(904);
+    f.Add<Pusher>(source, pusher);
+    f.Add<Transform3D>(source);
+
+    const EntityRef target = f.Create();
+    Health health{};
+    health.Spec.Id = AssetGuid(901);
+    f.Add<Health>(target, health);
+    Damageable damageable{};
+    damageable.Spec.Id = AssetGuid(900);
+    f.Add<Damageable>(target, damageable);
+    Pushable pushable{};
+    pushable.Spec.Id = AssetGuid(903);
+    f.Add<Pushable>(target, pushable);
+    RunFrames(sim, 1);
+
+    // The hit carries the spec's rules and the weapon user's multiplier.
+    const HitData hit = damageSpec->CreateHitData(&f, FPVector3::Zero(), FPVector3::Forward(), source, target);
+    CHECK(hit.owner == attacker);
+    CHECK(hit.source == source);
+    CHECK(hit.baseDamage == FP::FromInt(7));
+    CHECK(hit.damages == FP::FromInt(20));
+    CHECK(!hit.isCriticalHit);
+    CHECK(!hit.shield.ignoreShield);
+    CHECK(hit.health.damageMultiplier == FP::One());
+
+    // Hit with the source's own spec (twice: alone, then with a push).
+    CHECK(DamageLib::Hit(&f, source, target, FPVector3::Zero(), FPVector3::Forward(), nullptr));
+    CHECK(f.ResolveList(f.GetPointer<Damageable>(target)->get_hits()).get_Count() == 1);
+    CHECK(DamageLib::HitAndPush(&f, source, target, FPVector3::Zero(), FPVector3::Forward(), nullptr,
+                                nullptr));
+    Collections::QList<PushData> pushes = f.ResolveList(f.GetPointer<Pushable>(target)->get_PendingPushRequests());
+    CHECK(pushes.get_Count() == 1);
+    CHECK(pushes.get_Item(0).impulse == FPVector3::Forward() * FP::FromInt(5));
+    CHECK(pushes.get_Item(0).pusherOwner == attacker);
+    RunFrames(sim, 1);
+    CHECK(f.GetPointer<Health>(target)->CurrentHP == FP::FromInt(60));
+
+    // Inverse pushes pull; a pusher without matching filters does nothing.
+    pusherSpec->IsInverse = true;
+    CHECK(DamageLib::Push(&f, source, target, FPVector3::Zero(), FPVector3::Right(), pusherSpec.get()));
+    pushes = f.ResolveList(f.GetPointer<Pushable>(target)->get_PendingPushRequests());
+    CHECK(pushes.get_Item(pushes.get_Count() - 1).impulse == FPVector3::Left() * FP::FromInt(5));
+    pusherSpec->PushFilters = PUSH_FILTERS::NPC;
+    CHECK(!DamageLib::Push(&f, source, target, FPVector3::Zero(), FPVector3::Right(), pusherSpec.get()));
+
+    // Level-based amounts.
+    damageSpec->Mode = DamageSpec::DamageAmountMode::USE_SELF_LEVEL;
+    damageSpec->AmountPerSelfLevel = {FP::FromInt(1), FP::FromInt(2), FP::FromInt(3)};
+    LevelHolder level{};
+    level.Level = 5;
+    f.Add<LevelHolder>(attacker, level);
+    CHECK(damageSpec->CalculateRawDamages(&f, hit) == FP::FromInt(3));
+    f.GetPointer<LevelHolder>(attacker)->Level = 2;
+    CHECK(damageSpec->CalculateRawDamages(&f, hit) == FP::FromInt(2));
+    damageSpec->Mode = DamageSpec::DamageAmountMode::USE_AVERAGE_HUMAN_HEROES_LEVEL;
+    damageSpec->MinAmount = FP::FromInt(4);
+    damageSpec->MaxAmount = FP::FromInt(8);
+    CHECK(damageSpec->CalculateRawDamages(&f, hit) == FP::FromInt(4)); // no game mode handler
+
+    // Fully invulnerable targets take neither.
+    DamageLib::SetInvulnerable(&f, target, FP::FromInt(1), INVULNERABILITY_FILTER::ALL);
+    CHECK(!DamageLib::HitAndPush(&f, source, target, FPVector3::Zero(), FPVector3::Forward(), nullptr, nullptr));
+}
