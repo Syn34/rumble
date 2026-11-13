@@ -115,7 +115,7 @@ void HitShieldData::Serialize(void* ptr, FrameSerializer* serializer) {
 }
 
 std::int32_t HitData::GetHashCode() const {
-    return HashBuilder(4124348875u)
+    return HashBuilder(1571u)
         .Add(baseDamage)
         .Add(damages)
         .Add(direction)
@@ -672,7 +672,7 @@ void GOAPState::Serialize(void* ptr, FrameSerializer* serializer) {
 }
 
 std::int32_t GOAPAgent::GetHashCode() const {
-    return HashBuilder(3077639332u)
+    return HashBuilder(2699u)
         .Add(Config)
         .Add(CurrentActionIndex)
         .Add(CurrentActionTime)

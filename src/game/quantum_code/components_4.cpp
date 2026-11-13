@@ -430,7 +430,7 @@ void WeaponLoadoutItemData::Serialize(void* ptr, FrameSerializer* serializer) {
 }
 
 std::int32_t WeaponLoadoutItem::GetHashCode() const {
-    return HashBuilder(1911486u)
+    return HashBuilder(1979u)
         .Add(data)
         .Add(equippedFrame)
         .Add(spawnedWeapon)
@@ -1194,7 +1194,7 @@ void KillZoneArea::Serialize(void* ptr, FrameSerializer* serializer) {
 }
 
 std::int32_t ActivePowerUp::GetHashCode() const {
-    return HashBuilder(2078211258u)
+    return HashBuilder(1249u)
         .Add(PowerUpType)
         .Add(Spec)
         .Add(StartFrame)

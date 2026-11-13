@@ -1695,7 +1695,7 @@ void UtilityReasoner::ClearPointers(Frame* f, EntityRef entityRef) {
 }
 
 std::int32_t UTAgent::GetHashCode() const {
-    return HashBuilder(3690u)
+    return HashBuilder(3583u)
         .Add(Config)
         .Add(UtilityReasoner)
         .Value();

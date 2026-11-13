@@ -7,7 +7,7 @@
 namespace Quantum {
 
 std::int32_t AIBlackboardComponent::GetHashCode() const {
-    return HashBuilder(2136u)
+    return HashBuilder(2039u)
         .Add(Board)
         .Add(EntriesPtr)
         .Value();
@@ -759,7 +759,7 @@ void AutoJumperActor::Serialize(void* ptr, FrameSerializer* serializer) {
 }
 
 std::int32_t BTAgent::GetHashCode() const {
-    return HashBuilder(1281955266u)
+    return HashBuilder(2293u)
         .Add(AbortNodeId)
         .Add(ActiveServicesPtr)
         .Add(BTDataValuesPtr)
@@ -1693,7 +1693,7 @@ void CombatParticipant::Serialize(void* ptr, FrameSerializer* serializer) {
 }
 
 std::int32_t HFSMData::GetHashCode() const {
-    return HashBuilder(692738875u)
+    return HashBuilder(1553u)
         .Add(CurrentState)
         .Add(Root)
         .Add(StatesHistory)
@@ -1714,7 +1714,7 @@ void HFSMData::Serialize(void* ptr, FrameSerializer* serializer) {
 }
 
 std::int32_t HFSMAgent::GetHashCode() const {
-    return HashBuilder(2910u)
+    return HashBuilder(2803u)
         .Add(Config)
         .Add(Data)
         .Value();
@@ -1740,7 +1740,7 @@ void RuntimeHFSM::Serialize(void* ptr, FrameSerializer* serializer) {
 }
 
 std::int32_t CompoundHFSM::GetHashCode() const {
-    return HashBuilder(1876807068u)
+    return HashBuilder(2521u)
         .Add(attackHFSM)
         .Add(navHFSM)
         .Add(schedulePeriod)
