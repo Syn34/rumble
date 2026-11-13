@@ -303,6 +303,16 @@ template <class... Ts> struct ComponentFilter {
     }
 };
 
+// Filters into user structs (Quantum.ComponentFilterStruct`1, ComponentGetter`1,
+// ComponentFilterStructMeta) reflect over the struct's fields to find an EntityRef and
+// component pointers; they need a C++ description of such structs:
+// TODO(0x4c81f24, Quantum.ComponentFilterStructMeta.Create<T>)
+// TODO(0x70d7930, Quantum.ComponentFilterStruct<T>..ctor)
+// TODO(0x70d7b4c, Quantum.ComponentFilterStruct<T>.Next)
+// TODO(0x70d7924, Quantum.ComponentFilterStruct<T>.set_UseCulling)
+// TODO(0x7130988, Quantum.ComponentGetter<T>..ctor)
+// TODO(0x7130990, Quantum.ComponentGetter<T>.TryGet)
+
 // ---------------------------------------------------------------------------------------
 // FrameBase members that return these types
 
