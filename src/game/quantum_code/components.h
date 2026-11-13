@@ -20,6 +20,7 @@
 #include "quantum_code/core_types.h"
 
 #include <array>
+#include <optional>
 #include <cstdint>
 #include <span>
 #include <utility>
@@ -33,6 +34,7 @@ struct CharacterController3DMovement;
 class CharacterController3DConfig;
 class IKCCCallbacks3D;
 class KccExtensionConfig;
+struct WallRunningSystemFilter;
 // Asset classes named by component methods (quantum_code/assets/).
 class EnergyCellManagerSpec;
 class GameModeHandlerLevelConfig;
@@ -5861,6 +5863,18 @@ struct alignas(8) WallRunningActor {
     FP RunningSpeed;
     FPVector3 PreviousPosition;
     FPVector3 RunningDirection;
+
+    // Wall running (systems/movement_systems.cpp).
+    // 0x7c66b2c - Starts running along the wall: the direction (from the velocity, else the
+    // camera, else forward along the wall), the start point next to the wall and the speed.
+    void Init(Frame* f, const WallRunningSystemFilter& filter);
+    // 0x7c66eec - Runs along the wall (height pulled towards the wall's collider), speeds up
+    // or slows down towards the spec's speed, and jumps off when jump is pressed.
+    void Update(Frame* f, const WallRunningSystemFilter& filter);
+    // 0x7c6734c - A dash away from the wall stops the run; along it, it boosts the speed.
+    void OnActorDashed(Frame* f, EntityRef entity, const WallRunningSystemFilter& filter);
+    // 0x7c5f90c - Leaves the wall, optionally with an impulse (and as a jump).
+    void Stop(Frame* f, const WallRunningSystemFilter& filter, bool isJumping, std::optional<FPVector3> impulse);
 
     // 0x7c669b4
     std::int32_t GetHashCode() const;

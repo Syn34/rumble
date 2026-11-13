@@ -6,6 +6,7 @@
 #include "photon_deterministic/system_allocator.h"
 #include "quantum_code/assets/actor_specs.h"
 #include "quantum_code/assets/game_mode_specs.h"
+#include "quantum_code/assets/gameplay_specs.h"
 #include "quantum_code/frame.h"
 #include "quantum_code/systems/libs.h"
 #include "quantum_code/systems/movement_systems.h"
@@ -52,7 +53,7 @@ struct MovementWorld {
     std::shared_ptr<KccExtensionConfig> extConfig = std::make_shared<KccExtensionConfig>();
     std::shared_ptr<CharacterController3DConfig> kccConfig = std::make_shared<CharacterController3DConfig>();
 
-    MovementWorld() {
+    explicit MovementWorld(SystemList extraSystems = {}, std::vector<std::shared_ptr<AssetObject>> extraAssets = {}) {
         rr::test::InstallMathDerivedTables();
         ComponentTypeId<>::ResetForTests();
         auto map = std::make_shared<Map>();
@@ -69,8 +70,8 @@ struct MovementWorld {
         extConfig->PushReductionSpeed = F(20);
         extConfig->Airborne_Acceleration = F(10);
         extConfig->Airborne_Braking = F(1);
-        resources = std::make_unique<ResourceManagerStatic>(
-            std::vector<std::shared_ptr<AssetObject>>{map, kccConfig, extConfig}, nullptr);
+        extraAssets.insert(extraAssets.end(), {map, kccConfig, extConfig});
+        resources = std::make_unique<ResourceManagerStatic>(extraAssets, nullptr);
 
         platform.Allocator = &allocator;
         FrameContext::Args args;
@@ -84,8 +85,14 @@ struct MovementWorld {
         simulation.Entities.DefaultComponentBlockCapacity = 8;
         roots.push_back(std::make_unique<ActorInputUpdateSystem>());
         roots.push_back(std::make_unique<MovementSystem>());
+        for (auto& system : extraSystems) {
+            roots.push_back(std::move(system));
+        }
         all = FlattenSystems(roots);
-        std::vector<SystemBase*> rootPointers{roots[0].get(), roots[1].get()};
+        std::vector<SystemBase*> rootPointers;
+        for (const auto& root : roots) {
+            rootPointers.push_back(root.get());
+        }
         frame = std::make_unique<Frame>(context.get(), all, rootPointers, &session, &runtime, &simulation,
                                         FP::FromRaw(1092)); // 1/60 s
         frame->get_Global()->Map.Id = AssetGuid(kMapGuid);
@@ -262,4 +269,81 @@ TEST_CASE("quantum.code movement: helpers") {
     FP multiplier;
     CHECK(w.extConfig->TryGetWalkingPushMultiplier(EntityInfoType::Crate, multiplier) && multiplier == F(3));
     CHECK(!w.extConfig->TryGetWalkingPushMultiplier(EntityInfoType::None, multiplier) && multiplier == FP{});
+}
+
+TEST_CASE("quantum.code movement: turning, ledge grabbing and wall running") {
+    auto ledgeSpec = std::make_shared<LedgeGrabbingSpec>();
+    ledgeSpec->Guid = AssetGuid(710);
+    ledgeSpec->snapDuration = FP::One();
+    auto wallSpec = std::make_shared<WallRunningSpec>();
+    wallSpec->Guid = AssetGuid(711);
+    wallSpec->Speed = F(8);
+    wallSpec->Acceleration = F(4);
+    wallSpec->JumpSpeed = F(10);
+    wallSpec->PerpendicularThreshold = FP::FromRaw(32768);
+    wallSpec->HeightCorrectionInterpolationSpeed = FP{};
+    SystemList extra;
+    extra.push_back(std::make_unique<TurnToSystem>());
+    extra.push_back(std::make_unique<LedgeGrabbingActorSystem>());
+    extra.push_back(std::make_unique<WallRunningSystem>());
+    MovementWorld w(std::move(extra), {ledgeSpec, wallSpec});
+    Frame& f = *w.frame;
+
+    // TurnTo: turning towards +X; a turn speed of one full lerp per frame gets there at once
+    // (slower turns stop once a step is within the epsilon of FPMathUtility).
+    const EntityRef turner = f.Create();
+    f.Add(turner, Quantum::Transform3D{V3(0, 0, 0), FPQuaternion::Identity()});
+    TurnTo turn{};
+    turn.lookAtDirection = V3(1, 0, 0);
+    turn.turnSpeed = F(60);
+    f.Add(turner, turn);
+    f.SystemEnable<TurnToSystem>();
+    w.Step(2);
+    CHECK(f.GetPointer<Quantum::Transform3D>(turner)->Forward().X > FP::FromRaw(65000));
+
+    // Ledge: the signal starts the grab, the update brings the actor to the top.
+    const EntityRef climber = f.Create();
+    f.Add(climber, Quantum::Transform3D{V3(0, 1, 0), FPQuaternion::Identity()});
+    LedgeGrabbingActor grab{};
+    grab.Spec.Id = AssetGuid(710);
+    f.Add(climber, grab);
+    Physics3D::Hit3D wallHit{};
+    wallHit.Point = V3(0, 1, 2);
+    auto* ledgeSystem = dynamic_cast<LedgeGrabbingActorSystem*>(w.all[3]);
+    CHECK(ledgeSystem != nullptr);
+    ledgeSystem->KccExtension_OnValidLedgeDetected(&f, climber, wallHit, V3(0, 3, 2));
+    CHECK(f.GetPointer<LedgeGrabbingActor>(climber)->IsLedgeGrabbing);
+    CHECK(f.GetPointer<LedgeGrabbingActor>(climber)->Destination == V3(0, 3, 2));
+    w.Step(61);
+    CHECK(!f.GetPointer<LedgeGrabbingActor>(climber)->IsLedgeGrabbing);
+    CHECK(f.GetPointer<Quantum::Transform3D>(climber)->Position == V3(0, 3, 2));
+
+    // Wall running along a wall facing +Z: the runner moves along +Z and speeds up.
+    const EntityRef wall = f.Create();
+    f.Add(wall, Quantum::Transform3D{V3(2, 1, 0), FPQuaternion::Identity()});
+    const EntityRef runner = w.AddCharacter(V3(1, 1, 0));
+    f.GetPointer<CharacterController3D>(runner)->Velocity = V3(0, 0, 4);
+    WallRunningActor wallRunner{};
+    wallRunner.Spec.Id = AssetGuid(711);
+    f.Add(runner, wallRunner);
+    f.Add<DashActor>(runner);
+    WallRunningActor* wr = f.GetPointer<WallRunningActor>(runner);
+    CHECK(wr->CanWallRun);
+    wr->RunnableWallEntity = wall;
+    wr->IsWallRunning = true;
+    w.Step(30);
+    wr = f.GetPointer<WallRunningActor>(runner);
+    CHECK(wr->IsInitialized);
+    CHECK(wr->RunningDirection == V3(0, 0, 1));
+    CHECK(wr->RunningSpeed > F(4));
+    CHECK(f.GetPointer<Quantum::Transform3D>(runner)->Position.Z > F(1));
+    // The runner is snapped to the wall's right side at the snap offset (0.5).
+    CHECK(f.GetPointer<Quantum::Transform3D>(runner)->Position.X == FP::FromRaw(163840));
+    f.GetPointer<ActorInput>(runner)->JumpStateWanted = true;
+    w.Step();
+    wr = f.GetPointer<WallRunningActor>(runner);
+    CHECK(!wr->IsWallRunning);
+    CHECK(f.GetPointer<KccExtension>(runner)->jumpState == JumpState::Jumping);
+    CHECK(f.GetPointer<KccExtension>(runner)->hasImpulseToConsume ||
+          f.GetPointer<CharacterController3D>(runner)->Velocity.Y > FP{});
 }

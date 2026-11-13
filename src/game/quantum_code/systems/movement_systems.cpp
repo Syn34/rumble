@@ -6,6 +6,7 @@
 #include "quantum_code/assets/actor_specs.h"
 #include "quantum_code/assets/level_assets.h"
 #include "quantum_code/assets/game_mode_specs.h"
+#include "quantum_code/fp_math_utility.h"
 #include "quantum_code/input.h"
 #include "quantum_code/systems/combat_libs.h"
 #include "quantum_code/systems/libs.h"
@@ -391,6 +392,237 @@ void ActorInputUpdateSystem::HandlePlayerCommands(Frame* frame, EntityRef entity
     const auto flags = static_cast<std::int32_t>(input->inputsLocked);
     constexpr std::int32_t external = static_cast<std::int32_t>(ActorInputLockFlags::ExternalCommand);
     input->inputsLocked = static_cast<ActorInputLockFlags>(lockCommand->locked ? (flags | external) : (flags & ~external));
+}
+
+// -----------------------------------------------------------------------------------------
+// Turning and ledge grabbing
+
+void TurnToSystem::Update(Frame* f, Filter& filter) {
+    const TurnTo* turn = filter.turn;
+    if (turn->lookAtDirection == FPVector3::Zero()) {
+        return;
+    }
+    Transform3D* transform = filter.transform;
+    const FPVector3 target = FPVector3(turn->lookAtDirection.X, FP{}, turn->lookAtDirection.Z).Normalized();
+    const FPVector3 forward = transform->Forward();
+    const FPVector3 current = FPVector3(forward.X, FP{}, forward.Z).Normalized();
+    const FPQuaternion from = FPQuaternion::LookRotation(current, false);
+    const FPQuaternion to = FPQuaternion::LookRotation(target, false);
+    const FP t = FPMath::Clamp01(f->get_DeltaTime() * turn->turnSpeed);
+    const FPVector3 facing = FPQuaternion::LerpUnclamped(from, to, t) * FPVector3::Forward();
+    if (!FPMathUtility::EqualWithEpsilon(facing, transform->Forward())) {
+        transform->Rotation = FPQuaternion::LookRotation(facing, false);
+    }
+}
+
+void LedgeGrabbingActorSystem::Update(Frame* f, Filter& filter) {
+    LedgeGrabbingActor* grab = filter.ledgeGrabbingActor;
+    if (!grab->IsLedgeGrabbing) {
+        return;
+    }
+    LedgeGrabbingSpec* spec = nullptr;
+    if (!f->TryFindAssetInternal<LedgeGrabbingSpec>(grab->Spec.Id, true, spec)) {
+        return;
+    }
+    const FP t = f->get_DeltaTime() * (f->Number - grab->LedgeGrabbingStartFrame) / spec->snapDuration;
+    const FPVector3& start = grab->GrabStartPosition;
+    const FPVector3& end = grab->Destination;
+    const FP x = FPMath::Lerp(start.X, end.X, spec->snapPositionCurveXZ.Evaluate(t));
+    const FP y = FPMath::Lerp(start.Y, end.Y, spec->snapPositionCurveY.Evaluate(t));
+    const FP z = FPMath::Lerp(start.Z, end.Z, spec->snapPositionCurveXZ.Evaluate(t));
+    filter.transform->Position = FPVector3(x, y, z);
+    filter.transform->Rotation = FPQuaternion::LerpUnclamped(grab->GrabStartRotation, grab->SnapRotation,
+                                                             FPMath::Clamp01(spec->snapRotationCurve.Evaluate(t)));
+    if (f->get_DeltaTime() * (f->Number - grab->LedgeGrabbingStartFrame) >= spec->snapDuration) {
+        filter.transform->Position = grab->Destination;
+        grab->IsLedgeGrabbing = false;
+        f->Events.OnLedgeGrabEnd(filter.entity);
+    }
+}
+
+void LedgeGrabbingActorSystem::KccExtension_OnValidLedgeDetected(Frame* f, EntityRef character,
+                                                                 const Physics3D::Hit3D& hit,
+                                                                 const FPVector3& aboveLedgePoint) {
+    LedgeGrabbingActor* grab = nullptr;
+    Transform3D* transform = nullptr;
+    LedgeGrabbingSpec* spec = nullptr;
+    if (!f->TryGetPointer<LedgeGrabbingActor>(character, grab) || !f->TryGetPointer<Transform3D>(character, transform) ||
+        !f->TryFindAssetInternal<LedgeGrabbingSpec>(grab->Spec.Id, true, spec)) {
+        return;
+    }
+    grab->IsLedgeGrabbing = true;
+    grab->LedgeGrabbingStartFrame = f->Number;
+    const FPVector3 towardsWall = (hit.Point - transform->Position).Normalized();
+    grab->GrabStartPosition = transform->Position;
+    grab->SnapPosition = FPVector3(hit.Point.X - spec->snapPosForwardOffset * towardsWall.X,
+                                   aboveLedgePoint.Y - spec->snapPosHeightOffset,
+                                   hit.Point.Z - spec->snapPosForwardOffset * towardsWall.Z);
+    grab->GrabStartRotation = transform->Rotation;
+    grab->SnapRotation = FPQuaternion::LookRotation(FPVector3(towardsWall.X, FP{}, towardsWall.Z), false);
+    grab->Destination = aboveLedgePoint;
+    f->Events.OnLedgeGrabStart(character, spec->cameraDistanceOffset, spec->cameraVerticalAngle);
+    f->Signals.LedgeGrabbingActor_OnLedgeGrabStart(character);
+}
+
+// -----------------------------------------------------------------------------------------
+// Wall running
+
+void WallRunningActor::Init(Frame* f, const WallRunningSystemFilter& filter) {
+    WallRunningSpec* spec = nullptr;
+    Transform3D* wall = nullptr;
+    if (!f->TryFindAssetInternal<WallRunningSpec>(Spec.Id, true, spec) ||
+        !f->TryGetPointer<Transform3D>(RunnableWallEntity, wall)) {
+        return;
+    }
+    // Run along the wall the way the actor moves, or else looks, or else forwards.
+    FP alignment = FPVector3::Dot(filter.pKcc->Velocity.Normalized(), wall->Forward());
+    FP side = FP::One();
+    if (FPMath::Abs(alignment) > spec->PerpendicularThreshold) {
+        side = FPMath::Sign(alignment);
+    } else {
+        alignment = FPVector3::Dot(filter.pActorInput->CameraSight, wall->Forward());
+        if (FPMath::Abs(alignment) > spec->PerpendicularThreshold) {
+            side = FPMath::Sign(alignment);
+        }
+    }
+    const FPVector3 fromWall = filter.pTransform->Position - wall->Position;
+    const FPVector3 right = wall->Right();
+    PreviousPosition = wall->Position + FPVector3::ProjectOnPlane(fromWall, right) + right * spec->SnapOffset;
+    RunningDirection = wall->Forward() * side;
+    const FP horizontalSpeedSqr =
+        filter.pKcc->Velocity.Z * filter.pKcc->Velocity.Z + filter.pKcc->Velocity.X * filter.pKcc->Velocity.X;
+    const FP horizontalSpeed = FP::FromRaw(FPMath::SqrtRaw(horizontalSpeedSqr.RawValue()));
+    // Note: the original adds the perpendicular threshold here, not a speed.
+    RunningSpeed = FPMath::Abs(spec->PerpendicularThreshold + horizontalSpeed * alignment);
+    RunningLeft = side > FP{};
+    IsInitialized = true;
+    f->Events.OnWallRunningStart(filter.entity, RunningLeft);
+    f->Signals.WallRunningActor_OnWallRunningStart(filter.entity);
+}
+
+void WallRunningActor::Update(Frame* f, const WallRunningSystemFilter& filter) {
+    if (!IsInitialized) {
+        Init(f, filter);
+    }
+    WallRunningSpec* spec = nullptr;
+    Transform3D wall{};
+    if (!f->TryFindAssetInternal<WallRunningSpec>(Spec.Id, true, spec) ||
+        !f->TryGet<Transform3D>(RunnableWallEntity, wall)) {
+        return;
+    }
+    const FP dt = f->get_DeltaTime();
+    const FPVector3 step = RunningDirection * RunningSpeed;
+    FP y = PreviousPosition.Y + dt * step.Y;
+    PhysicsCollider3D wallCollider{};
+    if (f->TryGet<PhysicsCollider3D>(RunnableWallEntity, wallCollider)) {
+        // The height is pulled towards the wall collider's centre.
+        const FPVector3 centroid = wall.TransformPoint(wallCollider.Shape.LocalTransform.Position);
+        y = FPMath::Lerp(y, centroid.Y + spec->HeightCorrectionCentroidOffset, spec->HeightCorrectionInterpolationSpeed);
+    }
+    const FPVector3 position(PreviousPosition.X + dt * step.X, y, PreviousPosition.Z + dt * step.Z);
+    filter.pTransform->Position = position;
+    filter.pTransform->Rotation = FPQuaternion::LookRotation(RunningDirection, FPVector3::Up(), false);
+    PreviousPosition = position;
+
+    if (RunningSpeed < spec->Speed) {
+        RunningSpeed = FPMath::Clamp(RunningSpeed + dt * spec->Acceleration, RunningSpeed, spec->Speed);
+    } else if (RunningSpeed > spec->Speed) {
+        RunningSpeed = FPMath::Clamp(RunningSpeed - dt * spec->Deceleration, spec->Speed, RunningSpeed);
+    }
+    filter.pKcc->Velocity = FPVector3::Zero();
+
+    if (filter.pActorInput->JumpButton.WasPressed()) {
+        // Off the wall: away from it and up.
+        Stop(f, filter, true, (wall.Right() + wall.Up()) * spec->JumpSpeed);
+    }
+}
+
+void WallRunningActor::OnActorDashed(Frame* f, EntityRef entity, const WallRunningSystemFilter& filter) {
+    (void)entity;
+    WallRunningSpec* spec = nullptr;
+    DashActorConfig* dashConfig = nullptr;
+    if (!f->TryFindAssetInternal<WallRunningSpec>(filter.pWallRunningActor->Spec.Id, true, spec) ||
+        !f->TryFindAssetInternal<DashActorConfig>(filter.pDashActor->Spec.Id, true, dashConfig)) {
+        return;
+    }
+    FPVector3 dashDirection = filter.pTransform->Forward();
+    const FPVector2& input = filter.pActorInput->Direction;
+    if (input.Y * input.Y + input.X * input.X > dashConfig->validInputThreshold) {
+        dashDirection = FPVector3(input.X, FP{}, input.Y).Normalized();
+    }
+    if (FPVector3::Dot(dashDirection, RunningDirection) < spec->PerpendicularThreshold) {
+        Stop(f, filter, true, std::nullopt);
+    } else {
+        RunningSpeed = dashConfig->force + RunningSpeed;
+    }
+}
+
+void WallRunningActor::Stop(Frame* f, const WallRunningSystemFilter& filter, bool isJumping,
+                            std::optional<FPVector3> impulse) {
+    IsWallRunning = false;
+    RunnableWallEntity = EntityRef::None();
+    if (impulse.has_value()) {
+        filter.pKccExt->AddImpulsionWithInputsAuto(f, filter.pKcc, *impulse);
+    }
+    if (isJumping) {
+        filter.pKccExt->jumpState = JumpState::Jumping;
+    }
+    f->Events.OnWallRunningStop(filter.entity);
+}
+
+void WallRunningSystem::OnAdded(Frame* f, EntityRef entity, WallRunningActor* wallRunningActor) {
+    (void)f;
+    (void)entity;
+    wallRunningActor->CanWallRun = true;
+}
+
+void WallRunningSystem::OnInit(Frame* f) {
+    (void)f;
+    _filterGetter = ComponentGetter<WallRunningSystemFilter>{};
+}
+
+void WallRunningSystem::Update(Frame* f, Filter& filter) {
+    if (filter.pWallRunningActor->IsWallRunning) {
+        filter.pWallRunningActor->Update(f, filter);
+    }
+}
+
+void WallRunningSystem::Pushable_OnPushed(Frame* f, const PushData& pushParams, const OnPushedData& onPushedData) {
+    (void)onPushedData;
+    WallRunningSystemFilter filter{};
+    if (_filterGetter.TryGet(f, pushParams.pushed, filter) && filter.pWallRunningActor->IsWallRunning) {
+        filter.pWallRunningActor->Stop(f, filter, true, pushParams.impulse);
+    }
+}
+
+void WallRunningSystem::DashActor_OnDashed(Frame* f, EntityRef entity) {
+    WallRunningSystemFilter filter{};
+    if (_filterGetter.TryGet(f, entity, filter) && filter.pWallRunningActor->IsWallRunning) {
+        filter.pWallRunningActor->OnActorDashed(f, entity, filter);
+    }
+}
+
+void WallRunningSystem::Killable_OnRevive(Frame* f, EntityRef toRevive, const FPVector3& position,
+                                          const FPQuaternion& rotation) {
+    (void)position;
+    (void)rotation;
+    WallRunningActor* runner = nullptr;
+    WallRunningSystemFilter filter{};
+    if (f->TryGetPointer<WallRunningActor>(toRevive, runner) && runner->IsWallRunning &&
+        _filterGetter.TryGet(f, toRevive, filter)) {
+        runner->Stop(f, filter, false, std::nullopt);
+        filter.pKcc->Velocity = FPVector3::Zero();
+    }
+}
+
+void WallRunningSystem::BlastBallGame_StateChanged(Frame* f, BlastBallGameState newState) {
+    if (newState != BlastBallGameState::Playing && newState != BlastBallGameState::Restarting) {
+        return;
+    }
+    const bool canWallRun = newState == BlastBallGameState::Playing;
+    for (const auto& pair : f->Unsafe.GetComponentBlockIterator<WallRunningActor>().Range()) {
+        pair.Component->CanWallRun = canWallRun;
+    }
 }
 
 } // namespace Quantum
