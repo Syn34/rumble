@@ -33,7 +33,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 | Rewired_Core.dll | Input mapping | 7,149 | 0 |
 | Newtonsoft.Json.dll | JSON | 4,096 | 0 |
 | PhotonDeterministic.dll | Deterministic maths, RNG, bit streams, session runtime | 904 | ~790 (maths, RNGSession, ByteUtils, BitStream, offline session runtime) |
-| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, assets, prototypes, physics, navigation) | ~6,100 | 1,137 (quantum.core) |
+| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, assets, prototypes, physics, navigation) | ~6,100 | 1,336 (quantum.core) |
 | AK.Wwise.*.dll | Audio middleware bindings | ~2,500 | 0 |
 | MessagePack.dll, protobuf-net.dll | Binary serialisation | ~2,750 | 0 |
 | DOTween*.dll, Cinemachine.dll, NGUI.dll | Tweening, cameras, UI | ~4,400 | 0 |
@@ -99,12 +99,24 @@ local no-ops with documented behaviour.
   with CCD motion extrapolation, GJKSettings/CCDSettings, TriangleCCW, line casts against bodies
   (LinecastBody). 3D code works on the real Entry3D layout; 2D still uses a stand-in entry view
 - quantum.core physics components: PhysicsBody2D/3D (init, impulses, forces, sleep, world inertia
-  tensor), PhysicsCollider2D/3D, PhysicsCallbacks2D/3D collision lists (frame heap),
-  PhysicsJoints/CharacterController layouts, all registered with their real types;
-  HitCollection/HitCollection3D buffers. Pending: component Serialize callbacks, inertia reset
-  (Shape inertia factors), character controller movement, joints, and the whole scene/engine
-  layer (Scene2D/Scene3D, buckets, broad phase, queries, solver, islands/sleeping, callback
-  dispatch, PhysicsEngine2D/3D, FrameBase physics hooks)
+  tensor, inertia reset from Shape3D inertia factors, Serialize), PhysicsCollider2D/3D,
+  PhysicsCallbacks2D/3D collision lists (frame heap), PhysicsJoints/CharacterController layouts,
+  all registered with their real types; HitCollection/HitCollection3D buffers; body and
+  callbacks prototypes materialise. Pending: collider/callbacks Serialize (Shape Serialize),
+  collider Create/OnRemoved (compounds), character controller movement, joints, PhysicsBody2D
+  inertia reset
+- quantum.core 3D physics scene: Scene3D step run task by task on one thread (entry creation
+  with statics first, first/second-half force integration, bucketed sweep-and-prune broad
+  phase with the original endpoint order and active/stabbing lists, narrow phase, trigger and
+  collision callbacks with enter/stay/exit lists, islands, legacy Gauss-Seidel contact solver,
+  penetration correction, velocity integration, sleeping), Entry3D world body settings /
+  integration / AABBs, PhysicsSceneSettings, map static colliders (spheres/boxes),
+  PhysicsEngine3D (owned by FrameContext with UsePhysics3D; SetCallbacks; immediate line casts
+  and shape overlaps). Partly verified against the original and marked TODO: callback
+  handlers, islands, the velocity solver loop, sleep detection, UpdateMap, immediate queries.
+  Not ported: static meshes (TriangleMesh), broad-phase queries resolved in the step, shape
+  casts, compounds, CCD integration, joints, the hybrid Jacobi/Gauss-Seidel solver, the
+  whole 2D scene/engine
 - `Photon.Deterministic.RNGSession` (13/13; PCG32 seeded by SplitMix64), `BitStream` (107/107,
   incl. generic `SerializeArrayLength`), `ByteUtils` (20/20; the gzip writer emits stored deflate
   blocks, so compressed bytes differ from zlib's)

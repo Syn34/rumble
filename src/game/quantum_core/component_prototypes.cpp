@@ -5,6 +5,8 @@
 #include "photon_deterministic/fp_quaternion.h"
 #include "quantum_core/assert.h"
 #include "quantum_core/frame_base.h"
+#include "quantum_core/frame_context.h"
+#include "quantum_core/physics3d/physics_engine3d.h"
 
 #include <stdexcept>
 
@@ -189,14 +191,29 @@ bool CharacterController3D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,
     NotImplemented(*this);
 }
 
-bool PhysicsBody2D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,
+bool PhysicsBody2D_Prototype::AddToEntity(Core::FrameBase* f, EntityRef entity,
                                           const PrototypeMaterializationContext&) {
-    NotImplemented(*this);
+    PhysicsBody2D body{};
+    Materialize(f, body);
+    return f->Set(entity, body) == SetResult::ComponentAdded;
 }
 
-bool PhysicsBody3D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,
+void PhysicsBody2D_Prototype::Materialize(Core::FrameBase*, PhysicsBody2D& result) const {
+    result.InitBody(Mass, Drag, AngularDrag, Config, CenterOfMass,
+                    GravityScale.HasValue() ? std::optional<FP>(GravityScale.Value()) : std::nullopt);
+}
+
+bool PhysicsBody3D_Prototype::AddToEntity(Core::FrameBase* f, EntityRef entity,
                                           const PrototypeMaterializationContext&) {
-    NotImplemented(*this);
+    PhysicsBody3D body{};
+    Materialize(f, body);
+    return f->Set(entity, body) == SetResult::ComponentAdded;
+}
+
+void PhysicsBody3D_Prototype::Materialize(Core::FrameBase*, PhysicsBody3D& result) const {
+    result.InitBody(Mass, Drag, AngularDrag, Config, static_cast<RotationFreezeFlags>(RotationFreeze),
+                    CenterOfMass,
+                    GravityScale.HasValue() ? std::optional<FP>(GravityScale.Value()) : std::nullopt);
 }
 
 bool PhysicsCollider2D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,
@@ -214,9 +231,12 @@ bool PhysicsCallbacks2D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,
     NotImplemented(*this);
 }
 
-bool PhysicsCallbacks3D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,
+bool PhysicsCallbacks3D_Prototype::AddToEntity(Core::FrameBase* f, EntityRef entity,
                                                const PrototypeMaterializationContext&) {
-    NotImplemented(*this);
+    if (Physics3D::PhysicsEngine3D* physics = f->get_Context()->get_Physics3D()) {
+        physics->SetCallbacks(f, entity, static_cast<::Quantum::CallbackFlags>(CallbackFlags));
+    }
+    return true;
 }
 
 bool PhysicsJoints2D_Prototype::AddToEntity(Core::FrameBase*, EntityRef,

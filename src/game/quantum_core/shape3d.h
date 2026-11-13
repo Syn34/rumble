@@ -139,8 +139,12 @@ struct Shape3D {
     // volume; meshes and terrain: zero.
     FP GetVolume() const;
 
-    // TODO(0x7d33ed8, Quantum.Shape3D.CalculateInertiaTensorFactor): needs the frame for
-    // compound children.
+    // 0x7d33ed8 - inertia per unit mass about each axis through `centerOfMass`: the
+    // shape's own (sphere 2r^2/5, box (b^2 + c^2)/3 with half extents) plus the
+    // parallel-axis term of its local offset.
+    // Not done yet: compound shapes sum their children through the frame
+    // heap (CompoundShape3D.GetShapes); they and meshes give only the offset term here.
+    FPVector3 CalculateInertiaTensorFactor(const FPVector3& centerOfMass) const;
 
     // 0x7d3b0e8 - for primitive shapes the shape data is hashed through the BoxShape view
     // of the overlay, whatever the type.

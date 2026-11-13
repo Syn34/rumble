@@ -275,9 +275,9 @@ TEST_CASE("Entity prototype containers sort by component index") {
     CHECK(container.HasAnyListeners);
     CHECK(container.Components[2] == recorder);
 
-    // Pending component types resolve by their registered names.
+    // Typed and pending component types both resolve to the registered index.
     PhysicsBody3D_Prototype body;
-    CHECK(body.get_ComponentType() == nullptr);
+    CHECK(body.get_ComponentType() == &typeid(PhysicsBody3D));
     CHECK(body.get_ComponentTypeId() == ComponentTypeId<>::GetComponentIndex("PhysicsBody3D"));
     PhysicsCallbacks2D_Prototype callbacks;
     CHECK(callbacks.get_ComponentTypeId() ==

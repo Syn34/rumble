@@ -6,6 +6,7 @@
 // latest input of every player.
 #pragma once
 
+#include "quantum_core/physics_scene_settings.h"
 #include "quantum_code/components.h"
 #include "quantum_code/input.h"
 #include "quantum_core/frame_meta_data.h"
@@ -18,14 +19,10 @@
 
 namespace Quantum {
 
-// Same size and alignment as quantum.core's PhysicsEngineState and PhysicsSceneSettings,
-// whose reimplementation belongs to the physics engine work; until then the frame only
-// keeps their bytes.
+// Same size and alignment as quantum.core's PhysicsEngineState, whose reimplementation
+// belongs to the physics engine work; until then the frame only keeps its bytes.
 struct alignas(8) PhysicsEngineStateStorage {
     std::array<std::uint8_t, 16> Bytes;
-};
-struct alignas(8) PhysicsSceneSettingsStorage {
-    std::array<std::uint8_t, 296> Bytes;
 };
 
 struct alignas(8) _globals_ {
@@ -49,7 +46,7 @@ struct alignas(8) _globals_ {
     ::Quantum::FrameMetaData FrameMetaData;
     std::array<Input, Input::MAX_COUNT> _input_;
     BitSet1024 Systems;
-    PhysicsSceneSettingsStorage PhysicsSettings;
+    PhysicsSceneSettings PhysicsSettings;
 
     // 0x7b9ea0c - The input of every player slot.
     std::span<Input> get_input() { return _input_; }

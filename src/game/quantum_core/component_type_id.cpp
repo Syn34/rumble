@@ -81,9 +81,9 @@ void ComponentTypeId<void>::RegisterFrameworkComponents() {
     Add<Transform2DVertical>(ComponentCallbacks(&Transform2DVertical::Serialize), none);
     // Physics components. Their Serialize callbacks are still TODO (null here).
     Add<PhysicsCollider2D>(ComponentCallbacks(nullptr, &PhysicsCollider2D::OnAdded, nullptr), none);
-    Add<PhysicsBody2D>(ComponentCallbacks(nullptr, &PhysicsBody2D::OnAdded, &PhysicsBody2D::OnRemoved), none);
+    Add<PhysicsBody2D>(ComponentCallbacks(&PhysicsBody2D::Serialize, &PhysicsBody2D::OnAdded, &PhysicsBody2D::OnRemoved), none);
     Add<PhysicsCollider3D>(ComponentCallbacks(nullptr, &PhysicsCollider3D::OnAdded, nullptr), none);
-    Add<PhysicsBody3D>(ComponentCallbacks(nullptr, &PhysicsBody3D::OnAdded, &PhysicsBody3D::OnRemoved), none);
+    Add<PhysicsBody3D>(ComponentCallbacks(&PhysicsBody3D::Serialize, &PhysicsBody3D::OnAdded, &PhysicsBody3D::OnRemoved), none);
     Add<PhysicsJoints2D>(ComponentCallbacks(), none);
     Add<PhysicsJoints3D>(ComponentCallbacks(), none);
     Add<PhysicsCallbacks2D>(

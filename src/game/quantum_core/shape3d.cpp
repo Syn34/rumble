@@ -97,4 +97,32 @@ std::int32_t Shape3D::GetHashCode() const {
     return HashCombine(hash, Box._extents.GetHashCode());
 }
 
+// 0x7d33ed8
+FPVector3 Shape3D::CalculateInertiaTensorFactor(const FPVector3& centerOfMass) const {
+    const auto sq = [](FP::Raw v) { return (v * v) >> 16; };
+    const FP::Raw dx = sq(LocalTransform.Position.X.RawValue() - centerOfMass.X.RawValue());
+    const FP::Raw dy = sq(LocalTransform.Position.Y.RawValue() - centerOfMass.Y.RawValue());
+    const FP::Raw dz = sq(LocalTransform.Position.Z.RawValue() - centerOfMass.Z.RawValue());
+    FP::Raw fx = dz + dy;
+    FP::Raw fy = dz + dx;
+    FP::Raw fz = dy + dx;
+    if (_type == Shape3DType::Sphere) {
+        const FP::Raw r = Sphere.Radius.RawValue();
+        // 2 r^2 / 5, the division truncating towards zero.
+        const FP::Raw term = ((r * r) << 1) / (FP::Raw{5} << 16);
+        fx += term;
+        fy += term;
+        fz += term;
+    } else if (_type == Shape3DType::Box) {
+        const FP::Raw ex = sq(Box._extents.X.RawValue());
+        const FP::Raw ey = sq(Box._extents.Y.RawValue());
+        const FP::Raw ez = sq(Box._extents.Z.RawValue());
+        constexpr FP::Raw third = 0x5555;
+        fx += ((ez + ey) * third) >> 16;
+        fy += ((ez + ex) * third) >> 16;
+        fz += ((ey + ex) * third) >> 16;
+    }
+    return {FP::FromRaw(fx), FP::FromRaw(fy), FP::FromRaw(fz)};
+}
+
 } // namespace Quantum

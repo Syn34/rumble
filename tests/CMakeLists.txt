@@ -27,6 +27,7 @@ add_executable(rr_tests
     test_quantum_code_frame.cpp
     test_quantum_box3d.cpp
     test_quantum_physics_components.cpp
+    test_quantum_scene3d.cpp
     test_quantum_prototypes.cpp
 )
 target_link_libraries(rr_tests PRIVATE rr::game rr::assets)

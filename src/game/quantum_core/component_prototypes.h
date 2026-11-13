@@ -22,6 +22,7 @@
 #include "quantum_core/entity_prototype_ref.h"
 #include "quantum_core/map_entity_id.h"
 #include "quantum_core/navigation/navmesh.h"
+#include "quantum_core/physics_components.h"
 #include "quantum_core/navigation/navmesh_agent_config.h"
 #include "quantum_core/navigation/navmesh_components.h"
 #include "quantum_core/transform.h"
@@ -303,7 +304,7 @@ class CharacterController3D_Prototype final : public PendingComponentPrototype {
 
 // --- physics bodies, colliders, callbacks ----------------------------------------------------
 
-class PhysicsBody2D_Prototype final : public PendingComponentPrototype {
+class PhysicsBody2D_Prototype final : public TypedComponentPrototype<PhysicsBody2D> {
   public:
     static constexpr int BODY_PROTOTYPE_VERSION = 2;
 
@@ -318,20 +319,19 @@ class PhysicsBody2D_Prototype final : public PendingComponentPrototype {
     NullableFP GravityScale{0, FP::_1()};
 
     // 0x7d7fa48
-    PhysicsBody2D_Prototype() : PendingComponentPrototype("PhysicsBody2D") {}
+    PhysicsBody2D_Prototype() = default;
 
-    // TODO(0x7d7f860, Quantum.Prototypes.PhysicsBody2D_Prototype.Materialize): PhysicsBody2D
-    // initialised from mass, drag, angular drag, config flags, centre of mass and gravity
-    // scale; needs the PhysicsBody2D component.
-    // TODO(0x7d7f93c, Quantum.Prototypes.PhysicsBody2D_Prototype.AddToEntity): Materialize,
-    // then Set; true when new.
+    // 0x7d7f860 - PhysicsBody2D.InitBody with mass, drags, config, centre of mass (always
+    // given) and gravity scale. Version is not read.
+    void Materialize(Core::FrameBase* frame, PhysicsBody2D& result) const;
+    // 0x7d7f93c - Materialize, then Set; true when new.
     bool AddToEntity(Core::FrameBase* f, EntityRef entity,
                      const PrototypeMaterializationContext& context) override;
     // 0x7d7fa24
     void Dispatch(ComponentPrototypeVisitorBase& visitor) override { visitor.Visit(*this); }
 };
 
-class PhysicsBody3D_Prototype final : public PendingComponentPrototype {
+class PhysicsBody3D_Prototype final : public TypedComponentPrototype<PhysicsBody3D> {
   public:
     static constexpr int BODY_PROTOTYPE_VERSION = 2;
 
@@ -348,13 +348,12 @@ class PhysicsBody3D_Prototype final : public PendingComponentPrototype {
     NullableFP GravityScale{0, FP::_1()};
 
     // 0x7d7f314
-    PhysicsBody3D_Prototype() : PendingComponentPrototype("PhysicsBody3D") {}
+    PhysicsBody3D_Prototype() = default;
 
-    // TODO(0x7d7f120, Quantum.Prototypes.PhysicsBody3D_Prototype.Materialize):
-    // PhysicsBody3D.InitBody with mass, drag, angular drag, config flags, rotation freeze,
-    // centre of mass and gravity scale; needs the PhysicsBody3D component.
-    // TODO(0x7d7f210, Quantum.Prototypes.PhysicsBody3D_Prototype.AddToEntity): Materialize,
-    // then Set; true when new.
+    // 0x7d7f120 - PhysicsBody3D.InitBody with mass, drags, config, rotation freeze, centre
+    // of mass (always given) and gravity scale. Version is not read.
+    void Materialize(Core::FrameBase* frame, PhysicsBody3D& result) const;
+    // 0x7d7f210 - Materialize, then Set; true when new.
     bool AddToEntity(Core::FrameBase* f, EntityRef entity,
                      const PrototypeMaterializationContext& context) override;
     // 0x7d7f2f0
@@ -425,19 +424,18 @@ class PhysicsCallbacks2D_Prototype final : public PendingComponentPrototype {
     void Dispatch(ComponentPrototypeVisitorBase& visitor) override { visitor.Visit(*this); }
 };
 
-class PhysicsCallbacks3D_Prototype final : public PendingComponentPrototype {
+class PhysicsCallbacks3D_Prototype final : public TypedComponentPrototype<PhysicsCallbacks3D> {
   public:
     // Quantum.CallbackFlags_Wrapper (CallbackFlags as an int).
     std::int32_t CallbackFlags = 0;
 
     // 0x7d7f58c
-    PhysicsCallbacks3D_Prototype() : PendingComponentPrototype("PhysicsCallbacks3D") {}
+    PhysicsCallbacks3D_Prototype() = default;
 
-    // 0x7d7f4b8 - PhysicsCallbacks3D (by name until its struct exists).
-    const std::type_info* get_ComponentType() const override { return nullptr; }
+    // 0x7d7f4b8 get_ComponentType: typeid(PhysicsCallbacks3D) (TypedComponentPrototype).
 
-    // TODO(0x7d7f518, Quantum.Prototypes.PhysicsCallbacks3D_Prototype.AddToEntity): as the 2D
-    // one with the Physics3D API.
+    // 0x7d7f518 - with a 3D physics engine, sets the entity's callback flags through it
+    // (PhysicsEngine3D.SetCallbacks); always true.
     bool AddToEntity(Core::FrameBase* f, EntityRef entity,
                      const PrototypeMaterializationContext& context) override;
     // 0x7d7f564

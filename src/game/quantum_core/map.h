@@ -7,14 +7,14 @@
 // prototypes.
 #pragma once
 
-#include "photon_deterministic/fp_quaternion.h"
 #include "photon_deterministic/fp_vector2.h"
-#include "photon_deterministic/fp_vector3.h"
 #include "quantum_core/asset_guid.h"
 #include "quantum_core/asset_object.h"
 #include "quantum_core/builtin_assets.h"
 #include "quantum_core/navigation/navmesh.h"
 #include "quantum_core/shape3d.h"
+#include "photon_deterministic/fp_quaternion.h"
+#include "photon_deterministic/fp_vector3.h"
 #include "quantum_core/triangle_ccw.h"
 
 #include <cstdint>
@@ -26,42 +26,35 @@
 
 namespace Quantum {
 
-// Whether a static collider can be switched on and off at runtime, and how it starts.
-// Original: Quantum.PhysicsCommon.StaticColliderMutableMode.
+// Quantum.StaticColliderMutableMode
 enum class StaticColliderMutableMode : std::int32_t {
     Immutable = 0,
     ToggleableStartOn = 1,
     ToggleableStartOff = 2,
 };
 
-// Data shared by 2D and 3D static colliders. Original: Quantum.StaticColliderData.
+// Quantum.StaticColliderData: what a static collider reports in hits and callbacks.
 struct StaticColliderData {
     std::string Name;
     std::string Tag;
     std::int32_t Layer = 0;
-    AssetRef Asset; // optional user asset attached to the collider
+    AssetRef Asset;
     bool IsTrigger = false;
     std::int32_t ColliderIndex = 0;
     StaticColliderMutableMode MutableMode = StaticColliderMutableMode::Immutable;
 };
 
-// A static 3D collider baked into the map. Original: Quantum.MapStaticCollider3D.
+// Quantum.MapStaticCollider3D: a baked static collider of the map (sphere, box or mesh).
 struct MapStaticCollider3D {
-    enum class MutableModes : std::int32_t {
-        Immutable = 0,
-        ToggleableStartOn = 1,
-        ToggleableStartOff = 2,
-    };
-
-    Photon::Deterministic::FPQuaternion Rotation;
-    Photon::Deterministic::FPVector3 Position;
-    AssetRefPhysicsMaterial PhysicsMaterial;
+    Photon::Deterministic::FPQuaternion Rotation = Photon::Deterministic::FPQuaternion::Identity();
+    FPVector3 Position;
+    AssetRef PhysicsMaterial; // AssetRefPhysicsMaterial
     Shape3DType ShapeType = Shape3DType::None;
     FP SphereRadius;
-    Photon::Deterministic::FPVector3 BoxExtents;
+    FPVector3 BoxExtents;
     bool SmoothSphereMeshCollisions = false;
     StaticColliderData StaticData;
-    MutableModes MutableMode = MutableModes::Immutable;
+    StaticColliderMutableMode MutableMode = StaticColliderMutableMode::Immutable;
 };
 
 class Map final : public AssetObject, public IBuiltInAssetObject {
@@ -89,8 +82,8 @@ class Map final : public AssetObject, public IBuiltInAssetObject {
     std::int32_t GridNodeSize = 0;
     std::vector<AssetRefNavMesh> NavMeshLinks;
     std::vector<std::string> Regions;
-    // Not reproduced yet: StaticColliders2D (MapStaticCollider2D[], with polygon colliders
-    // whose native buffers Loaded/Disposed manage); the game's maps have none.
+    // Not reproduced yet: StaticColliders2D (MapStaticCollider2D[]).
+    // The map's static 3D colliders; the 3D scene turns them into its static entries.
     std::vector<MapStaticCollider3D> StaticColliders3D;
     // The map's baked entities, created together by FrameBase::Create(prototypes, map);
     // they refer to each other by index (MapEntityId).
