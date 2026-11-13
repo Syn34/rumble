@@ -42,6 +42,10 @@
 
 #include "photon_deterministic/native.h"
 
+namespace Quantum {
+class FrameSerializer;
+}
+
 namespace Quantum::Allocator {
 
 class FrameHeap;
@@ -234,8 +238,9 @@ class Heap {
         // later calls double the capacity. Returns the entry array.
         Ptr* EnsureBufferCapacity(FrameHeap& heap);
 
-        // TODO(0x7d233f4, Quantum.Allocator.Heap.AllocationTracker.Serialize): writes count,
-        // capacity and the Ptr array through the FrameSerializer; needs FrameSerializer.
+        // 0x7d233f4 - Count and capacity, then the whole entry array (all `capacity`
+        // slots) behind its Ptr.
+        static void Serialize(void* ptr, FrameSerializer* serializer);
     };
 
     // A set of equally configured heaps carved from one allocation: one per frame slot in

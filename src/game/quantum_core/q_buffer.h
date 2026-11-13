@@ -9,6 +9,7 @@
 #pragma once
 
 #include "quantum_core/frame_heap.h"
+#include "quantum_core/frame_serializer.h"
 #include "quantum_core/ptr.h"
 
 #include <cstddef>
@@ -94,13 +95,18 @@ struct QBuffer {
     // 0x7d1fba8 - ((17 * 31 + Length) * 31 + Stride) * 31 + Ptr hash.
     int GetHashCode() const;
 
-    // TODO(0x7d1f978, Quantum.Collections.QBuffer.SerializeMeta): serialises Length and,
-    // when reading, restores Stride; needs FrameSerializer.
-    // TODO(0x7d1faa8, Quantum.Collections.QBuffer.Serialize(QBuffer*, int, FrameSerializer,
-    // PtrKey)): serialises the Ptr through the frame serializer's pointer table.
-    // TODO(0x7d1faec, Quantum.Collections.QBuffer.Serialize(QBuffer*, int, FrameSerializer,
-    // int, Delegate)): Ptr plus each of the first `count` elements through an item
-    // serializer.
+    // Serialises one element (the original passes a delegate).
+    using ItemSerializer = void (*)(void* item, FrameSerializer* serializer);
+
+    // 0x7d1f978 - Length; when reading, Stride is set to `stride`.
+    static void SerializeMeta(QBuffer* buffer, int stride, FrameSerializer* serializer);
+    // 0x7d1faa8 - Meta, then the storage Ptr through the pointer table. True when the
+    // caller has to serialise the storage contents (see FrameSerializer::PointerSerialize).
+    static bool Serialize(QBuffer* buffer, int stride, FrameSerializer* serializer,
+                          FrameSerializer::PtrKey& key);
+    // 0x7d1faec - Meta, the Ptr, and (when needed) the first `count` elements.
+    static void Serialize(QBuffer* buffer, int stride, FrameSerializer* serializer, int count,
+                          ItemSerializer itemSerializer);
 };
 
 static_assert(sizeof(QBuffer) == 12);
