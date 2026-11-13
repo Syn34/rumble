@@ -3,5 +3,5 @@ add_executable(RangerRumble
     settings.cpp
     test_scene.cpp
 )
-target_link_libraries(RangerRumble PRIVATE rr::game rr::platform rr::render)
+target_link_libraries(RangerRumble PRIVATE rr::game rr::platform rr::render rr::assets)
 rr_set_warnings(RangerRumble)

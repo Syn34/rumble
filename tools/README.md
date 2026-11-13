@@ -74,3 +74,22 @@ asset provider the game uses.
 ```sh
 build/tools/contentindex <split_UnityDataAssetPack/assets/aa/Android> <libunity.so> --load
 ```
+
+## meshview
+
+Views a mesh from a content bundle with its material's main texture (OpenGL or Vulkan,
+drag to orbit, wheel to zoom), and runs numeric checks of the mesh and texture readers.
+
+```sh
+build/tools/meshview <bundle> --engine-lib <libunity.so> --list
+build/tools/meshview <bundle> --engine-lib <libunity.so> --mesh <name> [--renderer opengl]
+build/tools/meshview <bundle-dir> --engine-lib <libunity.so> --check-meshes
+build/tools/meshview <bundle-dir> --engine-lib <libunity.so> --check-textures --renderer opengl
+build/tools/meshview --astc-selftest 20000 --renderer opengl   # random blocks, no game files
+build/tools/meshview --demo                                     # generated mesh, no game files
+```
+
+`--check-textures` decodes every mip in software and, where the renderer samples a format
+natively (ASTC on Mesa's OpenGL driver, for example), compares the GPU's decode with ours.
+`--frames N --screenshot out.ppm` saves the last frame. Everything it shows or saves comes from
+your game files: keep it local.

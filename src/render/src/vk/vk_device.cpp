@@ -3,6 +3,12 @@
 // Kept deliberately straightforward for now: one render pass onto the
 // swapchain, host-visible buffers, two frames in flight. Streaming uploads,
 // a memory allocator and off-screen passes come later with the real renderer.
+//
+// Textures live in device-local images uploaded through a staging buffer and a
+// one-shot command buffer. Every draw sees kMaxTextureSlots combined image
+// samplers in descriptor set 0 (bindings 0..3); a descriptor set is written from
+// the currently bound textures whenever they change, from per-frame pools that
+// are reset once the frame's fence has signalled.
 #include "../shader_blob.h"
 #include "rr/render/render_device.h"
 
@@ -48,6 +54,42 @@ struct VkBufferResource {
     VkDeviceMemory memory = VK_NULL_HANDLE;
 };
 
+struct VkTextureResource {
+    VkImage image = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkImageView view = VK_NULL_HANDLE;
+    TextureDesc desc;
+};
+
+VkFormat ToVk(TextureFormat format) {
+    switch (format) {
+    case TextureFormat::RGBA8: return VK_FORMAT_R8G8B8A8_UNORM;
+    case TextureFormat::RGBA8_sRGB: return VK_FORMAT_R8G8B8A8_SRGB;
+    case TextureFormat::ASTC_4x4: return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+    case TextureFormat::ASTC_4x4_sRGB: return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
+    case TextureFormat::ASTC_5x5: return VK_FORMAT_ASTC_5x5_UNORM_BLOCK;
+    case TextureFormat::ASTC_5x5_sRGB: return VK_FORMAT_ASTC_5x5_SRGB_BLOCK;
+    case TextureFormat::ASTC_6x6: return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
+    case TextureFormat::ASTC_6x6_sRGB: return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
+    case TextureFormat::ASTC_8x8: return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
+    case TextureFormat::ASTC_8x8_sRGB: return VK_FORMAT_ASTC_8x8_SRGB_BLOCK;
+    case TextureFormat::ASTC_10x10: return VK_FORMAT_ASTC_10x10_UNORM_BLOCK;
+    case TextureFormat::ASTC_10x10_sRGB: return VK_FORMAT_ASTC_10x10_SRGB_BLOCK;
+    case TextureFormat::ASTC_12x12: return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
+    case TextureFormat::ASTC_12x12_sRGB: return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
+    }
+    return VK_FORMAT_R8G8B8A8_UNORM;
+}
+
+VkSamplerAddressMode ToVk(WrapMode wrap) {
+    switch (wrap) {
+    case WrapMode::Repeat: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    case WrapMode::ClampToEdge: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    case WrapMode::MirroredRepeat: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    }
+    return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+}
+
 struct VkPipelineResource {
     VkPipeline pipeline = VK_NULL_HANDLE;
     PipelineDesc desc; // kept so the pipeline can be rebuilt if the render pass changes
@@ -57,7 +99,11 @@ struct FrameResources {
     VkCommandBuffer commands = VK_NULL_HANDLE;
     VkSemaphore imageAvailable = VK_NULL_HANDLE;
     VkFence inFlight = VK_NULL_HANDLE;
+    std::vector<VkDescriptorPool> descriptorPools; // grown on demand, reset per frame
+    std::size_t activePool = 0;
 };
+
+constexpr std::uint32_t kSetsPerPool = 256;
 
 class VulkanDevice final : public RenderDevice {
 public:
@@ -66,11 +112,16 @@ public:
     ~VulkanDevice() override {
         if (device_) vkDeviceWaitIdle(device_);
         for (auto& [id, b] : buffers_) DestroyBufferResource(b);
+        for (auto& [id, t] : textures_) DestroyTextureResource(t);
+        DestroyTextureResource(whiteTexture_);
+        for (auto& [desc, sampler] : samplers_) vkDestroySampler(device_, sampler, nullptr);
         for (auto& [id, p] : pipelines_) vkDestroyPipeline(device_, p.pipeline, nullptr);
         DestroySwapchain();
         if (renderPass_) vkDestroyRenderPass(device_, renderPass_, nullptr);
         if (pipelineLayout_) vkDestroyPipelineLayout(device_, pipelineLayout_, nullptr);
+        if (textureSetLayout_) vkDestroyDescriptorSetLayout(device_, textureSetLayout_, nullptr);
         for (auto& f : frames_) {
+            for (VkDescriptorPool pool : f.descriptorPools) vkDestroyDescriptorPool(device_, pool, nullptr);
             if (f.imageAvailable) vkDestroySemaphore(device_, f.imageAvailable, nullptr);
             if (f.inFlight) vkDestroyFence(device_, f.inFlight, nullptr);
         }
@@ -93,7 +144,7 @@ public:
         }
         return CreateInstance(*provider) && CreateSurface(*provider) && PickPhysicalDevice() &&
                CreateLogicalDevice() && CreateCommandResources() && CreatePipelineLayout() &&
-               CreateSwapchain();
+               CreateSwapchain() && CreateWhiteTexture();
     }
 
     GraphicsApi Api() const override { return GraphicsApi::Vulkan; }
@@ -146,6 +197,50 @@ public:
         pipelines_.erase(it);
     }
 
+    bool SupportsTextureFormat(TextureFormat format) const override {
+        if (!DescribeTextureFormat(format).compressed) return true;
+        if (!astcEnabled_) return false;
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(physicalDevice_, ToVk(format), &props);
+        constexpr VkFormatFeatureFlags needed =
+            VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+        return (props.optimalTilingFeatures & needed) == needed;
+    }
+
+    TextureHandle CreateTexture(const TextureDesc& desc, std::span<const TextureLevelData> levels) override {
+        if (!SupportsTextureFormat(desc.format) || desc.width <= 0 || desc.height <= 0 || desc.mipCount == 0 ||
+            levels.size() < desc.mipCount) {
+            std::fprintf(stderr, "Vulkan: unsupported texture (%s %dx%d)\n", ToString(desc.format), desc.width,
+                         desc.height);
+            return {};
+        }
+        VkTextureResource texture;
+        if (!CreateTextureResource(desc, levels, texture)) return {};
+        const TextureHandle handle{nextId_++};
+        textures_.emplace(handle.id, texture);
+        return handle;
+    }
+
+    void DestroyTexture(TextureHandle handle) override {
+        auto it = textures_.find(handle.id);
+        if (it == textures_.end()) return;
+        vkDeviceWaitIdle(device_);
+        for (std::uint32_t slot = 0; slot < kMaxTextureSlots; ++slot) {
+            if (boundViews_[slot] == it->second.view) {
+                boundViews_[slot] = whiteTexture_.view;
+                descriptorsDirty_ = true;
+            }
+        }
+        DestroyTextureResource(it->second);
+        textures_.erase(it);
+    }
+
+    std::optional<Image> ReadTexture(TextureHandle handle, std::uint32_t mipLevel) override {
+        auto it = textures_.find(handle.id);
+        if (it == textures_.end() || mipLevel >= it->second.desc.mipCount) return std::nullopt;
+        return ReadTextureLevel(it->second, mipLevel);
+    }
+
     // Frame ----------------------------------------------------------------
 
     bool BeginFrame() override {
@@ -172,6 +267,9 @@ public:
         }
 
         vkResetFences(device_, 1, &frame.inFlight);
+        for (VkDescriptorPool pool : frame.descriptorPools) vkResetDescriptorPool(device_, pool, 0);
+        frame.activePool = 0;
+        descriptorsDirty_ = true; // a new command buffer has no descriptor sets bound
         vkResetCommandBuffer(frame.commands, 0);
         VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
         begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -226,13 +324,21 @@ public:
                            0, static_cast<std::uint32_t>(size), data);
     }
 
+    void BindTexture(std::uint32_t slot, TextureHandle handle, const SamplerDesc& sampler) override {
+        if (slot >= kMaxTextureSlots) return;
+        auto it = textures_.find(handle.id);
+        boundViews_[slot] = it != textures_.end() ? it->second.view : whiteTexture_.view;
+        boundSamplers_[slot] = Sampler(sampler);
+        descriptorsDirty_ = true;
+    }
+
     void Draw(std::uint32_t vertexCount, std::uint32_t firstVertex) override {
-        if (pipelineBound_) vkCmdDraw(cmd_, vertexCount, 1, firstVertex, 0);
+        if (pipelineBound_ && FlushDescriptors()) vkCmdDraw(cmd_, vertexCount, 1, firstVertex, 0);
     }
 
     void DrawIndexed(std::uint32_t indexCount, std::uint32_t firstIndex,
                      std::int32_t vertexOffset) override {
-        if (pipelineBound_) vkCmdDrawIndexed(cmd_, indexCount, 1, firstIndex, vertexOffset, 0);
+        if (pipelineBound_ && FlushDescriptors()) vkCmdDrawIndexed(cmd_, indexCount, 1, firstIndex, vertexOffset, 0);
     }
 
     void EndRenderPass() override { vkCmdEndRenderPass(cmd_); }
@@ -433,12 +539,20 @@ private:
         queueInfo.queueCount = 1;
         queueInfo.pQueuePriorities = &priority;
 
+        // Compressed mobile formats are optional; enable ASTC where the GPU has it.
+        VkPhysicalDeviceFeatures supported{};
+        vkGetPhysicalDeviceFeatures(physicalDevice_, &supported);
+        VkPhysicalDeviceFeatures enabled{};
+        enabled.textureCompressionASTC_LDR = supported.textureCompressionASTC_LDR;
+        astcEnabled_ = supported.textureCompressionASTC_LDR == VK_TRUE;
+
         const char* extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
         VkDeviceCreateInfo info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
         info.queueCreateInfoCount = 1;
         info.pQueueCreateInfos = &queueInfo;
         info.enabledExtensionCount = 1;
         info.ppEnabledExtensionNames = extensions;
+        info.pEnabledFeatures = &enabled;
         if (!Check(vkCreateDevice(physicalDevice_, &info, nullptr, &device_), "vkCreateDevice")) {
             return false;
         }
@@ -472,10 +586,27 @@ private:
     }
 
     bool CreatePipelineLayout() {
+        std::array<VkDescriptorSetLayoutBinding, kMaxTextureSlots> bindings{};
+        for (std::uint32_t i = 0; i < kMaxTextureSlots; ++i) {
+            bindings[i].binding = i;
+            bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            bindings[i].descriptorCount = 1;
+            bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        }
+        VkDescriptorSetLayoutCreateInfo setInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        setInfo.bindingCount = kMaxTextureSlots;
+        setInfo.pBindings = bindings.data();
+        if (!Check(vkCreateDescriptorSetLayout(device_, &setInfo, nullptr, &textureSetLayout_),
+                   "vkCreateDescriptorSetLayout")) {
+            return false;
+        }
+
         VkPushConstantRange range{};
         range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
         range.size = static_cast<std::uint32_t>(kMaxDrawConstantsSize);
         VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        info.setLayoutCount = 1;
+        info.pSetLayouts = &textureSetLayout_;
         info.pushConstantRangeCount = 1;
         info.pPushConstantRanges = &range;
         return Check(vkCreatePipelineLayout(device_, &info, nullptr, &pipelineLayout_),
@@ -855,6 +986,322 @@ private:
         resource = {};
     }
 
+    // Textures -------------------------------------------------------------
+
+    VkCommandBuffer BeginOneShot() {
+        VkCommandBufferAllocateInfo alloc{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        alloc.commandPool = commandPool_;
+        alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        alloc.commandBufferCount = 1;
+        VkCommandBuffer commands = VK_NULL_HANDLE;
+        if (!Check(vkAllocateCommandBuffers(device_, &alloc, &commands), "vkAllocateCommandBuffers")) {
+            return VK_NULL_HANDLE;
+        }
+        VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(commands, &begin);
+        return commands;
+    }
+
+    // Submits and waits; uploads are rare (load time), so stalling is acceptable.
+    bool EndOneShot(VkCommandBuffer commands) {
+        vkEndCommandBuffer(commands);
+        VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+        submit.commandBufferCount = 1;
+        submit.pCommandBuffers = &commands;
+        const bool ok = Check(vkQueueSubmit(queue_, 1, &submit, VK_NULL_HANDLE), "vkQueueSubmit(upload)") &&
+                        Check(vkQueueWaitIdle(queue_), "vkQueueWaitIdle");
+        vkFreeCommandBuffers(device_, commandPool_, 1, &commands);
+        return ok;
+    }
+
+    static void ImageBarrier(VkCommandBuffer commands, VkImage image, std::uint32_t baseMip, std::uint32_t mipCount,
+                             VkImageLayout from, VkImageLayout to, VkAccessFlags srcAccess, VkAccessFlags dstAccess,
+                             VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage) {
+        VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        barrier.srcAccessMask = srcAccess;
+        barrier.dstAccessMask = dstAccess;
+        barrier.oldLayout = from;
+        barrier.newLayout = to;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = image;
+        barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, baseMip, mipCount, 0, 1};
+        vkCmdPipelineBarrier(commands, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    }
+
+    bool CreateTextureResource(const TextureDesc& desc, std::span<const TextureLevelData> levels,
+                               VkTextureResource& out) {
+        // Lay the levels out in one staging buffer.
+        std::vector<VkDeviceSize> offsets;
+        VkDeviceSize total = 0;
+        for (std::uint32_t level = 0; level < desc.mipCount; ++level) {
+            const int w = std::max(1, desc.width >> level);
+            const int h = std::max(1, desc.height >> level);
+            if (!levels[level].data || levels[level].size != TextureLevelBytes(desc.format, w, h)) {
+                std::fprintf(stderr, "Vulkan: texture level %u has the wrong size\n", level);
+                return false;
+            }
+            total = (total + 15) & ~VkDeviceSize{15}; // copy offsets must be texel-block aligned
+            offsets.push_back(total);
+            total += levels[level].size;
+        }
+        VkBufferResource staging;
+        if (!CreateHostBuffer(static_cast<std::size_t>(total), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, staging)) return false;
+        void* mapped = nullptr;
+        if (!Check(vkMapMemory(device_, staging.memory, 0, total, 0, &mapped), "vkMapMemory")) {
+            DestroyBufferResource(staging);
+            return false;
+        }
+        for (std::uint32_t level = 0; level < desc.mipCount; ++level) {
+            std::memcpy(static_cast<std::uint8_t*>(mapped) + offsets[level], levels[level].data, levels[level].size);
+        }
+        vkUnmapMemory(device_, staging.memory);
+
+        out.desc = desc;
+        VkImageCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+        info.imageType = VK_IMAGE_TYPE_2D;
+        info.format = ToVk(desc.format);
+        info.extent = {static_cast<std::uint32_t>(desc.width), static_cast<std::uint32_t>(desc.height), 1};
+        info.mipLevels = desc.mipCount;
+        info.arrayLayers = 1;
+        info.samples = VK_SAMPLE_COUNT_1_BIT;
+        info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        bool ok = Check(vkCreateImage(device_, &info, nullptr, &out.image), "vkCreateImage(texture)");
+        if (ok) {
+            VkMemoryRequirements req;
+            vkGetImageMemoryRequirements(device_, out.image, &req);
+            ok = Allocate(req, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, out.memory) &&
+                 Check(vkBindImageMemory(device_, out.image, out.memory, 0), "vkBindImageMemory");
+        }
+        if (ok) {
+            VkCommandBuffer commands = BeginOneShot();
+            ok = commands != VK_NULL_HANDLE;
+            if (ok) {
+                ImageBarrier(commands, out.image, 0, desc.mipCount, VK_IMAGE_LAYOUT_UNDEFINED,
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, VK_ACCESS_TRANSFER_WRITE_BIT,
+                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+                std::vector<VkBufferImageCopy> regions;
+                for (std::uint32_t level = 0; level < desc.mipCount; ++level) {
+                    VkBufferImageCopy region{};
+                    region.bufferOffset = offsets[level];
+                    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1};
+                    region.imageExtent = {static_cast<std::uint32_t>(std::max(1, desc.width >> level)),
+                                          static_cast<std::uint32_t>(std::max(1, desc.height >> level)), 1};
+                    regions.push_back(region);
+                }
+                vkCmdCopyBufferToImage(commands, staging.buffer, out.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                       static_cast<std::uint32_t>(regions.size()), regions.data());
+                ImageBarrier(commands, out.image, 0, desc.mipCount, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT,
+                             VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                ok = EndOneShot(commands);
+            }
+        }
+        DestroyBufferResource(staging);
+        if (ok) {
+            VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+            view.image = out.image;
+            view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            view.format = info.format;
+            view.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, desc.mipCount, 0, 1};
+            ok = Check(vkCreateImageView(device_, &view, nullptr, &out.view), "vkCreateImageView(texture)");
+        }
+        if (!ok) DestroyTextureResource(out);
+        return ok;
+    }
+
+    void DestroyTextureResource(VkTextureResource& texture) {
+        if (texture.view) vkDestroyImageView(device_, texture.view, nullptr);
+        if (texture.image) vkDestroyImage(device_, texture.image, nullptr);
+        if (texture.memory) vkFreeMemory(device_, texture.memory, nullptr);
+        texture = {};
+    }
+
+    bool CreateWhiteTexture() {
+        const std::uint8_t white[4] = {255, 255, 255, 255};
+        TextureDesc desc;
+        desc.width = desc.height = 1;
+        const TextureLevelData level{white, sizeof(white)};
+        if (!CreateTextureResource(desc, std::span(&level, 1), whiteTexture_)) return false;
+        const VkSampler sampler = Sampler(SamplerDesc{});
+        for (std::uint32_t slot = 0; slot < kMaxTextureSlots; ++slot) {
+            boundViews_[slot] = whiteTexture_.view;
+            boundSamplers_[slot] = sampler;
+        }
+        return sampler != VK_NULL_HANDLE;
+    }
+
+    VkSampler Sampler(const SamplerDesc& desc) {
+        for (const auto& [d, sampler] : samplers_) {
+            if (d == desc) return sampler;
+        }
+        VkSamplerCreateInfo info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        info.magFilter = info.minFilter = desc.filter == FilterMode::Linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+        info.mipmapMode = desc.mipFilter == FilterMode::Linear ? VK_SAMPLER_MIPMAP_MODE_LINEAR
+                                                               : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        info.addressModeU = ToVk(desc.wrapU);
+        info.addressModeV = ToVk(desc.wrapV);
+        info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        info.minLod = 0.0f;
+        info.maxLod = desc.useMips ? VK_LOD_CLAMP_NONE : 0.0f;
+        VkSampler sampler = VK_NULL_HANDLE;
+        if (!Check(vkCreateSampler(device_, &info, nullptr, &sampler), "vkCreateSampler")) return VK_NULL_HANDLE;
+        samplers_.emplace_back(desc, sampler);
+        return sampler;
+    }
+
+    VkDescriptorSet AllocateTextureSet() {
+        FrameResources& frame = frames_[frameIndex_];
+        for (;;) {
+            const bool freshPool = frame.activePool == frame.descriptorPools.size();
+            if (freshPool) {
+                VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kSetsPerPool * kMaxTextureSlots};
+                VkDescriptorPoolCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+                info.maxSets = kSetsPerPool;
+                info.poolSizeCount = 1;
+                info.pPoolSizes = &size;
+                VkDescriptorPool pool = VK_NULL_HANDLE;
+                if (!Check(vkCreateDescriptorPool(device_, &info, nullptr, &pool), "vkCreateDescriptorPool")) {
+                    return VK_NULL_HANDLE;
+                }
+                frame.descriptorPools.push_back(pool);
+            }
+            VkDescriptorSetAllocateInfo alloc{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+            alloc.descriptorPool = frame.descriptorPools[frame.activePool];
+            alloc.descriptorSetCount = 1;
+            alloc.pSetLayouts = &textureSetLayout_;
+            VkDescriptorSet set = VK_NULL_HANDLE;
+            const VkResult result = vkAllocateDescriptorSets(device_, &alloc, &set);
+            if (result == VK_SUCCESS) return set;
+            if (freshPool) { // an empty pool can't be "full": something else is wrong
+                Check(result, "vkAllocateDescriptorSets");
+                return VK_NULL_HANDLE;
+            }
+            // Full (Vulkan 1.0 drivers may report this with any error code); next pool.
+            ++frame.activePool;
+        }
+    }
+
+    // Writes and binds a descriptor set for the bound textures if they changed.
+    bool FlushDescriptors() {
+        if (!descriptorsDirty_) return true;
+        const VkDescriptorSet set = AllocateTextureSet();
+        if (!set) return false;
+        std::array<VkDescriptorImageInfo, kMaxTextureSlots> images{};
+        std::array<VkWriteDescriptorSet, kMaxTextureSlots> writes{};
+        for (std::uint32_t i = 0; i < kMaxTextureSlots; ++i) {
+            images[i] = {boundSamplers_[i], boundViews_[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+            writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            writes[i].dstSet = set;
+            writes[i].dstBinding = i;
+            writes[i].descriptorCount = 1;
+            writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[i].pImageInfo = &images[i];
+        }
+        vkUpdateDescriptorSets(device_, kMaxTextureSlots, writes.data(), 0, nullptr);
+        vkCmdBindDescriptorSets(cmd_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 0, 1, &set, 0, nullptr);
+        descriptorsDirty_ = false;
+        return true;
+    }
+
+    // Copies one level into host memory as RGBA8. Compressed levels are first
+    // blitted (decoded by the GPU) into an RGBA8 image where the format allows it.
+    std::optional<Image> ReadTextureLevel(const VkTextureResource& texture, std::uint32_t level) {
+        const auto width = static_cast<std::uint32_t>(std::max(1, texture.desc.width >> level));
+        const auto height = static_cast<std::uint32_t>(std::max(1, texture.desc.height >> level));
+        const bool compressed = DescribeTextureFormat(texture.desc.format).compressed;
+        const bool srgb = DescribeTextureFormat(texture.desc.format).srgb;
+        if (compressed) {
+            VkFormatProperties props;
+            vkGetPhysicalDeviceFormatProperties(physicalDevice_, ToVk(texture.desc.format), &props);
+            if (!(props.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) return std::nullopt;
+        }
+
+        VkBufferResource readback;
+        const VkDeviceSize size = VkDeviceSize{width} * height * 4;
+        if (!CreateHostBuffer(static_cast<std::size_t>(size), VK_BUFFER_USAGE_TRANSFER_DST_BIT, readback)) {
+            return std::nullopt;
+        }
+        VkTextureResource decoded; // RGBA8 copy of a compressed level
+        if (compressed) {
+            TextureDesc desc;
+            desc.width = static_cast<int>(width);
+            desc.height = static_cast<int>(height);
+            desc.format = srgb ? TextureFormat::RGBA8_sRGB : TextureFormat::RGBA8;
+            std::vector<std::uint8_t> zeros(static_cast<std::size_t>(size));
+            const TextureLevelData data{zeros.data(), zeros.size()};
+            if (!CreateTextureResource(desc, std::span(&data, 1), decoded)) {
+                DestroyBufferResource(readback);
+                return std::nullopt;
+            }
+        }
+
+        VkCommandBuffer commands = BeginOneShot();
+        if (!commands) {
+            DestroyTextureResource(decoded);
+            DestroyBufferResource(readback);
+            return std::nullopt;
+        }
+        constexpr VkImageLayout kRead = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        ImageBarrier(commands, texture.image, level, 1, kRead, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                     VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                     VK_PIPELINE_STAGE_TRANSFER_BIT);
+        VkImage source = texture.image;
+        std::uint32_t sourceLevel = level;
+        if (compressed) {
+            ImageBarrier(commands, decoded.image, 0, 1, kRead, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+            VkImageBlit blit{};
+            blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1};
+            blit.srcOffsets[1] = {static_cast<std::int32_t>(width), static_cast<std::int32_t>(height), 1};
+            blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            blit.dstOffsets[1] = blit.srcOffsets[1];
+            vkCmdBlitImage(commands, texture.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, decoded.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
+            ImageBarrier(commands, decoded.image, 0, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT,
+                         VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+            source = decoded.image;
+            sourceLevel = 0;
+        }
+        VkBufferImageCopy region{};
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, sourceLevel, 0, 1};
+        region.imageExtent = {width, height, 1};
+        vkCmdCopyImageToBuffer(commands, source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback.buffer, 1, &region);
+        ImageBarrier(commands, texture.image, level, 1, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, kRead,
+                     VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+        VkBufferMemoryBarrier hostRead{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+        hostRead.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        hostRead.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+        hostRead.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        hostRead.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        hostRead.buffer = readback.buffer;
+        hostRead.size = VK_WHOLE_SIZE;
+        vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1,
+                             &hostRead, 0, nullptr);
+        const bool ok = EndOneShot(commands);
+
+        std::optional<Image> image;
+        void* mapped = nullptr;
+        if (ok && Check(vkMapMemory(device_, readback.memory, 0, VK_WHOLE_SIZE, 0, &mapped), "vkMapMemory")) {
+            image.emplace();
+            image->width = static_cast<int>(width);
+            image->height = static_cast<int>(height);
+            image->rgba.resize(static_cast<std::size_t>(size));
+            std::memcpy(image->rgba.data(), mapped, image->rgba.size());
+            vkUnmapMemory(device_, readback.memory);
+        }
+        DestroyTextureResource(decoded);
+        DestroyBufferResource(readback);
+        return image;
+    }
+
     // Capture --------------------------------------------------------------
 
     // Records a copy of the just-rendered swapchain image into a host buffer.
@@ -933,7 +1380,9 @@ private:
     VkQueue queue_ = VK_NULL_HANDLE;
     VkCommandPool commandPool_ = VK_NULL_HANDLE;
     VkPipelineLayout pipelineLayout_ = VK_NULL_HANDLE;
+    VkDescriptorSetLayout textureSetLayout_ = VK_NULL_HANDLE;
     VkRenderPass renderPass_ = VK_NULL_HANDLE;
+    bool astcEnabled_ = false;
 
     VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;
     VkSurfaceFormatKHR surfaceFormat_{};
@@ -957,6 +1406,12 @@ private:
 
     std::unordered_map<std::uint32_t, VkBufferResource> buffers_;
     std::unordered_map<std::uint32_t, VkPipelineResource> pipelines_;
+    std::unordered_map<std::uint32_t, VkTextureResource> textures_;
+    std::vector<std::pair<SamplerDesc, VkSampler>> samplers_;
+    VkTextureResource whiteTexture_;
+    std::array<VkImageView, kMaxTextureSlots> boundViews_{};
+    std::array<VkSampler, kMaxTextureSlots> boundSamplers_{};
+    bool descriptorsDirty_ = true;
     std::uint32_t nextId_ = 1;
 
     bool captureRequested_ = false;

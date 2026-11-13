@@ -41,3 +41,5 @@ target_link_libraries(rr_tests PRIVATE rr::content)
 
 # Component prototypes, prefab object model and entity prototype loading.
 target_sources(rr_tests PRIVATE test_quantum_code_prototypes.cpp)
+# Engine asset readers: meshes, textures and texture decoders.
+target_sources(rr_tests PRIVATE test_mesh_reader.cpp test_texture_decoders.cpp)

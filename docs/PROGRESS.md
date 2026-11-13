@@ -53,6 +53,10 @@ local no-ops with documented behaviour.
 | Shader pipeline (one GLSL source → GL text + SPIR-V, embedded) | done |
 | Textures, materials, render targets, text | not started |
 | Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); prefab hierarchies (`rr/assets/prefab.h`) with entity prototype components from prefabs and baked map entities; scenes, textures, meshes not started |
+| Textures (2D, mips, samplers, ASTC upload where supported) and a lit textured shader, both backends | done (first version) |
+| Materials (shader variants), render targets, text | not started |
+| Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); meshes, textures, materials, shader identification: readers done (`src/engine/assets`); prefabs/scenes not started |
+| Texture decoders | ASTC LDR 4x4..12x12 (linear and sRGB; the only compressed format the game uses) and the uncompressed formats, to RGBA8 |
 | Audio | not started |
 | Physics / animation | not started |
 
@@ -208,18 +212,44 @@ local no-ops with documented behaviour.
   (DamageableSystem, HealthLib.ApplyHit, shields), respawning (ActorManager), and the parts
   that need the 3D scene (death animations, spawn-on-death ray casts, culling, physics step)
 
+- Engine asset readers (`src/engine/assets`): Mesh (vertex streams in every component format,
+  multiple streams, streamed `.resS` data, compressed/quantised meshes with packed bit vectors,
+  16/32-bit indices, submeshes, bind poses, bone hashes, blend shapes), Texture2D (formats, mip
+  chains, stripped mips, sampler settings, streamed data), Material (shader, textures with tiling,
+  floats/ints/colours), Shader identification, ResourceStore for `StreamingInfo` ranges. Checked on
+  the game's files numerically only (`meshview --check-meshes`): all 226 meshes decode, vertex
+  bounds match the stored submesh bounds (worst 0.22% of size, quantisation), indices in range,
+  normals unit length within 8-bit quantisation, skin weights sum to 1, 99.7% of triangles wind
+  consistently with their normals
+- ASTC LDR decoder written from the specification: bit-exact against Mesa's decoder on 242k random
+  blocks (all six block sizes, both profiles) and on every mip of the game's 419 ASTC textures
+  (`meshview --check-textures`, GPU readback compared with our decode)
+- Renderer textures on both backends (RGBA8/sRGB, ASTC where the device has it, mips, samplers,
+  four slots per draw, readback for checks), `lit_textured` shader program; the placeholder scene
+  adds a lit mipmapped checker cube and an ASTC-textured quad built in code (compare_renderers:
+  0.06% edge-pixel difference)
+- `tools/meshview`: viewer (orbit camera, either renderer) for a mesh with its material's main
+  texture, plus `--list`, `--check-meshes`, `--check-textures`, `--astc-selftest`, `--demo`
+
 ## Known issues
 
 - On Mesa's software Vulkan driver (lavapipe), line primitives crossing the near plane
   rasterised incorrectly. The placeholder grid avoids it; needs checking on real GPUs.
 - Swapchain resize is implemented but has only been exercised at a fixed size so far.
-- Buffer/pipeline destruction on Vulkan stalls the GPU; replace with deferred deletion.
+- Buffer/pipeline/texture destruction on Vulkan stalls the GPU; replace with deferred deletion.
+  Texture uploads also wait for the queue (fine at load time, not for streaming).
+- Lavapipe has no ASTC, so the native ASTC upload path on Vulkan is untested (it falls back to
+  software decoding there); the OpenGL native path is tested on llvmpipe.
+- Mesh bounds (`m_LocalAABB`) of some skinned meshes are larger than their vertices; the
+  submesh bounds match. Not investigated further.
+- The game's meshes are left-handed with clockwise front faces; meshview mirrors X and reverses
+  each triangle. The real scene renderer needs the same conversion (and for transforms).
 
 ## Next
 
 1. quantum.core: memory/collections (in progress), collision geometry, frame/ECS
 2. Concrete Native::Allocator/Utility for the PC platform; hook DeterministicSession to quantum.core's game
-3. Renderer: textures, materials, render targets
+3. Renderer: materials (map the game's shaders to PC shader programs), skinning, render targets
 4. Asset reader for the game's content files (from the user's own copy)
 5. Gameplay systems from quantum.code.dll: damage pipeline and respawning next, then movement,
    weapons and projectiles (need the 3D scene from quantum.core)

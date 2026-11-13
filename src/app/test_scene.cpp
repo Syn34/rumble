@@ -1,8 +1,12 @@
 #include "test_scene.h"
 
+#include "rr/assets/astc_decoder.h"
+
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace rr::app {
@@ -80,6 +84,113 @@ struct DrawConstants {
     float tint[4];
 };
 static_assert(sizeof(DrawConstants) <= render::kMaxDrawConstantsSize);
+
+struct LitVertex {
+    float position[3];
+    float normal[3];
+    float uv[2];
+};
+
+struct LitConstants {
+    Mat4 transform;
+    float lightDir[4]; // towards the light, model space; w = ambient
+    float tint[4];
+    float params[4];   // x: encode sRGB, y: alpha cut-off
+};
+static_assert(sizeof(LitConstants) <= render::kMaxDrawConstantsSize);
+
+render::VertexLayout LitLayout() {
+    render::VertexLayout layout;
+    layout.stride = sizeof(LitVertex);
+    layout.attributes = {
+        {0, render::VertexFormat::Float3, offsetof(LitVertex, position)},
+        {1, render::VertexFormat::Float3, offsetof(LitVertex, normal)},
+        {2, render::VertexFormat::Float2, offsetof(LitVertex, uv)},
+    };
+    return layout;
+}
+
+// Checkerboard with one tint per mip level, so mip selection shows up in the image.
+std::vector<std::vector<std::uint8_t>> CheckerMips(int size) {
+    const std::uint8_t tints[][3] = {{255, 255, 255}, {255, 190, 120}, {120, 220, 255}, {200, 255, 140},
+                                     {255, 140, 200}, {180, 160, 255}, {255, 255, 120}, {140, 255, 220}};
+    std::vector<std::vector<std::uint8_t>> levels;
+    for (int level = 0; size >> level > 0; ++level) {
+        const int s = size >> level;
+        const int cell = std::max(1, 8 >> level);
+        std::vector<std::uint8_t> texels(static_cast<std::size_t>(s * s) * 4);
+        for (int y = 0; y < s; ++y) {
+            for (int x = 0; x < s; ++x) {
+                const bool dark = ((x / cell) + (y / cell)) % 2 == 1;
+                const auto* t = tints[level % 8];
+                std::uint8_t* p = &texels[static_cast<std::size_t>(y * s + x) * 4];
+                for (int c = 0; c < 3; ++c) p[c] = static_cast<std::uint8_t>(dark ? t[c] / 4 : t[c]);
+                p[3] = 255;
+            }
+        }
+        levels.push_back(std::move(texels));
+    }
+    return levels;
+}
+
+// Builds ASTC 8x8 blocks: one partition, RGB endpoints (CEM 8, 8-bit values) and a
+// 4x4 grid of 2-bit weights stretched over the block, so decoding exercises endpoint
+// selection, weight unquantisation and infill. Contents follow a fixed sequence.
+std::vector<std::uint8_t> AstcTestBlocks(int blocksX, int blocksY) {
+    std::vector<std::uint8_t> data(static_cast<std::size_t>(blocksX * blocksY) * 16, 0);
+    std::uint32_t seed = 12345;
+    auto next = [&seed]() {
+        seed = seed * 1664525u + 1013904223u;
+        return seed >> 24;
+    };
+    for (int b = 0; b < blocksX * blocksY; ++b) {
+        std::uint8_t* block = &data[static_cast<std::size_t>(b) * 16];
+        auto put = [block](int start, int count, std::uint32_t value) {
+            for (int i = 0; i < count; ++i) {
+                if ((value >> i) & 1) block[(start + i) / 8] |= static_cast<std::uint8_t>(1 << ((start + i) % 8));
+            }
+        };
+        put(0, 11, 0x42); // 4x4 weights, 4 levels
+        put(13, 4, 8);    // CEM 8
+        for (int i = 0; i < 6; ++i) put(17 + 8 * i, 8, next());
+        for (int i = 0; i < 16; ++i) {
+            const std::uint32_t w = ((i % 4) + (i / 4) + static_cast<std::uint32_t>(b)) % 4;
+            put(127 - 2 * i, 1, w & 1); // weights are stored bit-reversed from the top
+            put(126 - 2 * i, 1, (w >> 1) & 1);
+        }
+    }
+    return data;
+}
+
+// Unit cube with per-face normals and UVs; faces counter-clockwise from outside.
+void BuildLitCube(std::vector<LitVertex>& vertices, std::vector<std::uint16_t>& indices) {
+    const float faces[6][3][3] = {
+        {{0, 0, 1}, {1, 0, 0}, {0, 1, 0}},  {{0, 0, -1}, {-1, 0, 0}, {0, 1, 0}},
+        {{1, 0, 0}, {0, 0, -1}, {0, 1, 0}}, {{-1, 0, 0}, {0, 0, 1}, {0, 1, 0}},
+        {{0, 1, 0}, {1, 0, 0}, {0, 0, -1}}, {{0, -1, 0}, {1, 0, 0}, {0, 0, 1}},
+    };
+    const float corners[4][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
+    for (const auto& f : faces) {
+        const auto base = static_cast<std::uint16_t>(vertices.size());
+        for (const auto& c : corners) {
+            LitVertex v{};
+            for (int i = 0; i < 3; ++i) {
+                v.position[i] = 0.5f * (f[0][i] + c[0] * f[1][i] + c[1] * f[2][i]);
+                v.normal[i] = f[0][i];
+            }
+            v.uv[0] = (c[0] + 1.0f) * 1.5f; // three checker repeats per face
+            v.uv[1] = (c[1] + 1.0f) * 1.5f;
+            vertices.push_back(v);
+        }
+        for (int i : {0, 1, 2, 0, 2, 3}) indices.push_back(static_cast<std::uint16_t>(base + i));
+    }
+}
+
+// Rotation part of `m` applied transposed: world direction -> model direction for
+// rigid transforms.
+void ToModelSpace(const Mat4& m, const float world[3], float out[3]) {
+    for (int i = 0; i < 3; ++i) out[i] = m.At(0, i) * world[0] + m.At(1, i) * world[1] + m.At(2, i) * world[2];
+}
 
 render::VertexLayout VertexFormatLayout() {
     render::VertexLayout layout;
@@ -164,7 +275,53 @@ bool TestScene::Create(render::RenderDevice& device) {
     lines.cull = render::CullMode::None;
     lines_ = device.CreatePipeline(lines);
 
-    return solid_ && lines_ && cubeVertices_ && cubeIndices_ && gridVertices_;
+    // Lit, textured objects.
+    std::vector<LitVertex> litVertices;
+    std::vector<std::uint16_t> litIndices;
+    BuildLitCube(litVertices, litIndices);
+    litCubeVertices_ = device.CreateBuffer(render::BufferUsage::Vertex, litVertices.data(),
+                                           litVertices.size() * sizeof(LitVertex));
+    litCubeIndices_ = device.CreateBuffer(render::BufferUsage::Index, litIndices.data(),
+                                          litIndices.size() * sizeof(std::uint16_t));
+    const LitVertex quad[6] = {
+        {{-0.6f, -0.6f, 0}, {0, 0, 1}, {0, 0}}, {{0.6f, -0.6f, 0}, {0, 0, 1}, {1, 0}},
+        {{0.6f, 0.6f, 0}, {0, 0, 1}, {1, 1}},   {{-0.6f, -0.6f, 0}, {0, 0, 1}, {0, 0}},
+        {{0.6f, 0.6f, 0}, {0, 0, 1}, {1, 1}},   {{-0.6f, 0.6f, 0}, {0, 0, 1}, {0, 1}},
+    };
+    quadVertices_ = device.CreateBuffer(render::BufferUsage::Vertex, quad, sizeof(quad));
+
+    const auto mips = CheckerMips(64);
+    std::vector<render::TextureLevelData> levels;
+    for (const auto& m : mips) levels.push_back({m.data(), m.size()});
+    render::TextureDesc checker;
+    checker.width = checker.height = 64;
+    checker.mipCount = static_cast<std::uint32_t>(levels.size());
+    checker_ = device.CreateTexture(checker, levels);
+
+    // 64x64 ASTC 8x8 texture: uploaded as is where the device supports ASTC,
+    // otherwise decoded in software (the two paths must look the same).
+    constexpr int kAstcSize = 64;
+    const std::vector<std::uint8_t> blocks = AstcTestBlocks(kAstcSize / 8, kAstcSize / 8);
+    render::TextureDesc astc;
+    astc.width = astc.height = kAstcSize;
+    astc.format = render::TextureFormat::ASTC_8x8;
+    if (device.SupportsTextureFormat(astc.format)) {
+        const render::TextureLevelData level{blocks.data(), blocks.size()};
+        compressed_ = device.CreateTexture(astc, std::span(&level, 1));
+    } else {
+        const auto rgba = assets::astc::DecodeImage(blocks, kAstcSize, kAstcSize, 8, 8, assets::astc::Profile::Linear);
+        astc.format = render::TextureFormat::RGBA8;
+        const render::TextureLevelData level{rgba.data(), rgba.size()};
+        compressed_ = device.CreateTexture(astc, std::span(&level, 1));
+    }
+
+    render::PipelineDesc lit;
+    lit.shaderProgram = "lit_textured";
+    lit.vertexLayout = LitLayout();
+    lit_ = device.CreatePipeline(lit);
+
+    return solid_ && lines_ && cubeVertices_ && cubeIndices_ && gridVertices_ && lit_ && litCubeVertices_ &&
+           litCubeIndices_ && quadVertices_ && checker_ && compressed_;
 }
 
 void TestScene::Draw(render::RenderDevice& device, float time) {
@@ -198,6 +355,35 @@ void TestScene::Draw(render::RenderDevice& device, float time) {
     device.BindIndexBuffer(cubeIndices_, render::IndexType::UInt16);
     device.SetDrawConstants(&constants, sizeof(constants));
     device.DrawIndexed(cubeIndexCount_);
+
+    // Lit cube with the mipmapped checker texture (trilinear, repeating).
+    const float sunWorld[3] = {0.4f, 0.8f, 0.45f};
+    LitConstants lit{};
+    lit.tint[0] = lit.tint[1] = lit.tint[2] = lit.tint[3] = 1.0f;
+    const Mat4 cubeModel = Translation(-1.9f, 0.6f, -0.5f) * RotationY(0.7f + time * 0.5f) * RotationX(0.4f);
+    lit.transform = viewProjection * cubeModel;
+    ToModelSpace(cubeModel, sunWorld, lit.lightDir);
+    lit.lightDir[3] = 0.25f;
+    device.BindPipeline(lit_);
+    device.BindTexture(0, checker_, render::SamplerDesc{});
+    device.BindVertexBuffer(litCubeVertices_);
+    device.BindIndexBuffer(litCubeIndices_, render::IndexType::UInt16);
+    device.SetDrawConstants(&lit, sizeof(lit));
+    device.DrawIndexed(static_cast<std::uint32_t>(36));
+
+    // Quad with the block-compressed texture, sampled without filtering.
+    render::SamplerDesc nearest;
+    nearest.filter = render::FilterMode::Nearest;
+    nearest.useMips = false;
+    nearest.wrapU = nearest.wrapV = render::WrapMode::ClampToEdge;
+    const Mat4 quadModel = Translation(1.9f, 0.8f, -0.3f) * RotationY(-0.5f);
+    lit.transform = viewProjection * quadModel;
+    ToModelSpace(quadModel, sunWorld, lit.lightDir);
+    lit.lightDir[3] = 0.6f;
+    device.BindTexture(0, compressed_, nearest);
+    device.BindVertexBuffer(quadVertices_);
+    device.SetDrawConstants(&lit, sizeof(lit));
+    device.Draw(6);
 
     device.EndRenderPass();
 }

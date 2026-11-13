@@ -5,9 +5,11 @@
 #include "rr/render/render_device.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace rr::render {
 namespace {
@@ -18,6 +20,50 @@ struct GlBuffer {
     GLuint name = 0;
     BufferUsage usage = BufferUsage::Vertex;
 };
+
+struct GlTexture {
+    GLuint name = 0;
+    TextureDesc desc;
+};
+
+// Internal format for glTexImage2D / glCompressedTexImage2D.
+GLenum InternalFormat(TextureFormat format) {
+    switch (format) {
+    case TextureFormat::RGBA8: return GL_RGBA8;
+    case TextureFormat::RGBA8_sRGB: return GL_SRGB8_ALPHA8;
+    case TextureFormat::ASTC_4x4: return GL_COMPRESSED_RGBA_ASTC_4x4_KHR;
+    case TextureFormat::ASTC_4x4_sRGB: return GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR;
+    case TextureFormat::ASTC_5x5: return GL_COMPRESSED_RGBA_ASTC_5x5_KHR;
+    case TextureFormat::ASTC_5x5_sRGB: return GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR;
+    case TextureFormat::ASTC_6x6: return GL_COMPRESSED_RGBA_ASTC_6x6_KHR;
+    case TextureFormat::ASTC_6x6_sRGB: return GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR;
+    case TextureFormat::ASTC_8x8: return GL_COMPRESSED_RGBA_ASTC_8x8_KHR;
+    case TextureFormat::ASTC_8x8_sRGB: return GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR;
+    case TextureFormat::ASTC_10x10: return GL_COMPRESSED_RGBA_ASTC_10x10_KHR;
+    case TextureFormat::ASTC_10x10_sRGB: return GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR;
+    case TextureFormat::ASTC_12x12: return GL_COMPRESSED_RGBA_ASTC_12x12_KHR;
+    case TextureFormat::ASTC_12x12_sRGB: return GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR;
+    }
+    return GL_RGBA8;
+}
+
+GLint ToGl(WrapMode wrap) {
+    switch (wrap) {
+    case WrapMode::Repeat: return static_cast<GLint>(GL_REPEAT);
+    case WrapMode::ClampToEdge: return static_cast<GLint>(GL_CLAMP_TO_EDGE);
+    case WrapMode::MirroredRepeat: return static_cast<GLint>(GL_MIRRORED_REPEAT);
+    }
+    return static_cast<GLint>(GL_REPEAT);
+}
+
+GLint MinFilter(const SamplerDesc& s) {
+    const bool linear = s.filter == FilterMode::Linear;
+    if (!s.useMips) return static_cast<GLint>(linear ? GL_LINEAR : GL_NEAREST);
+    if (s.mipFilter == FilterMode::Linear) {
+        return static_cast<GLint>(linear ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_LINEAR);
+    }
+    return static_cast<GLint>(linear ? GL_LINEAR_MIPMAP_NEAREST : GL_NEAREST_MIPMAP_NEAREST);
+}
 
 struct GlPipeline {
     GLuint program = 0;
@@ -49,6 +95,9 @@ public:
         : platform_(platform), context_(context) {}
 
     ~OpenGLDevice() override {
+        for (auto& [id, t] : textures_) gl_.glDeleteTextures(1, &t.name);
+        for (auto& [desc, sampler] : samplers_) gl_.glDeleteSamplers(1, &sampler);
+        if (whiteTexture_) gl_.glDeleteTextures(1, &whiteTexture_);
         for (auto& [id, b] : buffers_) gl_.glDeleteBuffers(1, &b.name);
         for (auto& [id, p] : pipelines_) gl_.glDeleteProgram(p.program);
         if (constantsBuffer_) gl_.glDeleteBuffers(1, &constantsBuffer_);
@@ -75,6 +124,28 @@ public:
         gl_.glBindBufferBase(GL_UNIFORM_BUFFER, kDrawConstantsBinding, constantsBuffer_);
 
         gl_.glFrontFace(GL_CCW);
+
+        GLint extensionCount = 0;
+        gl_.glGetIntegerv(GL_NUM_EXTENSIONS, &extensionCount);
+        for (GLint i = 0; i < extensionCount; ++i) {
+            const auto* name = reinterpret_cast<const char*>(gl_.glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
+            if (name && std::string(name) == "GL_KHR_texture_compression_astc_ldr") hasAstc_ = true;
+        }
+
+        // Slots without a texture sample this opaque white texel.
+        const std::uint8_t white[4] = {255, 255, 255, 255};
+        gl_.glGenTextures(1, &whiteTexture_);
+        gl_.glBindTexture(GL_TEXTURE_2D, whiteTexture_);
+        gl_.glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+        gl_.glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(GL_RGBA8), 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
+        for (std::uint32_t slot = 0; slot < kMaxTextureSlots; ++slot) {
+            boundTextures_[slot] = whiteTexture_;
+            gl_.glActiveTexture(GL_TEXTURE0 + slot);
+            gl_.glBindTexture(GL_TEXTURE_2D, whiteTexture_);
+            gl_.glBindSampler(slot, Sampler(SamplerDesc{}));
+        }
+        gl_.glActiveTexture(GL_TEXTURE0);
         return true;
     }
 
@@ -136,6 +207,14 @@ public:
         if (block != GL_INVALID_INDEX) {
             gl_.glUniformBlockBinding(pipeline.program, block, kDrawConstantsBinding);
         }
+        // Texture slot N is texture unit N (uTextureN in the shader).
+        gl_.glUseProgram(pipeline.program);
+        for (std::uint32_t slot = 0; slot < kMaxTextureSlots; ++slot) {
+            const std::string uniform = "uTexture" + std::to_string(slot);
+            const GLint location = gl_.glGetUniformLocation(pipeline.program, uniform.c_str());
+            if (location >= 0) gl_.glUniform1i(location, static_cast<GLint>(slot));
+        }
+        gl_.glUseProgram(current_ ? current_->program : 0);
 
         const PipelineHandle handle{nextId_++};
         pipelines_.emplace(handle.id, std::move(pipeline));
@@ -147,6 +226,88 @@ public:
             gl_.glDeleteProgram(it->second.program);
             pipelines_.erase(it);
         }
+    }
+
+    bool SupportsTextureFormat(TextureFormat format) const override {
+        return !DescribeTextureFormat(format).compressed || hasAstc_;
+    }
+
+    TextureHandle CreateTexture(const TextureDesc& desc, std::span<const TextureLevelData> levels) override {
+        if (!SupportsTextureFormat(desc.format) || desc.width <= 0 || desc.height <= 0 || desc.mipCount == 0 ||
+            levels.size() < desc.mipCount) {
+            std::fprintf(stderr, "OpenGL: unsupported texture (%s %dx%d)\n", ToString(desc.format), desc.width,
+                         desc.height);
+            return {};
+        }
+        for (std::uint32_t level = 0; level < desc.mipCount; ++level) {
+            const int w = std::max(1, desc.width >> level);
+            const int h = std::max(1, desc.height >> level);
+            if (levels[level].size != TextureLevelBytes(desc.format, w, h) || !levels[level].data) {
+                std::fprintf(stderr, "OpenGL: texture level %u has the wrong size\n", level);
+                return {};
+            }
+        }
+        GlTexture texture;
+        texture.desc = desc;
+        gl_.glGenTextures(1, &texture.name);
+        gl_.glActiveTexture(GL_TEXTURE0);
+        gl_.glBindTexture(GL_TEXTURE_2D, texture.name);
+        gl_.glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+        gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(desc.mipCount - 1));
+        const GLenum internal = InternalFormat(desc.format);
+        const bool compressed = DescribeTextureFormat(desc.format).compressed;
+        for (std::uint32_t level = 0; level < desc.mipCount; ++level) {
+            const int w = std::max(1, desc.width >> level);
+            const int h = std::max(1, desc.height >> level);
+            if (compressed) {
+                gl_.glCompressedTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), internal, w, h, 0,
+                                           static_cast<GLsizei>(levels[level].size), levels[level].data);
+            } else {
+                gl_.glTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level), static_cast<GLint>(internal), w, h, 0,
+                                 GL_RGBA, GL_UNSIGNED_BYTE, levels[level].data);
+            }
+        }
+        gl_.glBindTexture(GL_TEXTURE_2D, boundTextures_[0]);
+        if (const GLenum error = gl_.glGetError(); error != GL_NO_ERROR) {
+            std::fprintf(stderr, "OpenGL: creating a %s texture failed (error 0x%x)\n", ToString(desc.format), error);
+            gl_.glDeleteTextures(1, &texture.name);
+            return {};
+        }
+        const TextureHandle handle{nextId_++};
+        textures_.emplace(handle.id, texture);
+        return handle;
+    }
+
+    void DestroyTexture(TextureHandle handle) override {
+        auto it = textures_.find(handle.id);
+        if (it == textures_.end()) return;
+        for (std::uint32_t slot = 0; slot < kMaxTextureSlots; ++slot) {
+            if (boundTextures_[slot] == it->second.name) {
+                boundTextures_[slot] = whiteTexture_;
+                gl_.glActiveTexture(GL_TEXTURE0 + slot);
+                gl_.glBindTexture(GL_TEXTURE_2D, whiteTexture_);
+            }
+        }
+        gl_.glActiveTexture(GL_TEXTURE0);
+        gl_.glDeleteTextures(1, &it->second.name);
+        textures_.erase(it);
+    }
+
+    std::optional<Image> ReadTexture(TextureHandle handle, std::uint32_t mipLevel) override {
+        auto it = textures_.find(handle.id);
+        if (it == textures_.end() || mipLevel >= it->second.desc.mipCount) return std::nullopt;
+        Image image;
+        image.width = std::max(1, it->second.desc.width >> mipLevel);
+        image.height = std::max(1, it->second.desc.height >> mipLevel);
+        image.rgba.resize(static_cast<std::size_t>(image.width) * static_cast<std::size_t>(image.height) * 4);
+        gl_.glActiveTexture(GL_TEXTURE0);
+        gl_.glBindTexture(GL_TEXTURE_2D, it->second.name);
+        gl_.glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        gl_.glGetTexImage(GL_TEXTURE_2D, static_cast<GLint>(mipLevel), GL_RGBA, GL_UNSIGNED_BYTE, image.rgba.data());
+        gl_.glBindTexture(GL_TEXTURE_2D, boundTextures_[0]);
+        if (gl_.glGetError() != GL_NO_ERROR) return std::nullopt;
+        return image;
     }
 
     bool BeginFrame() override {
@@ -213,6 +374,17 @@ public:
         if (size > kMaxDrawConstantsSize) size = kMaxDrawConstantsSize;
         gl_.glBindBuffer(GL_UNIFORM_BUFFER, constantsBuffer_);
         gl_.glBufferSubData(GL_UNIFORM_BUFFER, 0, static_cast<GLsizeiptr>(size), data);
+    }
+
+    void BindTexture(std::uint32_t slot, TextureHandle handle, const SamplerDesc& sampler) override {
+        if (slot >= kMaxTextureSlots) return;
+        auto it = textures_.find(handle.id);
+        const GLuint name = it != textures_.end() ? it->second.name : whiteTexture_;
+        gl_.glActiveTexture(GL_TEXTURE0 + slot);
+        gl_.glBindTexture(GL_TEXTURE_2D, name);
+        gl_.glBindSampler(slot, Sampler(sampler));
+        gl_.glActiveTexture(GL_TEXTURE0);
+        boundTextures_[slot] = name;
     }
 
     void Draw(std::uint32_t vertexCount, std::uint32_t firstVertex) override {
@@ -284,6 +456,22 @@ private:
         return log;
     }
 
+    // Sampler objects are shared between all draws with the same settings.
+    GLuint Sampler(const SamplerDesc& desc) {
+        for (const auto& [d, sampler] : samplers_) {
+            if (d == desc) return sampler;
+        }
+        GLuint sampler = 0;
+        gl_.glGenSamplers(1, &sampler);
+        gl_.glSamplerParameteri(sampler, GL_TEXTURE_MIN_FILTER, MinFilter(desc));
+        gl_.glSamplerParameteri(sampler, GL_TEXTURE_MAG_FILTER,
+                                static_cast<GLint>(desc.filter == FilterMode::Linear ? GL_LINEAR : GL_NEAREST));
+        gl_.glSamplerParameteri(sampler, GL_TEXTURE_WRAP_S, ToGl(desc.wrapU));
+        gl_.glSamplerParameteri(sampler, GL_TEXTURE_WRAP_T, ToGl(desc.wrapV));
+        samplers_.emplace_back(desc, sampler);
+        return sampler;
+    }
+
     GLenum Topology() const {
         return current_->desc.topology == PrimitiveTopology::LineList ? GL_LINES : GL_TRIANGLES;
     }
@@ -335,6 +523,11 @@ private:
 
     std::unordered_map<std::uint32_t, GlBuffer> buffers_;
     std::unordered_map<std::uint32_t, GlPipeline> pipelines_;
+    std::unordered_map<std::uint32_t, GlTexture> textures_;
+    std::vector<std::pair<SamplerDesc, GLuint>> samplers_;
+    std::array<GLuint, kMaxTextureSlots> boundTextures_{};
+    GLuint whiteTexture_ = 0;
+    bool hasAstc_ = false;
     std::uint32_t nextId_ = 1;
 
     GLuint vertexArray_ = 0;

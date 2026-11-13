@@ -13,3 +13,12 @@ rr_set_warnings(rr_assets)
 
 # Prefab (game object hierarchy) reader.
 target_sources(rr_assets PRIVATE src/prefab.cpp)
+# Mesh, texture, material and shader readers; texture decoders.
+target_sources(rr_assets PRIVATE
+    src/streamed_data.cpp
+    src/texture_format.cpp
+    src/astc_decoder.cpp
+    src/texture2d.cpp
+    src/mesh.cpp
+    src/material.cpp
+)
