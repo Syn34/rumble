@@ -24,6 +24,8 @@ add_library(rr_game
     quantum_code/frame_signals.cpp
     quantum_code/frame_components.cpp
     quantum_code/frame.cpp
+    quantum_code/globals.cpp
+    quantum_code/quantum_game.cpp
 )
 add_library(rr::game ALIAS rr_game)
 target_include_directories(rr_game PUBLIC .)

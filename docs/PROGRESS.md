@@ -274,8 +274,43 @@ local no-ops with documented behaviour.
   467 draw calls (127 skinned), 577k triangles, 9 pipelines, no errors (Vulkan validation clean);
   116 skinned instances skinned on the CPU land inside their stored bounds (110 within 5%)
 
+- Offline matches (`RangerRumble --match`, `src/app/match`; `Quantum.QuantumGame` in
+  `quantum_code/quantum_game.*`): content startup (bundles with the engine's field-name table,
+  QuantumContentProvider and the asset factories behind a ResourceManagerDynamic, the player's
+  Resources table from `globalgamemanagers` with TextAsset reading, `global-metadata.dat`
+  array-initialiser data), FPMath tables loaded from the user's files (small tables from the
+  metadata, large ones from Resources or exported `.bytes`; `--approx-math` computes stand-ins
+  when the files are missing); QuantumGame as the IDeterministicGame (frame context sized from
+  the simulation config and session, systems from SystemSetup, frames, OnGameStart/InitSystems,
+  OnSimulate with per-system exception capture, input poll/serialise/deserialise in input mode,
+  ApplyInputs, OnUpdateDone with interpolation factor) in a local DeterministicSession at the
+  fixed tick rate; `Frame.CalculateChecksum` (CRC64 of the global block and the entity store,
+  seeded with the frame number) and `_globals_.Serialize`; the Frame constructor now takes the
+  map and RNG seed from the runtime config and sets the start-enabled system bits; RuntimeConfig
+  built from the content (map, mode, tables); default keyboard/mouse/gamepad bindings to
+  `Quantum.Input` (camera-relative movement, camera sight/orbit); a view layer that instantiates
+  each entity's EntityView prefab through `src/engine/scene`, interpolates transforms and orbits a
+  camera around the local player's actor, drawn with either renderer; `--headless --ticks N`
+  prints entities per component, systems run/failing, events and a checksum every 60 ticks.
+  On the staged content (numbers only): all 52 maps start and run 180 ticks headless (1,049 map
+  entities in total; 4 maps lose some entities to compound collider shapes, which quantum.core
+  doesn't create yet; no other system throws, because the systems that would act on actors are
+  still TODO shells and no actors spawn yet); `--check-views` instantiates the prefabs of all 247
+  EntityView assets (185 renderers, 81 skinned). Determinism: two runs give identical checksums (`tests/test_quantum_game.cpp` with content
+  built in code; `tools/match_determinism.py` on the real content). Pending: RuntimePlayer and
+  `Frame.UpdatePlayerData` (no player data reaches the simulation, so no player actor spawns),
+  event confirmation/dispatch (events are counted and released), the checksum/replay snapshot
+  buffers, command factories, the Rewired input maps, decoding Quantum assets stored in the
+  player's Resources (they have no type trees)
+
 ## Known issues
 
+- The staged files lack the player's Resources data files: `globalgamemanagers` lists 1,800+
+  Resources paths in GUID-named files in `bin/Data` (842 externals) that aren't in the staged
+  base data or asset pack folders. They hold FPMath's large tables (`LUT/FP*`) and Quantum assets
+  (`db/configs/simulationconfig`, `deterministicconfig`, `db/elementaldamagetable`,
+  `db/ai/aibotsdkconfig`, `db/items/*`...). Matches run with `--approx-math` and class-default
+  configs until they are staged (and, for the assets, decodable without type trees).
 - On Mesa's software Vulkan driver (lavapipe), line primitives crossing the near plane
   rasterised incorrectly. The placeholder grid avoids it; needs checking on real GPUs.
 - Swapchain resize is implemented but has only been exercised at a fixed size so far.
@@ -296,7 +331,10 @@ local no-ops with documented behaviour.
 ## Next
 
 1. quantum.core: memory/collections (in progress), collision geometry, frame/ECS
-2. Concrete Native::Allocator/Utility for the PC platform; hook DeterministicSession to quantum.core's game
+2. Matches: RuntimePlayer and Frame player data so player and bot actors spawn; decode the Quantum
+   assets in the player's Resources (SimulationConfig, DeterministicConfig, ElementalDamageTable,
+   AIBotSDKConfig, db/items...) without type trees (layouts from the metadata); stage the
+   `bin/Data` Resources files (FPMath tables)
 3. Renderer: level scenes once their bundles are staged, the shader bundle (exact material
    mapping), built-in primitive meshes, animation clips and blend shapes, particles, shadows/fog,
    render targets

@@ -103,6 +103,16 @@ Quantum::AssetGuid QuantumContentProvider::GuidOfPath(const std::string& path) c
     return it != byPath_.end() ? entries_[it->second].id.Guid : Quantum::AssetGuid{};
 }
 
+std::optional<rr::assets::ObjectRef> QuantumContentProvider::SourceOf(Quantum::AssetGuid guid) {
+    auto it = byGuid_.find(guid.Value);
+    if (it == byGuid_.end()) return std::nullopt;
+    const Entry& entry = entries_[it->second];
+    const auto* file = library_.FindFile(entry.cab);
+    const auto* object = file ? file->FindObject(entry.pathId) : nullptr;
+    if (!object) return std::nullopt;
+    return rr::assets::ObjectRef{file, object, entry.cab};
+}
+
 std::string QuantumContentProvider::ScriptClassOf(const Quantum::AssetObjectIdentifier& id) {
     const Entry* entry = Find(id);
     if (!entry) return {};

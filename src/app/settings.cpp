@@ -39,6 +39,24 @@ Settings LoadSettings(const std::filesystem::path& file) {
                 settings.fullscreen = ParseBool(value);
             } else if (key == "vsync") {
                 settings.vsync = ParseBool(value);
+            } else if (key == "content_dir") {
+                settings.contentDir = value;
+            } else if (key == "engine_lib") {
+                settings.engineLib = value;
+            } else if (key == "data_dirs") {
+                settings.dataDirs.clear();
+                std::size_t start = 0;
+                while (start <= value.size()) {
+                    const auto end = value.find(';', start);
+                    const std::string item = Trim(value.substr(start, end == std::string::npos ? std::string::npos : end - start));
+                    if (!item.empty()) settings.dataDirs.emplace_back(item);
+                    if (end == std::string::npos) break;
+                    start = end + 1;
+                }
+            } else if (key == "metadata") {
+                settings.metadata = value;
+            } else if (key == "lut_dir") {
+                settings.lutDir = value;
             }
         } catch (const std::exception&) {
             // A malformed number keeps the default.
@@ -58,7 +76,15 @@ bool SaveSettings(const Settings& settings, const std::filesystem::path& file) {
         << "width=" << settings.windowWidth << '\n'
         << "height=" << settings.windowHeight << '\n'
         << "fullscreen=" << (settings.fullscreen ? "true" : "false") << '\n'
-        << "vsync=" << (settings.vsync ? "true" : "false") << '\n';
+        << "vsync=" << (settings.vsync ? "true" : "false") << '\n'
+        << "# your game files (see README)\n"
+        << "content_dir=" << settings.contentDir.string() << '\n'
+        << "engine_lib=" << settings.engineLib.string() << '\n';
+    out << "data_dirs=";
+    for (std::size_t i = 0; i < settings.dataDirs.size(); ++i) out << (i ? ";" : "") << settings.dataDirs[i].string();
+    out << '\n'
+        << "metadata=" << settings.metadata.string() << '\n'
+        << "lut_dir=" << settings.lutDir.string() << '\n';
     return static_cast<bool>(out);
 }
 

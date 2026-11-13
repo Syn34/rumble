@@ -8,6 +8,7 @@
 //   2. renderer= in userdata/settings.ini
 //   3. the first available backend (Vulkan, then OpenGL)
 // If the chosen backend can't start, the other one is tried.
+#include "match/match_app.h"
 #include "settings.h"
 #include "test_scene.h"
 
@@ -35,6 +36,15 @@ struct Options {
     bool saveRenderer = false;   // remember --renderer in settings.ini
     bool listRenderers = false;
     bool sceneDemo = false;      // draw the synthetic scene through the engine's scene renderer
+
+    // --match: an offline match with the user's game files.
+    bool match = false;
+    rr::app::MatchCommand matchCommand;
+    bool ticksGiven = false;
+    bool saveContent = false; // remember the content paths in settings.ini
+    // Content paths given on the command line (empty: take them from settings.ini).
+    std::filesystem::path contentDir, engineLib, metadata, lutDir;
+    std::vector<std::filesystem::path> dataDirs;
 };
 
 void PrintUsage() {
@@ -46,7 +56,24 @@ void PrintUsage() {
         "  --frames <n>                exit after n frames\n"
         "  --screenshot <file.ppm>     save the final frame (use with --frames)\n"
         "  --headless                  no window or rendering\n"
-        "  --scene-demo                draw the synthetic scene-renderer demo instead of the placeholder\n");
+        "  --scene-demo                draw the synthetic scene-renderer demo instead of the placeholder\n"
+        "\n"
+        "offline match (needs your own game files; see README):\n"
+        "  --match <map name|guid>     play a match on this map\n"
+        "  --game-mode <name|guid>     GAME_MODE name/number or game mode GUID (default: from the map name)\n"
+        "  --hero <name|guid>          hero spec\n"
+        "  --players <n>               player slots (default 1)\n"
+        "  --seed <n>                  simulation seed (default 1)\n"
+        "  --ticks <n>                 with --headless: ticks to run (default 600)\n"
+        "  --quiet                     with --headless: no log messages\n"
+        "  --check-views               with --headless: instantiate every EntityView prefab and print counts\n"
+        "  --content <dir>             asset pack aa/Android folder (*.bundle)\n"
+        "  --engine-lib <file>         libunity.so from the arm64 split\n"
+        "  --data <dir>                player data folder (bin/Data); repeatable\n"
+        "  --metadata <file>           global-metadata.dat (default: <data>/Managed/Metadata/)\n"
+        "  --lut-dir <dir>             folder with exported LUT/*.bytes tables\n"
+        "  --approx-math               compute missing FPMath tables (not bit-exact with the original)\n"
+        "  --save-content              remember the content paths in settings.ini\n");
 }
 
 bool ParseOptions(int argc, char** argv, Options& options) {
@@ -76,6 +103,48 @@ bool ParseOptions(int argc, char** argv, Options& options) {
             options.sceneDemo = true;
         } else if (arg == "--list-renderers") {
             options.listRenderers = true;
+        } else if (arg == "--match" || arg == "--game-mode" || arg == "--hero" || arg == "--players" || arg == "--seed" ||
+                   arg == "--ticks" || arg == "--content" || arg == "--engine-lib" || arg == "--data" ||
+                   arg == "--metadata" || arg == "--lut-dir") {
+            const char* value = next();
+            if (!value) {
+                std::fprintf(stderr, "%s expects a value\n", arg.c_str());
+                return false;
+            }
+            auto& m = options.matchCommand;
+            if (arg == "--match") {
+                options.match = true;
+                m.match.map = value;
+            } else if (arg == "--game-mode") {
+                m.match.gameMode = value;
+            } else if (arg == "--hero") {
+                m.match.hero = value;
+            } else if (arg == "--players") {
+                m.match.players = std::stoi(value);
+            } else if (arg == "--seed") {
+                m.match.seed = std::stoi(value);
+            } else if (arg == "--ticks") {
+                m.ticks = std::stoull(value);
+                options.ticksGiven = true;
+            } else if (arg == "--content") {
+                options.contentDir = value;
+            } else if (arg == "--engine-lib") {
+                options.engineLib = value;
+            } else if (arg == "--data") {
+                options.dataDirs.emplace_back(value);
+            } else if (arg == "--metadata") {
+                options.metadata = value;
+            } else {
+                options.lutDir = value;
+            }
+        } else if (arg == "--approx-math") {
+            options.matchCommand.content.allowApproximateMath = true;
+        } else if (arg == "--quiet") {
+            options.matchCommand.quiet = true;
+        } else if (arg == "--check-views") {
+            options.matchCommand.checkViews = true;
+        } else if (arg == "--save-content") {
+            options.saveContent = true;
         } else {
             PrintUsage();
             return false;
@@ -128,12 +197,29 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
-    if (options.headless) return RunHeadless(options);
-
     rr::platform::PlatformConfig config;
     config.frameLimit = options.frames;
     const auto settingsFile = config.userDataRoot / "settings.ini";
     rr::app::Settings settings = rr::app::LoadSettings(settingsFile);
+
+    if (options.match) {
+        // Content paths: command line first, then settings.ini.
+        if (!options.contentDir.empty()) settings.contentDir = options.contentDir;
+        if (!options.engineLib.empty()) settings.engineLib = options.engineLib;
+        if (!options.dataDirs.empty()) settings.dataDirs = options.dataDirs;
+        if (!options.metadata.empty()) settings.metadata = options.metadata;
+        if (!options.lutDir.empty()) settings.lutDir = options.lutDir;
+        if (options.saveContent) rr::app::SaveSettings(settings, settingsFile);
+        auto& content = options.matchCommand.content;
+        content.contentDir = settings.contentDir;
+        content.engineLib = settings.engineLib;
+        content.dataDirs = settings.dataDirs;
+        content.metadata = settings.metadata;
+        content.lutDir = settings.lutDir;
+        options.matchCommand.frames = options.frames;
+        if (options.headless) return rr::app::RunMatchHeadless(options.matchCommand);
+    }
+    if (options.headless) return RunHeadless(options);
     if (options.renderer && options.saveRenderer) {
         settings.renderer = options.renderer;
         rr::app::SaveSettings(settings, settingsFile);
@@ -171,6 +257,8 @@ int main(int argc, char** argv) {
     }
     std::printf("renderer: %s - %s\n", rr::platform::ToString(device->Api()),
                 device->DeviceName().c_str());
+
+    if (options.match) return rr::app::RunMatchWindowed(options.matchCommand, *platform, *device);
 
     // The engine's scene renderer on a scene built in code (the game's own scenes
     // come later; tools/sceneview shows them).

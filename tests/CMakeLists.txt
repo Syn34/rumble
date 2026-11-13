@@ -17,6 +17,7 @@ add_executable(rr_tests
     test_quantum_collections.cpp
     test_quantum_frame.cpp
     test_deterministic_session.cpp
+    test_quantum_game.cpp
     test_fp_collision.cpp
     test_quantum_collision.cpp
     test_navigation.cpp

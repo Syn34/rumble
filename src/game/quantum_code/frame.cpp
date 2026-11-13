@@ -3,6 +3,8 @@
 
 #include "photon_deterministic/log.h"
 #include "quantum_core/dynamic_asset_db.h"
+#include "quantum_core/frame_checksumer_bit_stream.h"
+#include "quantum_core/frame_serializer.h"
 #include "quantum_core/map.h"
 
 #include <cstring>
@@ -24,9 +26,23 @@ Frame::Frame(Core::FrameContext* context, std::vector<SystemBase*> systemsAll,
         const SystemBase& system = *_systemsAll[i];
         _systemIndexByType.emplace(std::type_index(typeid(system)), static_cast<int>(i));
     }
+    // The map named by the runtime config (if the asset database has it) and the RNG
+    // seeded from it.
+    if (_runtimeConfig != nullptr) {
+        Quantum::Map* map = _runtimeConfig->Map.Id.IsValid() ? FindAsset<Quantum::Map>(_runtimeConfig->Map.Id) : nullptr;
+        _globals->Map.Id = map != nullptr ? map->Guid : AssetGuid{};
+        _globals->RngSession = RNGSession(_runtimeConfig->Seed);
+    }
     _globals->DeltaTime = deltaTime;
-    // Not reimplemented yet: the Physics2D/3D API objects and the prototype-materialized
-    // signal forwarder the original constructor also creates.
+    // Systems that start enabled get their enable bit.
+    for (SystemBase* system : _systemsAll) {
+        if (system->get_StartEnabled()) {
+            _globals->Systems.Set(system->get_RuntimeIndex());
+        }
+    }
+    // Not reimplemented yet: the Physics2D/3D API objects, the prototype-materialized
+    // signal forwarder, PhysicsSceneSettings.Init from the simulation config's physics
+    // settings (not read yet), ClearAllNavMeshRegions and AllocUser (see frame.h).
 }
 
 Frame::~Frame() = default;
@@ -125,8 +141,34 @@ std::string Frame::DumpFrame(int dumpFlags) {
     throw std::logic_error("Frame::DumpFrame is not implemented yet");
 }
 
-std::uint64_t Frame::CalculateChecksum() {
-    throw std::logic_error("Frame::CalculateChecksum is not implemented yet");
+std::uint64_t Frame::CalculateChecksum() { return CalculateChecksum(get_Context()->get_UseSharedChecksumSerializer()); }
+
+std::uint64_t Frame::CalculateChecksum(bool useSharedSerializer) {
+    if (useSharedSerializer) {
+        return CalculateChecksumInternal(get_Context()->get_SharedChecksumSerializer());
+    }
+    FrameChecksumerBitStream stream;
+    FrameSerializer serializer(Photon::Deterministic::DeterministicFrameSerializeMode::Serialize, this, &stream);
+    return CalculateChecksumInternal(&serializer);
+}
+
+std::uint64_t Frame::CalculateChecksumInternal(FrameSerializer* serializer) {
+    if (serializer == nullptr) {
+        throw std::invalid_argument("serializer");
+    }
+    auto* stream = dynamic_cast<FrameChecksumerBitStream*>(&serializer->Stream());
+    if (stream == nullptr) {
+        throw std::logic_error("Serializer's stream needs to be of FrameChecksumerBitStream type");
+    }
+    serializer->Reset();
+    serializer->SetWriting(true);
+    serializer->set_Frame(this);
+    // The checksum starts from the frame number.
+    stream->set_Checksum(static_cast<std::uint64_t>(static_cast<std::int64_t>(Number)));
+    _globals_::Serialize(_globals, serializer);
+    Core::FrameBase::Serialize(this, serializer);
+    serializer->set_Frame(nullptr);
+    return stream->get_Checksum();
 }
 
 bool Frame::SystemIsEnabledSelf(const SystemBase* s) const {
