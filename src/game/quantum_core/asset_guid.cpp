@@ -1,6 +1,9 @@
 // Original: Quantum.AssetGuid / Quantum.AssetRef (quantum.core.dll).
 #include "asset_guid.h"
 
+#include "photon_deterministic/bit_stream.h"
+#include "photon_deterministic/deterministic_frame_serializer.h"
+
 #include <cstdio>
 #include <random>
 
@@ -19,6 +22,10 @@ AssetGuid AssetGuid::NewGuid() {
     } while (value >= 1 && value <= 255);
     // Clear the dynamic and reserved bits; callers set the dynamic bit themselves.
     return AssetGuid(static_cast<std::int64_t>(value & 0x3FFFFFFFFFFFFFFFull));
+}
+
+void AssetGuid::Serialize(void* ptr, Photon::Deterministic::IDeterministicFrameSerializer* serializer) {
+    serializer->Stream().Serialize(&static_cast<AssetGuid*>(ptr)->Value);
 }
 
 std::int32_t AssetGuid::GetHashCode() const {

@@ -54,8 +54,12 @@ struct QDictionaryInternal {
     }
 
     // TODO(0x7d20694, Quantum.Collections.QDictionaryInternal.Print): needs FramePrinter.
-    // TODO(0x7d20b00, Quantum.Collections.QDictionaryInternal.Serialize): serialises the
-    // record and its used entries through key/value serializers; needs FrameSerializer.
+    // 0x7d20b00 - The dictionary record behind `ptr`: counts, free list head, then every
+    // entry slot (its address is keyed too, entries link to each other) with chain link,
+    // hash and state, and key/value of the used ones; finally the bucket array.
+    static void Serialize(Quantum::Ptr* ptr, FrameSerializer* serializer, int keyStride,
+                          int valStride, QBuffer::ItemSerializer keySerializer,
+                          QBuffer::ItemSerializer valueSerializer);
 };
 
 static_assert(sizeof(QDictionaryInternal) == 36);
