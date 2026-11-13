@@ -16,6 +16,13 @@ add_library(rr_quantum_core
     physics3d/collision_manifold3d.cpp
     physics3d/hit3d.cpp
     physics3d/narrow_checks.cpp
+    byte_stream.cpp
+    mailbox_set8.cpp
+    navigation/navmesh_region_mask.cpp
+    navigation/navmesh_types.cpp
+    navigation/navmesh.cpp
+    navigation/navmesh_agent_config.cpp
+    navigation/path_finder.cpp
 )
 add_library(rr::quantum_core ALIAS rr_quantum_core)
 target_include_directories(rr_quantum_core PUBLIC ..)
