@@ -33,7 +33,7 @@ class Map;
 class NavMesh;
 class NavMeshAgentConfig;
 class PhysicsMaterial;
-class PolygonCollider;
+struct PolygonCollider;
 class TerrainCollider;
 
 // GUID and path of an asset. Original: Quantum.AssetObjectIdentifier.

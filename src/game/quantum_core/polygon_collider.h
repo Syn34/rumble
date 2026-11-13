@@ -16,8 +16,8 @@
 
 namespace Quantum {
 
-class PolygonCollider : public AssetObject, public IBuiltInAssetObject {
-  public:
+// (A struct, as the physics code declares it.)
+struct PolygonCollider : public AssetObject, public IBuiltInAssetObject {
     std::vector<Photon::Deterministic::FPVector2> Vertices;
     std::vector<Photon::Deterministic::FPVector2> Normals;
     Photon::Deterministic::FP Radius;
