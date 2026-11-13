@@ -143,6 +143,15 @@ class PlayerActorLib {
   public:
     // 0x7cb8060 - The player's game mode has finished (false for non-players).
     static bool IsGameModeFinished(Frame* frame, EntityRef entity);
+    // 0x7cb8360
+    static bool IsBot(Frame* frame, EntityRef entity);
+    // 0x7cb8628 - Runs OnInit of the hero's first `talentLevel` talents that are hero
+    // enhancements.
+    static void InitializeHeroEnhancementsFromTalentLevel(Frame* frame, EntityRef entity, std::int32_t talentLevel);
+    // 0x7cb81c0 - Players get a respawn timer from the actor manager.
+    static void PrepareForRespawn(Frame* frame, EntityRef entity);
+    // 0x7cb8284 - The player's remaining respawn time.
+    static bool TryGetRespawnTimer(Frame* frame, EntityRef entity, FP& timer);
 };
 
 class KillableLib {

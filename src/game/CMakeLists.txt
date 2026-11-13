@@ -65,3 +65,8 @@ target_sources(rr_game PRIVATE
     quantum_code/systems/damageable_systems.cpp
     quantum_code/systems/battle_stats_systems.cpp
 )
+
+# quantum.code systems: spawn points and respawning
+target_sources(rr_game PRIVATE
+    quantum_code/systems/actor_manager_systems.cpp
+)

@@ -246,12 +246,10 @@ class GameModeSpec : public AssetObject {
     virtual void OnPlayerKilled(Frame* frame, EntityRef killedEntity) const { (void)frame, (void)killedEntity; }
     // 0x7c91ed8 - the custom bot's entry of BotAggroBehaviourByIndex, DefaultAggroBehaviour outside it.
     virtual BOT_AGGRO_BEHAVIOUR GetBotAggroBehaviour(Frame* frame, std::int32_t customBotIndex) const;
-    // TODO(0x7c91f08, Quantum.GameModeSpec.CanRespawn): bool CanRespawn(Frame frame, EntityRef
-    //   killedEntity, int startFrame); uses PlayerActorLib.IsGameModeFinished
-    virtual bool CanRespawn(Frame* frame, EntityRef killedEntity, std::int32_t startFrame) const {
-        (void)frame, (void)killedEntity, (void)startFrame;
-        NotReimplemented("Quantum.GameModeSpec.CanRespawn");
-    }
+    // 0x7c91f08 - Players whose game mode is still on respawn if the mode allows it, within
+    // RespawnSetTime of `startFrame` when that window applies. Defined in
+    // systems/actor_manager_systems.cpp.
+    virtual bool CanRespawn(Frame* frame, EntityRef killedEntity, std::int32_t startFrame) const;
     // 0x7c91f9c - autoShootEnabled, whatever the target.
     virtual bool CanAutoShootTarget(Frame* frame, EntityRef localPlayerEntityRef, EntityRef targetEntityRef) const {
         (void)frame, (void)localPlayerEntityRef, (void)targetEntityRef;

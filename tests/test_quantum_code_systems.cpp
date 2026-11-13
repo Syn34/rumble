@@ -14,6 +14,9 @@
 #include "quantum_code/assets/weapon_specs.h"
 #include "quantum_code/systems/combat_libs.h"
 #include "quantum_code/systems/damageable_systems.h"
+#include "quantum_code/systems/actor_manager_systems.h"
+#include "quantum_core/map.h"
+#include "quantum_core/physics_components.h"
 #include "quantum_code/systems/health_systems.h"
 #include "quantum_code/systems/game_mode_systems.h"
 #include "quantum_code/systems/killable_systems.h"
@@ -114,8 +117,16 @@ TEST_CASE("quantum.code systems: the system list has the original's shape") {
 }
 
 TEST_CASE("quantum.code systems: start, enablers and group scheduling") {
-    SystemsSimulation sim(SystemSetup::CreateSystems(nullptr, nullptr));
+    // The actor manager needs its singleton and a map when the systems start.
+    auto map = std::make_shared<Map>();
+    map->Guid = AssetGuid(90);
+    map->UserAsset.Id = AssetGuid(91);
+    auto customData = std::make_shared<MapCustomData>();
+    customData->Guid = AssetGuid(91);
+    SystemsSimulation sim(SystemSetup::CreateSystems(nullptr, nullptr), {map, customData});
     Frame& f = *sim.frame;
+    f.get_Global()->Map.Id = AssetGuid(90);
+    f.GetOrAddSingletonPointer<ActorManager>();
     StartSystems(&f);
     auto* moveTo = sim.Find<MoveToSystem>();
     CHECK(moveTo != nullptr);
@@ -577,4 +588,93 @@ TEST_CASE("quantum.code systems: damage multipliers, entity info and shield rege
     f.SystemDisable<ShieldedActorSystem>();
     f.CommitAllCommands();
     CHECK(!f.Has<ShieldedActor>(actor));
+}
+
+TEST_CASE("quantum.code systems: spawn points and the respawn loop") {
+    auto map = MakeAsset<Map>(600);
+    map->UserAsset.Id = AssetGuid(601);
+    auto customData = MakeAsset<MapCustomData>(601);
+    auto addPoint = [&](SpawnPointOptions options, FPVector3 position) {
+        MapCustomData::SpawnPointData point;
+        point.options = options;
+        point.position = position;
+        customData->SpawnPoints.push_back(point);
+    };
+    addPoint(SpawnPointOptions::Initial, FPVector3(FP::FromInt(1), FP{}, FP{}));
+    addPoint(SpawnPointOptions::Respawn, FPVector3(FP::FromInt(10), FP{}, FP{}));
+    addPoint(static_cast<SpawnPointOptions>(static_cast<int>(SpawnPointOptions::Respawn) |
+                                            static_cast<int>(SpawnPointOptions::Podium)),
+             FPVector3(FP{}, FP{}, FP::FromInt(20)));
+    addPoint(static_cast<SpawnPointOptions>(static_cast<int>(SpawnPointOptions::Initial) |
+                                            static_cast<int>(SpawnPointOptions::LocalPlayerFirstSpawn)),
+             FPVector3(FP::FromInt(3), FP{}, FP{}));
+    auto config = MakeAsset<ActorManagerConfig>(602);
+    config->PendingRespawnDuration = FP::One();
+    config->RespawnDuration = FP::One();
+    config->RespawnPointCalculationDelay = FP::FromRaw(32768); // 0.5 s
+    config->RespawnPointCooldownDuration = FP{};
+    auto modeSpec = MakeAsset<FreeForAllGameModeSpec>(603);
+    auto levelConfig = MakeAsset<GameModeHandlerLevelConfig>(604);
+    levelConfig->maxPlayers = 8;
+    SystemsSimulation sim(MakeSystems<ActorManagerSystem>(), {map, customData, config, modeSpec, levelConfig});
+    Frame& f = *sim.frame;
+    f.get_Global()->Map.Id = AssetGuid(600);
+    GameModeHandler* handler = f.GetOrAddSingletonPointer<GameModeHandler>();
+    handler->gameModeSpecRef.Id = AssetGuid(603);
+    handler->levelConfig.Id = AssetGuid(604);
+    f.GetOrAddSingletonPointer<ActorManager>()->Config.Id = AssetGuid(602);
+    StartSystems(&f);
+    f.Number = 1;
+
+    // OnInit read the map: two initial points (the forced local-player one first), two
+    // respawn points with dynamic data, one podium point.
+    ActorManager* actorManager = f.Unsafe.GetPointerSingleton<ActorManager>();
+    CHECK(actorManager->GetInitialPlayerCount(&f) == 2);
+    Collections::QList<std::int16_t> initial = f.ResolveList(actorManager->get_initialSpawnPoints());
+    CHECK(initial.get_Count() == 2);
+    CHECK(initial.get_Item(0) == 3);
+    CHECK(f.ResolveList(actorManager->get_respawnablePoints()).get_Count() == 2);
+    CHECK(f.ResolveList(actorManager->get_podiumPoints()).get_Count() == 1);
+    CHECK(f.ResolveList(actorManager->get_spawnPointDynamicData()).get_Count() == 2);
+    FPVector3 spawnPosition;
+    FPQuaternion spawnRotation;
+    std::uint16_t introTrack = 7;
+    CHECK(actorManager->ProvidePlayerInitialSpawnPoint(&f, PlayerRef{}, 0, 0, spawnPosition, spawnRotation, introTrack));
+    CHECK(spawnPosition == FPVector3(FP::FromInt(3), FP{}, FP{}));
+    CHECK(introTrack == 0);
+    CHECK(initial.get_Count() == 1);
+
+    // A dead player: a timer, a respawn point after half a second, revival after two.
+    const EntityRef player = f.Create();
+    f.Add<PlayerActor>(player);
+    CHECK(f.Has<ActorInput>(player));
+    f.Add<Killable>(player);
+    f.Add<Transform3D>(player);
+    f.GetPointer<Killable>(player)->IsAlive = false;
+    PlayerActorLib::PrepareForRespawn(&f, player);
+    PlayerActorLib::PrepareForRespawn(&f, player);
+    CHECK(f.ResolveList(actorManager->get_respawnTimers()).get_Count() == 1);
+    FP left;
+    CHECK(PlayerActorLib::TryGetRespawnTimer(&f, player, left));
+    CHECK(left == FP::FromInt(2));
+    RunFrames(sim, 31);
+    const FPVector3 position = f.GetPointer<Transform3D>(player)->Position;
+    CHECK(position == FPVector3(FP::FromInt(10), FP{}, FP{}) || position == FPVector3(FP{}, FP{}, FP::FromInt(20)));
+    CHECK(!KillableLib::IsAlive(&f, player));
+    RunFrames(sim, 90);
+    CHECK(KillableLib::IsAlive(&f, player));
+    CHECK(f.ResolveList(actorManager->get_respawnTimers()).get_Count() == 0);
+    CHECK(f.GetPointer<Transform3D>(player)->Position == position);
+
+    // A player whose game mode finished loses its timer.
+    f.GetPointer<Killable>(player)->IsAlive = false;
+    PlayerActorLib::PrepareForRespawn(&f, player);
+    sim.Find<ActorManagerSystem>()->GameMode_OnPlayerFinished(&f, player);
+    CHECK(!PlayerActorLib::TryGetRespawnTimer(&f, player, left));
+
+    // Checkpoints are recorded per actor.
+    const EntityRef checkpoint = f.Create();
+    actorManager->SetActiveCheckpoint(&f, player, checkpoint);
+    actorManager->SetActiveCheckpoint(&f, player, checkpoint);
+    CHECK(f.ResolveList(actorManager->get_activeCheckpoints()).get_Count() == 1);
 }

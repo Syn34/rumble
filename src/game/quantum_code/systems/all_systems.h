@@ -1,6 +1,7 @@
 // all_systems.h - every system class of quantum.code.dll.
 #pragma once
 
+#include "quantum_code/systems/actor_manager_systems.h"
 #include "quantum_code/systems/actor_systems.h"
 #include "quantum_code/systems/battle_stats_systems.h"
 #include "quantum_code/systems/core_systems.h"

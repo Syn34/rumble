@@ -174,20 +174,6 @@ class ActorManagerRespawnTesterSystem : public SystemSignalsOnly {
     // TODO(0x7cb2d1c, Quantum.ActorManagerRespawnTesterSystem..ctor): .ctor(); not reimplemented yet.
 };
 
-// Quantum.ActorManagerSystem (original base: Quantum.SystemMainThread)
-class ActorManagerSystem : public SystemMainThread {
-  public:
-    // TODO(0x7cb2834, Quantum.ActorManagerSystem.OnInit): OnInit(f); not reimplemented yet.
-    // TODO(0x7cb2924, Quantum.ActorManagerSystem.Update): Update(frame); not reimplemented yet.
-    // TODO(0x7cb299c, Quantum.ActorManagerSystem.Quantum.ISignalOnMapChanged.OnMapChanged): Quantum.ISignalOnMapChanged.OnMapChanged(f, previousMap); not reimplemented yet.
-    // TODO(0x7cb2a18, Quantum.ActorManagerSystem.OnAdded): OnAdded(f, entity, pActor); not reimplemented yet.
-    // TODO(0x7cb2a70, Quantum.ActorManagerSystem.OnAdded): OnAdded(f, entity, component); not reimplemented yet.
-    // TODO(0x7cb2a90, Quantum.ActorManagerSystem.GameMode_OnPlayerFinished): GameMode_OnPlayerFinished(f, entity); not reimplemented yet.
-    // TODO(0x7cb2b2c, Quantum.ActorManagerSystem.PlayerActor_OnAfterInitialized): PlayerActor_OnAfterInitialized(f, actorEntity, actor); not reimplemented yet.
-    // TODO(0x7cb2b50, Quantum.ActorManagerSystem..ctor): .ctor(); not reimplemented yet.
-    void Update(Frame* f) override { (void)f; }
-};
-
 // Quantum.ActorSlowDownOnHitSystem (original base: Quantum.SystemSignalsOnly)
 class ActorSlowDownOnHitSystem : public SystemSignalsOnly {
   public:

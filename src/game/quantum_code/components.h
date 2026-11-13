@@ -22,12 +22,15 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <utility>
 
 namespace Quantum {
 
 class Frame;
 // Asset classes named by component methods (quantum_code/assets/).
 class EnergyCellManagerSpec;
+class GameModeHandlerLevelConfig;
+class MapCustomData;
 namespace Prototypes {
 class Killable_Prototype;
 }
@@ -621,6 +624,64 @@ struct alignas(8) ActorManager {
     Collections::QListPtr<SpawnPointDynamicData> get_spawnPointDynamicData() const { return Collections::QListPtr<SpawnPointDynamicData>(spawnPointDynamicDataPtr); }
     // 0x7c372b0
     void set_spawnPointDynamicData(Collections::QListPtr<SpawnPointDynamicData> value) { spawnPointDynamicDataPtr = value.Ptr; }
+
+    // 0x7c37d74 - Rebuilds the spawn point lists from the map's spawn points: initial
+    // ones (up to the level's player cap, 100 without a game mode handler; then shuffled,
+    // with a forced local-player point moved first), respawnable ones (each with fresh
+    // dynamic data) and podium ones; points with an excluded option are skipped. Active
+    // checkpoints are cleared.
+    void InitializeFromMapData(Frame* f, SpawnPointOptions excludeSpawnPoints);
+    // 0x7c384f4
+    std::int32_t GetInitialPlayerCount(Frame* frame) const { (void)frame; return nbInitialSpawnPoints; }
+    // 0x7c384fc - Players whose game mode has not finished.
+    std::int32_t GetCurrentPlayerCount(Frame* frame) const;
+    // 0x7c386b8 - The respawnable point at `index` of the respawnable list.
+    void GetRespawnableSpawnPointAt(Frame* frame, std::int32_t index, FPVector3& position, FPQuaternion& rotation) const;
+    // 0x7c387a0 - Map spawn point `index`: position, yaw-only rotation and intro track.
+    static void GetStaticSpawnPointAt(Frame* frame, std::int32_t index, FPVector3& position, FPQuaternion& rotation,
+                                      std::uint16_t& introTrackId);
+    // 0x7c38834 - Throws std::out_of_range for an index past the map's spawn points.
+    // (A template only so that this header needs no asset header; the one instance is
+    // defined in systems/actor_manager_systems.cpp.)
+    template <class TMapCustomData = MapCustomData>
+    static typename TMapCustomData::SpawnPointData GetStaticSpawnPointData(Frame* frame, std::int32_t index);
+    // 0x7c38910 - Takes the initial spawn point the game mode picks (the first by
+    // default) out of the initial list; false (logged) when none is left or the pick is
+    // negative.
+    bool ProvidePlayerInitialSpawnPoint(Frame* f, PlayerRef playerRef, std::int32_t teamId, std::int32_t playerIndex,
+                                        FPVector3& spawnPosition, FPQuaternion& spawnRotation, std::uint16_t& introTrackId);
+    // 0x7c38c58
+    void Update(Frame* f) { UpdateRespawnTimers(f); }
+    // 0x7c390b8
+    static void ClearAllRespawnTimers(Frame* frame);
+    // 0x7c391b0 - Starts a respawn timer for the entity (once), if the game mode lets it
+    // respawn.
+    void AddRespawnTimer(Frame* frame, EntityRef entity);
+    // 0x7c394c4 - Time left before the entity respawns.
+    bool TryGetRespawnTimer(Frame* frame, EntityRef entity, FP& timer) const;
+    // 0x7c39798
+    void RemoveRespawnTimer(Frame* frame, EntityRef entity);
+    // 0x7c399cc - Near a living target: its last grounded position (or, on maps without
+    // respawn points or checkpoints, its position) and its rotation. `respawnDistance` is
+    // unused, as in the original.
+    bool TryGetTargetRespawnPositionAndRotation(Frame* frame, EntityRef target,
+                                                Collections::QList<ActiveCheckpoint> activeCheckpointsList,
+                                                Collections::QList<std::int16_t> respawnableList, FP respawnDistance,
+                                                FPVector3& position, FPQuaternion& rotation) const;
+    // 0x7c39c10 - Where the entity comes back: near its team leader or a teammate when the
+    // mode wants it, else around its active checkpoint, else the best respawn point (free
+    // and unwatched first; the shortest availability; otherwise the farthest from the
+    // shrinking zone's centre or a random one), which is then marked used.
+    void GetRespawnPositionAndRotation(Frame* frame, EntityRef toRespawn, FPVector3& position, FPQuaternion& rotation);
+    // 0x7c38c5c - After the calculation delay the respawn point is chosen (and the entity
+    // moved there); after the full respawn duration the entity is revived.
+    void UpdateRespawnTimers(Frame* frame);
+    // 0x7c3aa8c - Records (or replaces) the actor's checkpoint.
+    void SetActiveCheckpoint(Frame* frame, EntityRef actor, EntityRef checkpoint);
+    // 0x7c38380 - The first spawn point flagged as the forced local-player initial point
+    // goes to the front of the initial list.
+    static void HandleForcedLocalPlayerSpawnPoint(const MapCustomData* mapCustomData,
+                                                  Collections::QList<std::int16_t>& availableList);
 
     // 0x7c372b8
     std::int32_t GetHashCode() const;
@@ -2775,6 +2836,9 @@ struct alignas(8) GameModeHandler {
     // 0x7c483cc - Same, including paused time.
     FP GetCurrentStateElapsedTimeNoPause(Frame* f) const;
 
+    // 0x7c38308 - The level config asset (null if missing).
+    GameModeHandlerLevelConfig* GetLevelConfig(Frame* frame) const;
+
     // 0x7c476f4
     std::int32_t GetHashCode() const;
     // 0x7c47cec
@@ -4792,6 +4856,12 @@ struct alignas(8) ShrinkingZone {
     FPVector3 position;
     FPVector3 startPosition;
 
+    // 0x7c613b4
+    static bool TryGet(Frame* f, ShrinkingZone& zone);
+    // 0x7c6140c - Centre and radius at `time` along the closing zone's closing points
+    // (interpolated inside a closing window); the start values without map data.
+    std::pair<FPVector3, FP> GetPositionAndRadiusAt(Frame* f, FP time) const;
+
     // 0x7c60b84
     std::int32_t GetHashCode() const;
     // 0x7c60d0c
@@ -5163,6 +5233,12 @@ struct alignas(4) Team {
 
     // 0x7c6478c - teamId is -1 without a Team (implemented in systems/team.cpp).
     static bool TryGetTeamID(Frame* f, EntityRef teamMember, std::int32_t& teamId);
+
+    // 0x7c64838 - Another player (in component order) in the same team.
+    static bool TryGetTeammate(Frame* f, EntityRef playerEntity, EntityRef& teammate);
+
+    // 0x7c64a2c - The leader of the entity's team.
+    static bool TryGetPlayerTeamLeader(Frame* f, EntityRef entity, EntityRef& leader);
 
     // 0x7c6404c
     std::int32_t GetHashCode() const;

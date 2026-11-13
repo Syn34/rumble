@@ -90,6 +90,12 @@ class HeroEnhancementSpec : public EnhancementSpec {
 
     // 0x7beee10
     HeroEnhancementSpec() = default;
+
+    // Abstract in the original (no concrete hero enhancement exists in this build).
+    virtual void OnInit(Frame* f, EntityRef heroEntity) const {
+        (void)f, (void)heroEntity;
+        NotReimplemented("Quantum.HeroEnhancementSpec.OnInit");
+    }
 };
 
 class JumpAttackHeroImprovementSpec : public ImprovementSpec {
