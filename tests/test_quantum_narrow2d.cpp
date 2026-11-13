@@ -344,3 +344,42 @@ TEST_CASE("Physics2D time of impact of a fast circle") {
     CollisionManifoldInfo2D info3(&m3, &a, &b);
     CHECK(NarrowChecks::Check(tls, settings, F(1), &info3, false));
 }
+
+TEST_CASE("Physics2D LinecastBody against every primitive") {
+    rr::test::InstallMathDerivedTables();
+    NarrowTls2D tls;
+    Hit hit;
+    const FPVector2 start = V2(0, 0);
+    const FPVector2 end = V2(10, 0);
+
+    const Shape2D circle = Shape2D::CreateCircle(F(1));
+    const NarrowEntry2D ball = Entry(circle, V2(5, 0));
+    CHECK(NarrowChecks::LinecastBody::Check(tls, AssetGuid{}, &ball, start, end, true, hit));
+    CHECK(Near(hit.Point, V2(4, 0), 64) && Near(hit.CastDistanceNormalized, Q(2, 5), 64));
+    CHECK(Near(hit.Normal, V2(-1, 0), 64));
+
+    const Shape2D box = Shape2D::CreateBox(V2(1, 1));
+    const NarrowEntry2D crate = Entry(box, V2(5, 0));
+    CHECK(NarrowChecks::LinecastBody::Check(tls, AssetGuid{}, &crate, start, end, true, hit));
+    CHECK(hit.Point == V2(FP::FromRaw(262140), F(0)) && hit.Normal == V2(-1, 0)); // 4 minus the truncation of 0.4
+    CHECK(hit.CastDistanceNormalized == FP::FromRaw(26214));
+
+    const PolygonCollider square = UnitSquare();
+    const Shape2D polygonShape = Shape2D::CreatePolygon(square);
+    NarrowEntry2D polygon = PolygonEntry(polygonShape, square, V2(5, 0));
+    polygon.StaticColliderIndex = 2;
+    CHECK(NarrowChecks::LinecastBody::Check(tls, AssetGuid{}, &polygon, start, end, true, hit));
+    CHECK(hit.CastDistanceNormalized == FP::FromRaw(26214)); // enters the left side at 0.4
+    CHECK(hit.Point == V2(FP::FromRaw(262140), F(0)) && hit.Normal == V2(-1, 0));
+    CHECK(hit._staticColliderIndex == 2);
+
+    const Shape2D edge = Shape2D::CreateEdge(F(2));
+    const NarrowEntry2D wall = Entry(edge, V2(5, 0), true); // vertical, (5, -2) to (5, 2)
+    CHECK(NarrowChecks::LinecastBody::Check(tls, AssetGuid{}, &wall, start, end, true, hit));
+    CHECK(hit.Point == V2(5, 0) && hit.CastDistanceNormalized == Q(1, 2));
+    CHECK(hit.Normal == V2(-1, 0));
+
+    // Starting inside the box misses; passing above everything misses.
+    CHECK(!NarrowChecks::LinecastBody::Check(tls, AssetGuid{}, &crate, V2(5, 0), end, true, hit));
+    CHECK(!NarrowChecks::LinecastBody::Check(tls, AssetGuid{}, &polygon, V2(0, 3), V2(10, 3), true, hit));
+}

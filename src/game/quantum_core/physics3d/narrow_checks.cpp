@@ -270,4 +270,173 @@ FPVector3 TriangleCollisionIterator::AverageNormal() const {
     return -sum;
 }
 
+// 0x7d78710
+bool LinecastBody::RaySphereProjection(const FPVector3& center, FP radius, const FPVector3& start,
+                                       const FPVector3& end, FPVector3& intersection,
+                                       FP& normalizedDist) {
+    auto miss = [&]() {
+        intersection = FPVector3::Zero();
+        normalizedDist = FP::Zero();
+        return false;
+    };
+    const FPVector3 fromCenter = start - center;
+    const FP radiusSquared = radius * radius;
+    if (fromCenter.SqrMagnitude() < radiusSquared) {
+        return miss();
+    }
+    const FPVector3 segment = end - start;
+    const FP lengthSquared = segment.SqrMagnitude();
+    if (lengthSquared == 0) {
+        return miss();
+    }
+    const FP towards = FPVector3::Dot(-fromCenter, segment);
+    if (towards < 0) {
+        return miss();
+    }
+    const FPVector3 closest = start + segment * (towards / lengthSquared);
+    const FP inside = radiusSquared - (center - closest).SqrMagnitude();
+    if (inside < 0) {
+        return miss();
+    }
+    normalizedDist = (towards - FPMath::Sqrt(inside * lengthSquared)) / lengthSquared;
+    if (normalizedDist > FP::One()) {
+        return miss();
+    }
+    intersection = start + segment * normalizedDist;
+    return true;
+}
+
+// 0x7d7889c
+bool LinecastBody::HitBoundingBox(const FPVector3& minB, const FPVector3& maxB, const FPVector3& origin,
+                                  const FPVector3& dir, FPVector3& coord, FP::Raw maxDistanceRaw,
+                                  FPVector3& normal, FP& normalizedDist) {
+    auto miss = [&]() {
+        coord = FPVector3::Zero();
+        normal = FPVector3::Zero();
+        normalizedDist = FP::Zero();
+        return false;
+    };
+    const FP o[3] = {origin.X, origin.Y, origin.Z};
+    const FP lo[3] = {minB.X, minB.Y, minB.Z};
+    const FP hi[3] = {maxB.X, maxB.Y, maxB.Z};
+    const FP d[3] = {dir.X, dir.Y, dir.Z};
+    // Candidate entry plane per axis (none when the origin lies between the slabs).
+    bool middle[3];
+    FP candidate[3];
+    for (int i = 0; i < 3; ++i) {
+        if (o[i] < lo[i]) {
+            middle[i] = false;
+            candidate[i] = lo[i];
+        } else if (o[i] > hi[i]) {
+            middle[i] = false;
+            candidate[i] = hi[i];
+        } else {
+            middle[i] = true;
+            candidate[i] = FP::Zero();
+        }
+    }
+    if (middle[0] && middle[1] && middle[2]) {
+        miss();
+        coord = origin; // starts inside
+        return false;
+    }
+    FP maxT[3];
+    for (int i = 0; i < 3; ++i) {
+        maxT[i] = (!middle[i] && d[i] != 0) ? (candidate[i] - o[i]) / d[i] : -FP::One();
+    }
+    // The furthest candidate plane is the one hit (ties: x over y, the earlier of
+    // the first two over z).
+    const FP firstTwo = maxT[0] > maxT[1] ? maxT[0] : maxT[1];
+    int plane = maxT[0] < maxT[1] ? 1 : 0;
+    const FP t = firstTwo > maxT[2] ? firstTwo : maxT[2];
+    if (!(firstTwo >= maxT[2])) {
+        plane = 2;
+    }
+    if (t < 0) {
+        return miss();
+    }
+    FP c[3];
+    for (int i = 0; i < 3; ++i) {
+        c[i] = i == plane ? candidate[i] : o[i] + d[i] * t;
+        if (c[i] < lo[i] || c[i] > hi[i]) {
+            return miss();
+        }
+    }
+    coord = {c[0], c[1], c[2]};
+    const FP maxDistance = FP::FromRaw(maxDistanceRaw);
+    if ((origin - coord).SqrMagnitude() > maxDistance * maxDistance) {
+        return miss();
+    }
+    switch (plane) {
+    case 0:
+        normal = o[0] > c[0] ? FPVector3::Right() : FPVector3::Left();
+        break;
+    case 1:
+        normal = o[1] > c[1] ? FPVector3::Up() : FPVector3::Down();
+        break;
+    default:
+        normal = o[2] > c[2] ? FPVector3::Forward() : FPVector3::Back();
+        break;
+    }
+    normalizedDist = t / maxDistance;
+    return true;
+}
+
+// 0x7d782c8
+bool LinecastBody::Check(AssetGuid mapGuid, const NarrowEntry3D* b, const FPVector3& start,
+                         const FPVector3& end, bool computeNormal, Hit3D& hit) {
+    hit = Hit3D{};
+    auto identify = [&]() {
+        hit._staticColliderIndex = b->StaticColliderIndex;
+        if (b->StaticColliderIndex < 0) {
+            hit._entity = b->Ref;
+        } else {
+            hit._mapGuid = mapGuid;
+        }
+        hit.ShapeUserTag = b->Shape->UserTag;
+        hit._isTrigger = b->IsTrigger ? 1 : 0;
+    };
+    const NarrowData3D& frame = b->Narrow;
+    switch (b->Shape->Type()) {
+    case Shape3DType::Sphere:
+        if (!RaySphereProjection(frame.Position, b->Shape->Sphere.Radius, start, end, hit.Point,
+                                 hit.CastDistanceNormalized)) {
+            return false;
+        }
+        identify();
+        if (computeNormal) {
+            hit.Normal = FPVector3::Normalize(hit.Point - frame.Position);
+        }
+        return true;
+    case Shape3DType::Box: {
+        // In the box's frame.
+        const FPVector3 offset = start - frame.Position;
+        const FPVector3 localStart = {FPVector3::Dot(frame.RotatedRight, offset),
+                                      FPVector3::Dot(frame.RotatedUp, offset),
+                                      FPVector3::Dot(frame.RotatedForward, offset)};
+        const FPVector3 extents = b->Shape->Box._extents;
+        FP length;
+        const FPVector3 dir = FPVector3::Normalize(end - start, length);
+        const FPVector3 localDir = {FPVector3::Dot(frame.RotatedRight, dir), FPVector3::Dot(frame.RotatedUp, dir),
+                                    FPVector3::Dot(frame.RotatedForward, dir)};
+        FPVector3 coord;
+        FPVector3 normal;
+        if (!HitBoundingBox(-extents, extents, localStart, localDir, coord, length.RawValue(), normal,
+                            hit.CastDistanceNormalized)) {
+            return false;
+        }
+        identify();
+        hit.Point = frame.Position + frame.RotatedRight * coord.X + frame.RotatedUp * coord.Y +
+                    frame.RotatedForward * coord.Z;
+        if (computeNormal) {
+            hit.Normal = frame.RotatedRight * normal.X + frame.RotatedUp * normal.Y +
+                         frame.RotatedForward * normal.Z;
+        }
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
 } // namespace Quantum::Physics3D::NarrowChecks

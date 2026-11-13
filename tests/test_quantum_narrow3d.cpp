@@ -261,3 +261,30 @@ TEST_CASE("Physics3D time of impact of a fast sphere") {
     CollisionManifoldInfo3D info3{&m3, &a, &b, nullptr};
     CHECK(NarrowChecks::Check(tls, settings, F(1), &info3, false));
 }
+
+TEST_CASE("Physics3D LinecastBody against a sphere and a box") {
+    rr::test::InstallMathDerivedTables();
+    const Shape3D sphere = Shape3D::CreateSphere(F(1));
+    NarrowEntry3D ball = Entry(sphere, V3(5, 0, 0));
+    ball.Ref = {3, 1};
+    Hit3D hit;
+    CHECK(NarrowChecks::LinecastBody::Check(AssetGuid{}, &ball, V3(0, 0, 0), V3(10, 0, 0), true, hit));
+    CHECK(hit.CastDistanceNormalized == FP::FromRaw(26214)); // (50 - 10) / 100
+    CHECK(hit.Point == V3(FP::FromRaw(262140), F(0), F(0)));
+    CHECK(hit.Normal == V3(-1, 0, 0));
+    CHECK(hit.IsDynamic() && hit._entity.Index == 3);
+
+    const Shape3D box = Shape3D::CreateBox(V3(1, 1, 1));
+    NarrowEntry3D crate = Entry(box, V3(5, 0, 0));
+    crate.StaticColliderIndex = 7;
+    CHECK(NarrowChecks::LinecastBody::Check(AssetGuid{}, &crate, V3(F(0), Q(1, 2), F(0)),
+                                            V3(F(10), Q(1, 2), F(0)), true, hit));
+    CHECK(hit.CastDistanceNormalized == FP::FromRaw(26214)); // 4 / 10
+    CHECK(hit.Point == V3(F(4), Q(1, 2), F(0)));
+    CHECK(hit.Normal == V3(-1, 0, 0));
+    CHECK(hit.StaticColliderIndex() == 7);
+
+    CHECK(!NarrowChecks::LinecastBody::Check(AssetGuid{}, &crate, V3(0, 3, 0), V3(10, 3, 0), true, hit));
+    // Starting inside the box misses.
+    CHECK(!NarrowChecks::LinecastBody::Check(AssetGuid{}, &crate, V3(5, 0, 0), V3(10, 0, 0), true, hit));
+}

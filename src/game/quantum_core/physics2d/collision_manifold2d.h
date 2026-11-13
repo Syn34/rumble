@@ -8,6 +8,7 @@
 
 #include "photon_deterministic/fp.h"
 #include "photon_deterministic/fp_vector2.h"
+#include "hit.h" // HitEntityRef
 #include "quantum_core/polygon_collider.h"
 #include "quantum_core/shape2d.h"
 
@@ -161,6 +162,11 @@ struct NarrowEntry2D {
     FPVector2 TransformPosition; // Entry2D.Transform2D->Position
     bool HasDynamicBody = false;
     FPVector2 RotatedCenterOfMass;
+    // Reported by queries (line casts): Entry2D.StaticColliderIndex (negative for dynamic
+    // entries), Entry2D.Ref and the collider's trigger flag.
+    std::int32_t StaticColliderIndex = -1;
+    HitEntityRef Ref;
+    bool IsTrigger = false;
 };
 
 // The pair handed to every narrow-phase check.

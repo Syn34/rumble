@@ -516,4 +516,112 @@ bool PolygonEdge::Check(NarrowTls2D& tls, CollisionManifoldInfo2D* mInfo, bool d
     return true;
 }
 
+// 0x7d15bf0
+bool LinecastBody::Check(NarrowTls2D& tls, AssetGuid mapGuid, const NarrowEntry2D* b,
+                         const FPVector2& start, const FPVector2& end, bool computeDetailedInfo,
+                         Hit& hit) {
+    hit = Hit{};
+    auto identify = [&]() {
+        hit._staticColliderIndex = b->StaticColliderIndex;
+        if (b->StaticColliderIndex < 0) {
+            hit._entity = b->Ref;
+        } else {
+            hit._mapGuid = mapGuid;
+        }
+        hit.ShapeUserTag = b->Shape->UserTag;
+        hit._isTrigger = b->IsTrigger ? 1 : 0;
+    };
+    const Shape2D& shape = *b->Shape;
+    const FPVector2 position = b->Narrow.Position;
+    const FP sin = b->Narrow.RotSin;
+    const FP cos = b->Narrow.RotCos;
+    switch (shape.Type()) {
+    case Shape2DType::Circle:
+        if (!FPCollision::LineIntersectsCircle(start, end, position, shape.Circle.Radius, hit.Point,
+                                               hit.CastDistanceNormalized, true)) {
+            return false;
+        }
+        identify();
+        if (computeDetailedInfo) {
+            hit.Normal = FPVector2::Normalize(hit.Point - position);
+        }
+        return true;
+    case Shape2DType::Edge: {
+        const FPVector2 half = {cos * shape.Edge.Extent, shape.Edge.Extent * sin};
+        FP distance;
+        if (!FPCollision::LineIntersectsLine(start, end, position - half, position + half, hit.Point,
+                                             distance, hit.CastDistanceNormalized)) {
+            return false;
+        }
+        identify();
+        if (computeDetailedInfo) {
+            hit.Normal = {-sin, cos};
+            if ((start.X - end.X) * sin + (end.Y - start.Y) * cos > 0) {
+                hit.Normal = {sin, -cos}; // face the segment
+            }
+        }
+        return true;
+    }
+    case Shape2DType::Box: {
+        const FPVector2 extents = shape.Box._extents;
+        FPVector2 contact;
+        FPVector2 normal;
+        if (!LineBoxLocalSpace(ToLocal(start - position, sin, cos), ToLocal(end - position, sin, cos),
+                               -extents, extents, contact, normal, hit.CastDistanceNormalized)) {
+            return false;
+        }
+        identify();
+        hit.Point = FPVector2::Rotate(contact, sin, cos) + position;
+        if (computeDetailedInfo) {
+            hit.Normal = FPVector2::Rotate(normal, sin, cos);
+        }
+        return true;
+    }
+    case Shape2DType::Polygon: {
+        Polygon polygon;
+        polygon.Set(tls, *b);
+        // Cyrus-Beck clipping of the segment (in the polygon's frame) against the sides.
+        const FPVector2 localStart = ToLocal(start - position, sin, cos);
+        const FPVector2 direction = ToLocal(end - position, sin, cos) - localStart;
+        FP enter = FP::Zero();
+        FP exit = FP::One();
+        std::int32_t enterSide = -1;
+        if (polygon.VerticesCount < 1) {
+            return false;
+        }
+        for (std::int32_t i = 0; i < polygon.VerticesCount; ++i) {
+            const FP numerator = FPVector2::Dot(polygon.Normals[i], polygon.Vertices[i] - localStart);
+            const FP denominator = FPVector2::Dot(polygon.Normals[i], direction);
+            if (denominator == 0) {
+                if (numerator < 0) {
+                    return false; // parallel to this side and outside it
+                }
+            } else if (denominator < 0) {
+                if (numerator < enter * denominator) {
+                    enter = numerator / denominator;
+                    enterSide = i;
+                }
+            } else if (numerator < exit * denominator) {
+                exit = numerator / denominator;
+            }
+            if (exit < enter) {
+                return false;
+            }
+        }
+        if (enterSide < 0 || enter > FP::One()) {
+            return false;
+        }
+        identify();
+        hit.Point = start + (end - start) * enter;
+        hit.CastDistanceNormalized = enter;
+        if (computeDetailedInfo) {
+            hit.Normal = FPVector2::Rotate(polygon.Normals[enterSide], sin, cos);
+        }
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
 } // namespace Quantum::Physics2D::NarrowChecks

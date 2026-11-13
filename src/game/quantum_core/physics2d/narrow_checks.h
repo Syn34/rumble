@@ -145,6 +145,15 @@ FP CalculatePenetrationOnPolygonHalf(const Polygon& polygon, std::int32_t initVe
                                      FPVector2& avgNormal);
 } // namespace PolygonEdge
 
+namespace LinecastBody {
+// 0x7d15bf0 - segment start->end against a circle, edge, box or polygon entry. On a hit
+// fills the point, the fraction along the segment, the collider identity and, if asked,
+// the surface normal (an edge's normal faces the segment). Segments starting inside a
+// shape miss.
+bool Check(NarrowTls2D& tls, AssetGuid mapGuid, const NarrowEntry2D* b, const FPVector2& start,
+           const FPVector2& end, bool computeDetailedInfo, Hit& hit);
+} // namespace LinecastBody
+
 namespace BoxBox {
 struct LocalsContact {
     std::int32_t flipped = 0; // 1: the point is in B's frame

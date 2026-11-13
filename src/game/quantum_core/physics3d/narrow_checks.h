@@ -52,6 +52,24 @@ std::optional<bool> CheckForVertex(const TriangleCCW* tri, const FPVector3& proj
                                    FP::Raw radiusSqr, FPVector3& nearestPoint);
 } // namespace SphereTriangle
 
+namespace LinecastBody {
+// 0x7d782c8 - segment start->end against a sphere or (oriented) box entry. On a hit fills
+// the point, the fraction along the segment, the collider identity and, if asked, the
+// surface normal.
+bool Check(AssetGuid mapGuid, const NarrowEntry3D* b, const FPVector3& start, const FPVector3& end,
+           bool computeNormal, Hit3D& hit);
+// 0x7d78710 - first point where start->end enters the sphere (a segment starting inside
+// misses); outputs zeroed on a miss.
+bool RaySphereProjection(const FPVector3& center, FP radius, const FPVector3& start,
+                         const FPVector3& end, FPVector3& intersection, FP& normalizedDist);
+// 0x7d7889c - ray from `origin` along unit `dir` against the box [minB, maxB] (Woo's
+// algorithm), within maxDistance (raw). A ray starting inside misses (coord = origin).
+// The normal is the axis of the entry face pointing back towards the origin.
+bool HitBoundingBox(const FPVector3& minB, const FPVector3& maxB, const FPVector3& origin,
+                    const FPVector3& dir, FPVector3& coord, FP::Raw maxDistanceRaw,
+                    FPVector3& normal, FP& normalizedDist);
+} // namespace LinecastBody
+
 // Not implemented yet (CheckShapes asserts on these pairs and reports no collision):
 // TODO(0x7d70eec, Quantum.Physics3D.NarrowChecks.BoxBox.Check): SAT over face and edge axes
 // with the box edge/plane caches of NarrowData3D; also BoxBox.get_allowedDotDiff (0x7d7293c),

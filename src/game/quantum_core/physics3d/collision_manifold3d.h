@@ -6,6 +6,7 @@
 #include "photon_deterministic/fp.h"
 #include "photon_deterministic/fp_quaternion.h"
 #include "photon_deterministic/fp_vector3.h"
+#include "quantum_core/physics2d/hit.h" // HitEntityRef
 #include "quantum_core/shape3d.h"
 #include "quantum_core/triangle_ccw.h"
 
@@ -153,6 +154,11 @@ struct NarrowEntry3D {
     bool HasDynamicBody = false;
     bool UseSmoothSphereMeshCollision = false;
     FPVector3 RotatedCenterOfMass;
+    // Reported by queries (line casts): Entry3D.StaticColliderIndex (negative for dynamic
+    // entries), Entry3D.Ref and the collider's trigger flag.
+    std::int32_t StaticColliderIndex = -1;
+    Physics2D::HitEntityRef Ref;
+    bool IsTrigger = false;
 };
 
 struct CollisionManifoldInfo3D {
