@@ -19,7 +19,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 | Original assembly | Role | Methods | Done |
 |---|---|---:|---:|
 | quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | ~2,860 (data types, Frame, events, signals, system framework, first systems) |
-| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | 3,147 (data types, Frame, events, signals, asset classes) |
+| quantum.code.dll | Deterministic gameplay simulation (rules, weapons, AI, game modes) | 7,251 | 4,585 (data types, Frame, events, signals, asset classes, component prototypes) |
 | GameClasses.dll | Shared game types | 1,162 | 0 |
 | Assembly-CSharp.dll | Game client (UI, presentation, flow) | 20,495 | 0 |
 | Fidelio-Framework.dll, FidelioFramework-Core.dll | Developer's client framework | 16,438 | 0 |
@@ -34,7 +34,7 @@ Method counts are methods with bodies, from `tools/il2cpp_inventory.py`
 | Rewired_Core.dll | Input mapping | 7,149 | 0 |
 | Newtonsoft.Json.dll | JSON | 4,096 | 0 |
 | PhotonDeterministic.dll | Deterministic maths, RNG, bit streams, session runtime | 904 | ~790 (maths, RNGSession, ByteUtils, BitStream, offline session runtime) |
-| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, assets, prototypes, physics, navigation) | ~6,100 | 1,336 (quantum.core) |
+| quantum.core.dll, PhotonQuantum.dll | Simulation framework (frame, ECS, assets, prototypes, physics, navigation) | ~6,100 | 1,341 (quantum.core), 24 (PhotonQuantum: entity prototype loading) |
 | AK.Wwise.*.dll | Audio middleware bindings | ~2,500 | 0 |
 | MessagePack.dll, protobuf-net.dll | Binary serialisation | ~2,750 | 0 |
 | DOTween*.dll, Cinemachine.dll, NGUI.dll | Tweening, cameras, UI | ~4,400 | 0 |
@@ -52,7 +52,7 @@ local no-ops with documented behaviour.
 | Renderer interface + Vulkan 1.0 backend | done (first version) |
 | Shader pipeline (one GLSL source → GL text + SPIR-V, embedded) | done |
 | Textures, materials, render targets, text | not started |
-| Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); prefabs/scenes, textures, meshes not started |
+| Asset loading from the user's game files | simulation assets: all 1,868 built as C++ types from the content bundles (`src/game/content`); prefab hierarchies (`rr/assets/prefab.h`) with entity prototype components from prefabs and baked map entities; scenes, textures, meshes not started |
 | Audio | not started |
 | Physics / animation | not started |
 
@@ -163,7 +163,22 @@ local no-ops with documented behaviour.
   assets and quantum.core's built-ins (Map with static colliders, NavMesh, BinaryData,
   PhysicsMaterial, character controller configs, EntityView, EntityPrototype, SimulationConfig).
   `contentindex --load` builds all 1,868 simulation assets of the game's bundles with C++
-  types. Entity prototypes come with empty containers until the prefab reader exists
+  types.
+- Component prototypes: engine-side prefab reader (`rr/assets/prefab.h`: game objects with
+  components, transforms, hierarchies and world transforms, script data via type trees,
+  pointers across bundles); all 185 quantum.code component prototypes and the 15 value-type
+  prototypes (`quantum_code/prototypes/`) with Materialize/AddToEntity/Dispatch (map entity
+  links, heap lists and dictionaries in the original allocation order, fixed buffers, unions,
+  prototype references for the user-extended ones), Quantum.ComponentPrototypeVisitor,
+  FlatEntityPrototypeContainer (Collect/Store) and its StoreVisitor; readers for every game and
+  framework prototype; PhotonQuantum's entity prototype side (`content/unity_entity_prototype.h`:
+  the EntityPrototype script's PreSerialize / SerializeImplicitComponents, source-collider
+  shapes, body config upgrade, EntityPrototypeConverter, the editor-side twins of linking
+  prototypes, EntityPrototypeAsset.PrepareAsset and MapAsset.PrepareAsset, FPMathUtils
+  conversions). `contentindex --load` now fills all 251 entity prototypes from their prefabs and
+  all 997 baked map entities of the 52 maps, and reports prototypes per type. Pending: 2D
+  source colliders and 2D shape configs (the game has none), joint prototypes on prefabs,
+  the framework component scripts' Refresh overrides (unused by the game's prefabs)
 
 - quantum.code systems (`src/game/quantum_code/systems/`): the system framework
   (SystemMainThread, SystemMainThreadFilter with filter structs, groups, signal-only systems,
@@ -201,5 +216,5 @@ local no-ops with documented behaviour.
 4. Asset reader for the game's content files (from the user's own copy)
 5. Gameplay systems from quantum.code.dll: damage pipeline and respawning next, then movement,
    weapons and projectiles (need the 3D scene from quantum.core)
-4. Asset reader for the game's content files: prefabs (entity prototype components), scenes, textures, meshes
+4. Asset reader for the game's content files: scenes, textures, meshes
 5. Gameplay systems from quantum.code.dll, starting with movement and damage
