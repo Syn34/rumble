@@ -161,6 +161,183 @@ bool DamageLib::TryGetHitBy(Frame* frame, EntityRef entity, Damageable* damageab
     return false;
 }
 
+void DamageLib::SetInvulnerable(Frame* frame, EntityRef entity, FP duration, INVULNERABILITY_FILTER invulnerabilityFilter) {
+    Damageable* damageable = nullptr;
+    if (frame->TryGetPointer<Damageable>(entity, damageable)) {
+        damageable->SetInvulnerable(frame, duration, invulnerabilityFilter);
+    }
+}
+
+bool DamageLib::IsInvulnerable(Frame* frame, EntityRef entity) {
+    Damageable* damageable = nullptr;
+    return frame->TryGetPointer<Damageable>(entity, damageable) && damageable->IsInvulnerable(frame, entity);
+}
+
+bool DamageLib::IsInvulnerableToDamage(Frame* frame, EntityRef entity) {
+    Damageable* damageable = nullptr;
+    return frame->TryGetPointer<Damageable>(entity, damageable) && damageable->IsInvulnerableToDamage(frame, entity);
+}
+
+bool DamageLib::IsInvulnerableToPush(Frame* frame, EntityRef entity) {
+    Damageable* damageable = nullptr;
+    return frame->TryGetPointer<Damageable>(entity, damageable) && damageable->IsInvulnerableToPush(frame, entity);
+}
+
+FP DamageLib::GetInvulnerabilityRemainingDuration(Frame* frame, EntityRef entity) {
+    Damageable damageable{};
+    if (!frame->TryGet<Damageable>(entity, damageable)) {
+        return FP{};
+    }
+    return damageable.GetInvulnerabilityRemainingDuration(frame, entity);
+}
+
+void DamageLib::SetDamageMultiplier(Frame* frame, EntityRef entity, FP value, DAMAGE_MULTIPLIER_ORIGIN origin,
+                                    FP duration) {
+    DamageSource* source = nullptr;
+    if (!frame->TryGetPointer<DamageSource>(entity, source)) {
+        return;
+    }
+    Collections::QList<DamageMultiplierData> multipliers = frame->ResolveList(source->get_multipliers());
+    const std::int32_t endFrame =
+        duration.RawValue() >= 1 ? frame->Number + (duration / frame->get_DeltaTime()).AsInt() : -1;
+    for (int i = 0; i < multipliers.get_Count(); ++i) {
+        DamageMultiplierData entry = multipliers.get_Item(i);
+        if (entry.origin == origin) {
+            entry.endFrame = std::max(endFrame, entry.endFrame);
+            entry.value = value;
+            multipliers.set_Item(i, entry);
+            return;
+        }
+    }
+    DamageMultiplierData entry{};
+    entry.origin = origin;
+    entry.endFrame = endFrame;
+    entry.value = value;
+    multipliers.Add(entry);
+}
+
+void DamageLib::ClearDamageMultiplier(Frame* frame, EntityRef entity, DAMAGE_MULTIPLIER_ORIGIN origin) {
+    DamageSource* source = nullptr;
+    if (!frame->TryGetPointer<DamageSource>(entity, source)) {
+        return;
+    }
+    Collections::QList<DamageMultiplierData> multipliers = frame->ResolveList(source->get_multipliers());
+    for (int i = multipliers.get_Count() - 1; i >= 0; --i) {
+        if (multipliers.get_Item(i).origin == origin) {
+            multipliers.RemoveAt(i);
+        }
+    }
+}
+
+bool DamageLib::TryGetDamageMultiplier(Frame* frame, EntityRef entity, DAMAGE_MULTIPLIER_ORIGIN origin,
+                                       FP& damageMultiplier) {
+    DamageSource source{};
+    if (!frame->TryGet<DamageSource>(entity, source)) {
+        damageMultiplier = FP{};
+        return false;
+    }
+    return TryGetDamageMultiplier(frame, source, origin, damageMultiplier);
+}
+
+bool DamageLib::TryGetDamageMultiplier(Frame* frame, const DamageSource& damageSource, DAMAGE_MULTIPLIER_ORIGIN origin,
+                                       FP& damageMultiplier) {
+    damageMultiplier = FP::One();
+    bool found = false;
+    Collections::QList<DamageMultiplierData> multipliers = frame->ResolveList(damageSource.get_multipliers());
+    for (int i = 0; i < multipliers.get_Count(); ++i) {
+        const DamageMultiplierData entry = multipliers.get_Item(i);
+        if (entry.origin == origin) {
+            damageMultiplier = damageMultiplier * entry.value;
+            found = true;
+        }
+    }
+    return found;
+}
+
+FP DamageLib::GetTotalDamageMultiplier(Frame* frame, EntityRef entity) {
+    DamageSource* source = nullptr;
+    if (!frame->TryGetPointer<DamageSource>(entity, source)) {
+        return FP::One();
+    }
+    Collections::QList<DamageMultiplierData> multipliers = frame->ResolveList(source->get_multipliers());
+    FP total = FP::One();
+    for (int i = multipliers.get_Count() - 1; i >= 0; --i) {
+        const DamageMultiplierData entry = multipliers.get_Item(i);
+        if (entry.endFrame == -1 || frame->Number < entry.endFrame) {
+            total = entry.value * total;
+        } else {
+            multipliers.RemoveAt(i);
+        }
+    }
+    return total;
+}
+
+// --- EntityInfoLib / WeaponLoadoutLib ----------------------------------------------------------------
+
+bool EntityInfoLib::EntityHasTypeMatching(Frame* frame, EntityRef entity, ENTITY_INFO_FILTER filter,
+                                          Code::EntityInfo& entityInfo) {
+    if (!frame->TryGet<Code::EntityInfo>(entity, entityInfo)) {
+        return false;
+    }
+    return FilterContains(filter, entityInfo.type);
+}
+
+bool EntityInfoLib::EntityHasNoTypeOrMatches(Frame* frame, EntityRef entity, ENTITY_INFO_FILTER filter) {
+    if (!frame->Has<Code::EntityInfo>(entity)) {
+        return true;
+    }
+    Code::EntityInfo entityInfo{};
+    return EntityHasTypeMatching(frame, entity, filter, entityInfo);
+}
+
+bool EntityInfoLib::TryFindEntity(Frame* frame, ENTITY_INFO_FILTER filter, std::int32_t entityId, EntityRef& entity) {
+    for (const auto& pair : frame->Unsafe.GetComponentBlockIterator<Code::EntityInfo>().Range()) {
+        Code::EntityInfo entityInfo{};
+        if (pair.Component->id == entityId && EntityHasTypeMatching(frame, pair.Entity, filter, entityInfo)) {
+            entity = pair.Entity;
+            return true;
+        }
+    }
+    entity = EntityRef::None();
+    return false;
+}
+
+bool EntityInfoLib::TryGetId(Frame* frame, EntityRef entity, std::int32_t& id) {
+    Code::EntityInfo* entityInfo = nullptr;
+    const bool found = frame->TryGetPointer<Code::EntityInfo>(entity, entityInfo);
+    id = found ? entityInfo->id : -1;
+    return found;
+}
+
+bool EntityInfoLib::TryGetType(Frame* frame, EntityRef entity, EntityInfoType& type) {
+    Code::EntityInfo* entityInfo = nullptr;
+    const bool found = frame->TryGetPointer<Code::EntityInfo>(entity, entityInfo);
+    type = found ? entityInfo->type : EntityInfoType::None;
+    return found;
+}
+
+bool EntityInfoLib::HasId(Frame* frame, EntityRef spawnerEntity, std::int32_t id) {
+    Code::EntityInfo entityInfo{};
+    const bool found = frame->TryGet<Code::EntityInfo>(spawnerEntity, entityInfo);
+    return found && entityInfo.id == id;
+}
+
+bool WeaponLoadoutLib::TryGetWeaponIdInLoadout(Frame* frame, EntityRef entity, EntityRef weapon,
+                                               GENERATED_WEAPON_ID& weaponId) {
+    weaponId = static_cast<GENERATED_WEAPON_ID>(0);
+    WeaponLoadoutActor* loadoutActor = nullptr;
+    if (!frame->TryGetPointer<WeaponLoadoutActor>(entity, loadoutActor)) {
+        return false;
+    }
+    for (const WeaponLoadoutItem& item : loadoutActor->loadout.get_slots()) {
+        if (item.spawnedWeapon == weapon) {
+            weaponId = item.data.uniqueWeaponID;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool PlayerActorLib::IsGameModeFinished(Frame* frame, EntityRef entity) {
     PlayerActor* actor = nullptr;
     return frame->TryGetPointer<PlayerActor>(entity, actor) && actor->gameModeFinished;

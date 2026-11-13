@@ -484,11 +484,13 @@ class ElementalDamageTable : public AssetObject {
     // 0x7c8fc58
     ElementalDamageTable() = default;
 
-    // TODO(0x7c8f9ec, Quantum.ElementalDamageTable.TryGetTable): bool TryGetTable(Frame frame,
-    //   ElementalDamageTable table)
-    // TODO(0x7c8fa78, Quantum.ElementalDamageTable.GetDamageMultiplier): FP
-    //   GetDamageMultiplier(Frame frame, ElementalDamageTable table, DamageType damageType,
-    //   ElementType elementType)
+    // 0x7c8f9ec - The session's table (named by the runtime config). Defined in
+    // systems/damageable_systems.cpp.
+    static bool TryGetTable(Frame* frame, ElementalDamageTable*& table);
+    // 0x7c8fa78 - The table's multiplier for that damage type against that element; 1 when
+    // either is None, there is no table or no entry.
+    static FP GetDamageMultiplier(Frame* frame, const ElementalDamageTable* table, DamageType damageType,
+                                  ElementType elementType);
 };
 
 class EnergyCellManagerSpec : public AssetObject {

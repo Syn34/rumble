@@ -236,6 +236,57 @@ void HealthLib::UpdateMaxHp(Frame* frame, Health* health) {
     health->Stats.MaxHP = maxHP;
 }
 
+HealthHitResult HealthLib::ApplyHit(Frame* frame, EntityRef entity, const HitData& hitData) {
+    Health* health = nullptr;
+    HealthSpec* spec = nullptr;
+    if (!frame->TryGetPointer<Health>(entity, health) || !frame->TryFindAssetInternal(health->Spec.Id, true, spec)) {
+        return HealthHitResult::get_NotDamaged();
+    }
+    FP damage = hitData.health.damageMultiplier * hitData.damages;
+    if (spec->HasDamageThreshold && damage < spec->DamageThreshold) {
+        return HealthHitResult::get_NotDamaged();
+    }
+    const FP hpBefore = health->CurrentHP;
+    const FP overHPBefore = health->CurrentOverHP;
+    FP overDamage{};
+    if (overHPBefore.RawValue() >= 1) {
+        overDamage = FPMath::Min(damage, overHPBefore);
+        damage -= overDamage;
+        health->CurrentOverHP -= overDamage;
+    }
+    DamageSource* source = nullptr;
+    DamageSpec* damageSpec = nullptr;
+    if (frame->TryGetPointer<DamageSource>(hitData.source, source) &&
+        frame->TryFindAssetInternal(source->Spec.Id, true, damageSpec) && !damageSpec->CanKill) {
+        damage = FPMath::Min(damage, health->CurrentHP - FP::One());
+        if (damage <= FP{}) {
+            return HealthHitResult::get_NotDamaged();
+        }
+    }
+    health->CurrentHP -= damage;
+    health->regenFrameReference = frame->Number;
+    health->StartRegenHP = health->CurrentHP;
+    const FP totalBefore = overHPBefore + hpBefore;
+    if (spec->HasPushThreshold) {
+        const FP threshold = spec->PushPercentageThreshold / 100 * health->Stats.MaxHP;
+        if (totalBefore >= threshold && health->CurrentHP < threshold && health->CurrentHP.RawValue() >= 1) {
+            frame->Signals.Shield_OnBreaks(entity, hitData.source, hitData.direction);
+            frame->Events.ShieldBreaks(entity);
+        }
+    }
+    if (health->CurrentHP <= FP{}) {
+        health->CurrentHP = FP{};
+        if (spec->KillWhenNoMoreHP) {
+            KillableLib::Kill(frame, entity, KillType::ZeroHP, hitData.source);
+        }
+    }
+    if (totalBefore.RawValue() >= 1) {
+        frame->Events.OnHealthDecreased(entity, damage, hitData);
+        frame->Signals.Health_OnHealthDecreased(entity, totalBefore, health->CurrentHP, health->Stats.MaxHP);
+    }
+    return HealthHitResult::Damaged(damage, overDamage);
+}
+
 void HealthLib::FullRegen(Frame* frame, EntityRef entity) {
     Health* health = nullptr;
     if (frame->TryGetPointer<Health>(entity, health)) {

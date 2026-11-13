@@ -13,6 +13,7 @@
 #include "quantum_code/assets/gameplay_specs.h"
 #include "quantum_code/assets/weapon_specs.h"
 #include "quantum_code/systems/combat_libs.h"
+#include "quantum_code/systems/damageable_systems.h"
 #include "quantum_code/systems/health_systems.h"
 #include "quantum_code/systems/game_mode_systems.h"
 #include "quantum_code/systems/killable_systems.h"
@@ -407,4 +408,173 @@ TEST_CASE("quantum.code systems: bolts, kill-count wins and slow motion") {
     CHECK(!TimeScaleLib::IsTimeScaleActive(&f));
     f.Signals.GameMode_OnStateChanged(GAME_MODE_HANDLER_STATE::GameModeOutro, GAME_MODE_HANDLER_STATE::Ended);
     CHECK(f.get_DeltaTime() == f.get_UnscaledDeltaTime());
+}
+
+namespace {
+HitData MakeHit(Frame& f, EntityRef owner, FP damages, DamageType type = DamageType::Normal) {
+    HitData hit{};
+    hit.type = type;
+    hit.frame = f.Number;
+    hit.owner = owner;
+    hit.damages = damages;
+    hit.baseDamage = damages;
+    hit.health.damageMultiplier = FP::One();
+    hit.shield.damageMultiplier = FP::One();
+    return hit;
+}
+} // namespace
+
+TEST_CASE("quantum.code systems: damage resolution through elements, shield and health") {
+    auto damageableSpec = MakeAsset<DamageableSpec>(500);
+    damageableSpec->ElementType = ElementType::Ice;
+    damageableSpec->SpawnInvulnerabilityDuration = FP::FromRaw(32768); // 0.5 s
+    auto healthSpec = MakeAsset<HealthSpec>(501);
+    healthSpec->Mode = HealthSpecMode::FIXED;
+    healthSpec->FixedHP = FP::FromInt(100);
+    healthSpec->KillWhenNoMoreHP = true;
+    auto table = MakeAsset<ElementalDamageTable>(502);
+    DamageTypeToElementMapping fire;
+    fire.damageType = DamageType::Fire;
+    ElementMultiplier againstIce;
+    againstIce.elementType = ElementType::Ice;
+    againstIce.multiplier = FP::FromInt(2);
+    fire.elementMultipliers.push_back(againstIce);
+    table->mappings.push_back(fire);
+    auto shieldSpec = MakeAsset<ShieldedActorSpec>(503);
+    SystemsSimulation sim(MakeSystems<DamageableSystem, HealthSystem, KillableSystem>(),
+                          {damageableSpec, healthSpec, table, shieldSpec});
+    sim.runtime.elementalDamageTable.Id = AssetGuid(502);
+    Frame& f = *sim.frame;
+    StartSystems(&f);
+    f.Number = 1;
+
+    const EntityRef attacker = f.Create();
+    // No Killable: losing all HP destroys the entity outright (a killable needs its entity
+    // prototype).
+    const EntityRef target = f.Create();
+    Health health{};
+    health.Spec.Id = AssetGuid(501);
+    f.Add<Health>(target, health);
+    Damageable damageable{};
+    damageable.Spec.Id = AssetGuid(500);
+    f.Add<Damageable>(target, damageable);
+    RunFrames(sim, 1);
+    CHECK(f.GetPointer<Health>(target)->CurrentHP == FP::FromInt(100));
+
+    // Spawn invulnerability (30 frames): hits are not even queued.
+    CHECK(DamageLib::IsInvulnerableToDamage(&f, target));
+    CHECK(DamageLib::IsInvulnerable(&f, target));
+    CHECK(DamageLib::GetInvulnerabilityRemainingDuration(&f, target) > FP{});
+    f.GetPointer<Damageable>(target)->Hit(&f, target, MakeHit(f, attacker, FP::FromInt(30)));
+    CHECK(f.ResolveList(f.GetPointer<Damageable>(target)->get_hits()).get_Count() == 0);
+    RunFrames(sim, 30);
+    CHECK(!DamageLib::IsInvulnerableToDamage(&f, target));
+
+    // A plain hit reaches health and is remembered.
+    f.GetPointer<Damageable>(target)->Hit(&f, target, MakeHit(f, attacker, FP::FromInt(30)));
+    RunFrames(sim, 1);
+    CHECK(f.GetPointer<Health>(target)->CurrentHP == FP::FromInt(70));
+    CHECK(f.GetPointer<Damageable>(target)->hitBy.damages == FP::FromInt(30));
+    CHECK(f.ResolveList(f.GetPointer<Damageable>(target)->get_hits()).get_Count() == 0);
+    HitData lastHit{};
+    CHECK(DamageLib::TryGetHitBy(&f, target, lastHit));
+    CHECK(lastHit.owner == attacker);
+
+    // Fire against ice doubles.
+    f.GetPointer<Damageable>(target)->Hit(&f, target, MakeHit(f, attacker, FP::FromInt(20), DamageType::Fire));
+    RunFrames(sim, 1);
+    CHECK(f.GetPointer<Health>(target)->CurrentHP == FP::FromInt(30));
+
+    // A shield takes hits instead of health until it breaks.
+    ShieldedActor shield{};
+    shield.spec.Id = AssetGuid(503);
+    shield.shieldPoints = FP::FromInt(25);
+    shield.stats.shieldMaxPoints = FP::FromInt(50);
+    shield.stats.statsInitialised = true;
+    shield.state = ShieldState::FULL;
+    f.Add<ShieldedActor>(target, shield);
+    f.GetPointer<Damageable>(target)->Hit(&f, target, MakeHit(f, attacker, FP::FromInt(10)));
+    RunFrames(sim, 1);
+    CHECK(f.GetPointer<ShieldedActor>(target)->shieldPoints == FP::FromInt(15));
+    CHECK(f.GetPointer<ShieldedActor>(target)->state == ShieldState::WAIT_FOR_REGEN);
+    CHECK(f.GetPointer<Health>(target)->CurrentHP == FP::FromInt(30));
+    f.GetPointer<Damageable>(target)->Hit(&f, target, MakeHit(f, attacker, FP::FromInt(20)));
+    RunFrames(sim, 1);
+    CHECK(f.GetPointer<ShieldedActor>(target)->shieldIsBroken);
+    CHECK(f.GetPointer<ShieldedActor>(target)->shieldPoints == FP{});
+    CHECK(f.GetPointer<Health>(target)->CurrentHP == FP::FromInt(30));
+    // Broken: health takes the hits again.
+    f.GetPointer<Damageable>(target)->Hit(&f, target, MakeHit(f, attacker, FP::FromInt(10)));
+    RunFrames(sim, 1);
+    CHECK(f.GetPointer<Health>(target)->CurrentHP == FP::FromInt(20));
+
+    // Zero HP kills.
+    f.GetPointer<Damageable>(target)->Hit(&f, target, MakeHit(f, attacker, FP::FromInt(50)));
+    RunFrames(sim, 1);
+    CHECK(!f.Exists(target));
+}
+
+TEST_CASE("quantum.code systems: damage multipliers, entity info and shield regeneration") {
+    auto shieldSpec = MakeAsset<ShieldedActorSpec>(510);
+    shieldSpec->timeWithoutDamageBeforeStartRegen = FP::One();
+    shieldSpec->timeToRegenerate = FP::FromInt(2);
+    SystemsSimulation sim(MakeSystems<ShieldedActorSystem>(), {shieldSpec});
+    Frame& f = *sim.frame;
+    StartSystems(&f);
+    f.Number = 1;
+
+    // Damage source multipliers: timed and permanent, by origin.
+    const EntityRef source = f.Create();
+    f.Add<DamageSource>(source);
+    DamageLib::SetDamageMultiplier(&f, source, FP::FromRaw(98304), DAMAGE_MULTIPLIER_ORIGIN::CriticalHit, FP::One());
+    DamageLib::SetDamageMultiplier(&f, source, FP::FromInt(2), DAMAGE_MULTIPLIER_ORIGIN::Spawner);
+    CHECK(DamageLib::GetTotalDamageMultiplier(&f, source) == FP::FromInt(3));
+    FP critical;
+    CHECK(DamageLib::TryGetDamageMultiplier(&f, source, DAMAGE_MULTIPLIER_ORIGIN::CriticalHit, critical));
+    CHECK(critical == FP::FromRaw(98304));
+    f.Number += 61;
+    CHECK(DamageLib::GetTotalDamageMultiplier(&f, source) == FP::FromInt(2));
+    CHECK(!DamageLib::TryGetDamageMultiplier(&f, source, DAMAGE_MULTIPLIER_ORIGIN::CriticalHit, critical));
+    CHECK(critical == FP::One());
+    DamageLib::ClearDamageMultiplier(&f, source, DAMAGE_MULTIPLIER_ORIGIN::Spawner);
+    CHECK(DamageLib::GetTotalDamageMultiplier(&f, source) == FP::One());
+
+    // Entity info lookups.
+    const EntityRef boss = f.Create();
+    Code::EntityInfo info{};
+    info.type = EntityInfoType::Boss;
+    info.id = 7;
+    f.Add<Code::EntityInfo>(boss, info);
+    CHECK(EntityInfoLib::EntityHasTypeMatching(&f, boss, ENTITY_INFO_FILTER::NPC));
+    CHECK(!EntityInfoLib::EntityHasTypeMatching(&f, boss, ENTITY_INFO_FILTER::Player));
+    CHECK(EntityInfoLib::EntityHasNoTypeOrMatches(&f, source, ENTITY_INFO_FILTER::Player));
+    EntityRef found;
+    CHECK(EntityInfoLib::TryFindEntity(&f, ENTITY_INFO_FILTER::BOSS, 7, found));
+    CHECK(found == boss);
+    CHECK(EntityInfoLib::HasId(&f, boss, 7));
+    std::int32_t id = 0;
+    CHECK(!EntityInfoLib::TryGetId(&f, source, id));
+    CHECK(id == -1);
+
+    // A broken shield waits, then regenerates to full (the system starts disabled).
+    f.SystemEnable<ShieldedActorSystem>();
+    const EntityRef actor = f.Create();
+    ShieldedActor shield{};
+    shield.spec.Id = AssetGuid(510);
+    shield.stats.shieldMaxPoints = FP::FromInt(40);
+    shield.stats.statsInitialised = true;
+    shield.state = ShieldState::FULL;
+    f.Add<ShieldedActor>(actor, shield);
+    CHECK(f.GetPointer<ShieldedActor>(actor)->canRegen);
+    ShieldedActorLib::SetState(&f, actor, ShieldState::WAIT_FOR_REGEN);
+    RunFrames(sim, 59);
+    CHECK(f.GetPointer<ShieldedActor>(actor)->state == ShieldState::WAIT_FOR_REGEN);
+    RunFrames(sim, 2);
+    CHECK(f.GetPointer<ShieldedActor>(actor)->state == ShieldState::REGENERATING);
+    RunFrames(sim, 130);
+    CHECK(f.GetPointer<ShieldedActor>(actor)->state == ShieldState::FULL);
+    CHECK(f.GetPointer<ShieldedActor>(actor)->shieldPoints == FP::FromInt(40));
+    f.SystemDisable<ShieldedActorSystem>();
+    f.CommitAllCommands();
+    CHECK(!f.Has<ShieldedActor>(actor));
 }

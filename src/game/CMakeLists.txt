@@ -59,3 +59,9 @@ target_sources(rr_game PRIVATE
     quantum_code/assets/level_assets.cpp
     quantum_code/assets/weapon_specs.cpp
 )
+
+# quantum.code systems: damage resolution, shields, battle statistics
+target_sources(rr_game PRIVATE
+    quantum_code/systems/damageable_systems.cpp
+    quantum_code/systems/battle_stats_systems.cpp
+)

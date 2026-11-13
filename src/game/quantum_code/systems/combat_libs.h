@@ -57,6 +57,86 @@ class DamageLib {
     // 0x7bba910 - The latest hit while it is recent enough to count (the damageable's
     // spec says how long a hit is remembered).
     static bool TryGetHitBy(Frame* frame, EntityRef entity, Damageable* damageable, HitData& hitBy);
+
+    // 0x7bb9b58 - The filter has the damage type's bit.
+    static bool Contains(DAMAGE_FILTER filters, DamageType targetType) {
+        return ((static_cast<std::uint32_t>(filters) >> static_cast<std::uint32_t>(targetType)) & 1U) != 0;
+    }
+    // 0x7bb9b64 - The two filters share a flag (ALL shares every one).
+    static bool Contains(INVULNERABILITY_FILTER thisFilter, INVULNERABILITY_FILTER otherFilter) {
+        return (static_cast<std::int32_t>(otherFilter) & static_cast<std::int32_t>(thisFilter)) > 0;
+    }
+    // 0x7bba5f0 - Damageable.SetInvulnerable on the entity, if damageable.
+    static void SetInvulnerable(Frame* frame, EntityRef entity, FP duration, INVULNERABILITY_FILTER invulnerabilityFilter);
+    // 0x7bb9b70 - Fully (filter ALL) invulnerable right now.
+    static bool IsInvulnerable(Frame* frame, EntityRef entity);
+    // 0x7bba6bc
+    static bool IsInvulnerableToDamage(Frame* frame, EntityRef entity);
+    // 0x7bba404
+    static bool IsInvulnerableToPush(Frame* frame, EntityRef entity);
+    // 0x7bba76c - Zero for non-damageables and when not invulnerable.
+    static FP GetInvulnerabilityRemainingDuration(Frame* frame, EntityRef entity);
+    // 0x7bbaa20 - A multiplier that lasts until cleared.
+    static void SetDamageMultiplier(Frame* frame, EntityRef entity, FP value, DAMAGE_MULTIPLIER_ORIGIN origin) {
+        SetDamageMultiplier(frame, entity, value, origin, FP::FromRaw(-65536));
+    }
+    // 0x7bbaa28 - Sets the damage source's multiplier from `origin`; a positive duration
+    // makes it expire (an existing entry keeps the later end frame), otherwise it never
+    // expires.
+    static void SetDamageMultiplier(Frame* frame, EntityRef entity, FP value, DAMAGE_MULTIPLIER_ORIGIN origin,
+                                    FP duration);
+    // 0x7bb99b4 - Drops every multiplier from `origin`.
+    static void ClearDamageMultiplier(Frame* frame, EntityRef entity, DAMAGE_MULTIPLIER_ORIGIN origin);
+    // 0x7bbac4c - The product of the entity's multipliers from `origin` (1 if none).
+    static bool TryGetDamageMultiplier(Frame* frame, EntityRef entity, DAMAGE_MULTIPLIER_ORIGIN origin,
+                                       FP& damageMultiplier);
+    // 0x7bbad3c
+    static bool TryGetDamageMultiplier(Frame* frame, const DamageSource& damageSource, DAMAGE_MULTIPLIER_ORIGIN origin,
+                                       FP& damageMultiplier);
+    // 0x7bbaf48 - The product of the live multipliers; expired ones are removed.
+    static FP GetTotalDamageMultiplier(Frame* frame, EntityRef entity);
+    // TODO(0x7bb9c7c, Quantum.DamageLib.Hit): queues a hit built by DamageSpec.CreateHitData
+    //   on a damageable target (filters, Damageable_OnBeforeHit, area-of-effect continuity);
+    //   waits for DamageSpec.CreateHitData.
+    // TODO(0x7bba074, Quantum.DamageLib.Push): pushes a pushable target with a pusher spec.
+    // TODO(0x7bb5d40, Quantum.DamageLib.HitAndPush): Hit then Push.
+    // TODO(0x7bbb0cc, Quantum.DamageLib.DamageableCanBuildUpDamageOfType): elemental build-up
+    //   check (fire damage effects).
+};
+
+class EntityInfoLib {
+  public:
+    // 0x7ccba64
+    static bool FilterContains(ENTITY_INFO_FILTER filters, EntityInfoType targetType) {
+        return ((static_cast<std::uint32_t>(filters) >> static_cast<std::uint32_t>(targetType)) & 1U) != 0;
+    }
+    // 0x7cd35cc
+    static bool EntityHasTypeMatching(Frame* frame, EntityRef entity, ENTITY_INFO_FILTER filter) {
+        Code::EntityInfo entityInfo{};
+        return EntityHasTypeMatching(frame, entity, filter, entityInfo);
+    }
+    // 0x7cda7f4 - The entity has an EntityInfo whose type is in the filter.
+    static bool EntityHasTypeMatching(Frame* frame, EntityRef entity, ENTITY_INFO_FILTER filter, Code::EntityInfo& entityInfo);
+    // 0x7cda87c - Entities without EntityInfo always match.
+    static bool EntityHasNoTypeOrMatches(Frame* frame, EntityRef entity, ENTITY_INFO_FILTER filter);
+    // 0x7cd7f00 - The first entity (in component order) with that id and a matching type.
+    static bool TryFindEntity(Frame* frame, ENTITY_INFO_FILTER filter, std::int32_t entityId, EntityRef& entity);
+    // 0x7cdaa0c - -1 without EntityInfo.
+    static bool TryGetId(Frame* frame, EntityRef entity, std::int32_t& id);
+    // 0x7cdaab8 - None without EntityInfo.
+    static bool TryGetType(Frame* frame, EntityRef entity, EntityInfoType& type);
+    // 0x7cdab64
+    static bool HasId(Frame* frame, EntityRef spawnerEntity, std::int32_t id);
+    // TODO(0x7cd8fb0, Quantum.EntityInfoLib.EntityPrototypeHasTypeMatching): type test on an
+    //   entity prototype's EntityInfo prototype; needs FrameUtility.GetComponentPrototype.
+    // TODO(0x7cda948, Quantum.EntityInfoLib.GetEntities): lazily enumerates the entities whose
+    //   type matches a filter.
+};
+
+class WeaponLoadoutLib {
+  public:
+    // 0x7c0251c - The unique id of the loadout slot that spawned `weapon`.
+    static bool TryGetWeaponIdInLoadout(Frame* frame, EntityRef entity, EntityRef weapon, GENERATED_WEAPON_ID& weaponId);
 };
 
 class PlayerActorLib {

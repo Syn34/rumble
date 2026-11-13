@@ -2131,6 +2131,11 @@ struct alignas(8) HitData {
     FPVector3 position;
     HitShieldData shield;
 
+    // 0x7b98b58
+    void SetIsContinuous(bool value) { isContinuous = value; }
+    // 0x7b98b78 - The hit no longer reaches health (the shield took it).
+    void CancelHealthDamage() { health.damageMultiplier = FP{}; }
+
     // 0x7b9872c
     std::int32_t GetHashCode() const;
     // 0x7b988fc
@@ -2162,6 +2167,20 @@ struct alignas(8) Damageable {
     Collections::QListPtr<HitData> get_hits() const { return Collections::QListPtr<HitData>(hitsPtr); }
     // 0x7c42d24
     void set_hits(Collections::QListPtr<HitData> value) { hitsPtr = value.Ptr; }
+
+    // 0x7c43438 - Invulnerable to `invulnerabilityType` for `duration` from now.
+    void SetInvulnerable(Frame* frame, FP duration, INVULNERABILITY_FILTER invulnerabilityType);
+    // 0x7c43498 - Fully invulnerable (filter ALL) right now.
+    bool IsInvulnerable(Frame* frame, EntityRef damageableEntity) const;
+    // 0x7c43540
+    bool IsInvulnerableToDamage(Frame* frame, EntityRef damageableEntity) const;
+    // 0x7c43574
+    bool IsInvulnerableToPush(Frame* frame, EntityRef damageableEntity) const;
+    // 0x7c435a8 - Zero when not invulnerable.
+    FP GetInvulnerabilityRemainingDuration(Frame* frame, EntityRef damageableEntity) const;
+    // 0x7c435f4 - Queues a damaging hit unless invulnerable to damage; the hits are
+    // resolved by DamageableSystem.
+    void Hit(Frame* frame, EntityRef damageableEntity, const HitData& hitData);
 
     // 0x7c42d2c
     std::int32_t GetHashCode() const;
@@ -4166,6 +4185,10 @@ struct alignas(8) Projectile {
     // 0x7c5c308
     void set_entitiesToSpawnOnImpact(Collections::QListPtr<AssetRefEntityPrototype> value) { entitiesToSpawnOnImpactPtr = value.Ptr; }
 
+    // 0x7c5cd10 - The recorded impact landed on a head-tagged shape and the weapon that
+    // fired can headshot.
+    bool IsImpactHeadshot(Frame* frame) const;
+
     // 0x7c5c310
     std::int32_t GetHashCode() const;
     // TODO(0x7c5c834, Quantum.Projectile.Serialize): all fields in layout order; waits
@@ -6102,6 +6125,16 @@ struct alignas(8) HealthHitResult {
     FP damages;
     FP overHealthDamages;
 
+    // 0x7b98680 - Nothing was taken.
+    static HealthHitResult get_NotDamaged() { return HealthHitResult{}; }
+    // 0x7b9868c
+    static HealthHitResult Damaged(FP damages, FP damageOnOverHP) {
+        HealthHitResult result{};
+        result.damages = damages;
+        result.overHealthDamages = damageOnOverHP;
+        return result;
+    }
+
     // 0x7b98640
     std::int32_t GetHashCode() const;
 };
@@ -6112,6 +6145,15 @@ struct alignas(8) ShieldHitResult {
     static constexpr int ALIGNMENT = 8;
 
     FP damages;
+
+    // 0x7b9bfe4
+    static ShieldHitResult get_NotDamaged() { return ShieldHitResult{}; }
+    // 0x7b9bfec
+    static ShieldHitResult Damaged(FP damages) {
+        ShieldHitResult result{};
+        result.damages = damages;
+        return result;
+    }
 
     // 0x7b98d30
     std::int32_t GetHashCode() const;
@@ -6124,6 +6166,9 @@ struct alignas(8) HitResult {
 
     ShieldHitResult shield;
     HealthHitResult health;
+
+    // 0x7b98d4c - Either the shield or health took something.
+    bool get_HasReceivedDamages() const { return shield.damages > FP{} || health.damages > FP{}; }
 
     // 0x7b98cd4
     std::int32_t GetHashCode() const;

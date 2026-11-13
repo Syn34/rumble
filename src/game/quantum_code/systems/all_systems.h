@@ -2,7 +2,9 @@
 #pragma once
 
 #include "quantum_code/systems/actor_systems.h"
+#include "quantum_code/systems/battle_stats_systems.h"
 #include "quantum_code/systems/core_systems.h"
+#include "quantum_code/systems/damageable_systems.h"
 #include "quantum_code/systems/game_mode_systems.h"
 #include "quantum_code/systems/health_systems.h"
 #include "quantum_code/systems/killable_systems.h"

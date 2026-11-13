@@ -405,29 +405,6 @@ class AutoJumperActorSystem : public SystemMainThread {
     void Update(Frame* f) override { (void)f; }
 };
 
-// Quantum.BattleStatsActorSystem (original base: Quantum.SystemSignalsOnly)
-class BattleStatsActorSystem : public SystemSignalsOnly {
-  public:
-    // TODO(0x7cb2d20, Quantum.BattleStatsActorSystem.PlayerActor_OnInitialized): PlayerActor_OnInitialized(frame, actorEntity, pActor); not reimplemented yet.
-    // TODO(0x7cb3068, Quantum.BattleStatsActorSystem.Damageable_HitReceived): Damageable_HitReceived(f, entity, hitData, hitResult); not reimplemented yet.
-    // TODO(0x7cb3440, Quantum.BattleStatsActorSystem.Killable_OnKill): Killable_OnKill(f, toKill, killedBy); not reimplemented yet.
-    // TODO(0x7cb3860, Quantum.BattleStatsActorSystem.Bolt_OnGoldenBoltCollected): Bolt_OnGoldenBoltCollected(f, collector); not reimplemented yet.
-    // TODO(0x7cb3900, Quantum.BattleStatsActorSystem.Bolt_OnCollected): Bolt_OnCollected(f, collector, amount); not reimplemented yet.
-    // TODO(0x7cb39a4, Quantum.BattleStatsActorSystem.GrinderActor_OnExitGrind): GrinderActor_OnExitGrind(f, entity, grindingDuration); not reimplemented yet.
-    // TODO(0x7cb3a48, Quantum.BattleStatsActorSystem.UltimateAbilityUser_OnStateChanged): UltimateAbilityUser_OnStateChanged(frame, entity, state); not reimplemented yet.
-    // TODO(0x7cb3af0, Quantum.BattleStatsActorSystem.GadgetUser_OnGadgetActivated): GadgetUser_OnGadgetActivated(f, entity); not reimplemented yet.
-    // TODO(0x7cb3b90, Quantum.BattleStatsActorSystem.PowerUp_OnCollected): PowerUp_OnCollected(f, collector, type, source); not reimplemented yet.
-    // TODO(0x7cb2ec0, Quantum.BattleStatsActorSystem.TryGetWeaponUsageStats): TryGetWeaponUsageStats(f, pBattleStatsActor, entity, weapon, stats); not reimplemented yet.
-    // TODO(0x7cb3d50, Quantum.BattleStatsActorSystem.Weapon_OnReload): Weapon_OnReload(f, weaponEntity, weapon); not reimplemented yet.
-    // TODO(0x7cb3e0c, Quantum.BattleStatsActorSystem.WeaponLoadoutActor_OnManualSwap): WeaponLoadoutActor_OnManualSwap(f, loadoutActor, slot); not reimplemented yet.
-    // TODO(0x7cb30f8, Quantum.BattleStatsActorSystem.ComputeStatsForDamageTaken): ComputeStatsForDamageTaken(f, entity, hitData); not reimplemented yet.
-    // TODO(0x7cb3224, Quantum.BattleStatsActorSystem.ComputeStatsForDamageDealt): ComputeStatsForDamageDealt(f, entity, hitData); not reimplemented yet.
-    // TODO(0x7cb34d0, Quantum.BattleStatsActorSystem.ComputeStatsForVictim): ComputeStatsForVictim(f, toKill, killedBy); not reimplemented yet.
-    // TODO(0x7cb35f8, Quantum.BattleStatsActorSystem.ComputeStatsForKiller): ComputeStatsForKiller(f, toKill, killedBy); not reimplemented yet.
-    // TODO(0x7cb3ec0, Quantum.BattleStatsActorSystem.IsEntityOwnedByPlayer): IsEntityOwnedByPlayer(f, entity); not reimplemented yet.
-    // TODO(0x7cb3f54, Quantum.BattleStatsActorSystem..ctor): .ctor(); not reimplemented yet.
-};
-
 // Quantum.BigBoomMineSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
 class BigBoomMineSystem : public SystemMainThread {
   public:
@@ -711,26 +688,6 @@ class DamageToImpulseConverterSystem : public SystemMainThread {
     // TODO(0x7bbbe84, Quantum.DamageToImpulseConverterSystem.TryGetWeaponData): TryGetWeaponData(f, hitData, converterSpec, weaponMultiplier); not reimplemented yet.
     // TODO(0x7bbc128, Quantum.DamageToImpulseConverterSystem.TryGetAoESourceData): TryGetAoESourceData(f, hitData, converterSpec, aoeMultiplier); not reimplemented yet.
     // TODO(0x7bbc454, Quantum.DamageToImpulseConverterSystem..ctor): .ctor(); not reimplemented yet.
-    void Update(Frame* f) override { (void)f; }
-};
-
-// Quantum.DamageableSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
-class DamageableSystem : public SystemMainThread {
-  public:
-    // TODO(0x7bb820c, Quantum.DamageableSystem.Update): Update(frame, filter); not reimplemented yet.
-    // TODO(0x7bb895c, Quantum.DamageableSystem.ResetElectricalDamageGuage): ResetElectricalDamageGuage(frame, damageable, elementalDamageTable); not reimplemented yet.
-    // TODO(0x7bb89d0, Quantum.DamageableSystem.ResetIceBuildUp): ResetIceBuildUp(frame, damageable, elementalDamageTable); not reimplemented yet.
-    // TODO(0x7bb831c, Quantum.DamageableSystem.IsDead): IsDead(frame, entity); not reimplemented yet.
-    // TODO(0x7bb8398, Quantum.DamageableSystem.ResolveHits): ResolveHits(frame, hittenEntity, damageable, damageableSpec, elementalDamageTable); not reimplemented yet.
-    // TODO(0x7bb8a5c, Quantum.DamageableSystem.GetElementalDamageMultiplier): GetElementalDamageMultiplier(frame, elementalDamageTable, hit, damageableSpec); not reimplemented yet.
-    // TODO(0x7bb8ad8, Quantum.DamageableSystem.ResolveShieldDamages): ResolveShieldDamages(frame, entity, hitData); not reimplemented yet.
-    // TODO(0x7bb8c04, Quantum.DamageableSystem.ResolveHealthDamages): ResolveHealthDamages(frame, entity, hitData); not reimplemented yet.
-    // TODO(0x7bb910c, Quantum.DamageableSystem.Killable_OnRevive): Killable_OnRevive(frame, entity, position, rotation); not reimplemented yet.
-    // TODO(0x7bb9238, Quantum.DamageableSystem.GameMode_OnMainLoopStart): GameMode_OnMainLoopStart(frame, gameMode); not reimplemented yet.
-    // TODO(0x7bb9418, Quantum.DamageableSystem.Shield_OnBreaks): Shield_OnBreaks(frame, entity, sourceEntity, direction); not reimplemented yet.
-    // TODO(0x7bb9544, Quantum.DamageableSystem.OnAdded): OnAdded(frame, entity, damageable); not reimplemented yet.
-    // TODO(0x7bb9614, Quantum.DamageableSystem.Damageable_OnBeforeHit): Damageable_OnBeforeHit(f, targetEntity, hitData); not reimplemented yet.
-    // TODO(0x7bb9b10, Quantum.DamageableSystem..ctor): .ctor(); not reimplemented yet.
     void Update(Frame* f) override { (void)f; }
 };
 
@@ -1443,22 +1400,6 @@ class ShapeOverlappingSystem : public SystemMainThread {
     bool get_StartEnabled() const override { return false; }
     // TODO(0x7be0d0c, Quantum.ShapeOverlappingSystem.Update): Update(f, filter); not reimplemented yet.
     // TODO(0x7be1734, Quantum.ShapeOverlappingSystem..ctor): .ctor(); not reimplemented yet.
-    void Update(Frame* f) override { (void)f; }
-};
-
-// Quantum.ShieldedActorSystem (original base: Quantum.SystemMainThreadFilter<Filter>)
-class ShieldedActorSystem : public SystemMainThread {
-  public:
-    // 0x7cb763c
-    bool get_StartEnabled() const override { return false; }
-    // TODO(0x7cb7644, Quantum.ShieldedActorSystem.Killable_OnRevive): Killable_OnRevive(frame, entity, position, rotation); not reimplemented yet.
-    // TODO(0x7cb774c, Quantum.ShieldedActorSystem.InitActorIfNeeded): InitActorIfNeeded(frame, entity, shieldedActor, spec); not reimplemented yet.
-    // TODO(0x7cb7a00, Quantum.ShieldedActorSystem.Update): Update(frame, filter); not reimplemented yet.
-    // TODO(0x7cb7b08, Quantum.ShieldedActorSystem.WaitForRegen): WaitForRegen(frame, entity, shieldedActor); not reimplemented yet.
-    // TODO(0x7cb7b74, Quantum.ShieldedActorSystem.Regenerate): Regenerate(frame, entity, shieldedActor, spec); not reimplemented yet.
-    // TODO(0x7cb7c20, Quantum.ShieldedActorSystem.OnDisabled): OnDisabled(f); not reimplemented yet.
-    // TODO(0x7cb7d9c, Quantum.ShieldedActorSystem.OnAdded): OnAdded(f, entity, component); not reimplemented yet.
-    // TODO(0x7cb7dc4, Quantum.ShieldedActorSystem..ctor): .ctor(); not reimplemented yet.
     void Update(Frame* f) override { (void)f; }
 };
 

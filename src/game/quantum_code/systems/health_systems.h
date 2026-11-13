@@ -36,8 +36,11 @@ class HealthLib {
     // 0x7bc2bb8 - Maximum HP = initial maximum times every multiplier (in source order);
     // a full entity stays full.
     static void UpdateMaxHp(Frame* frame, Health* health);
-    // TODO(0x7bb8d08, Quantum.HealthLib.ApplyHit): applies a hit to HP and overhealth
-    // (thresholds, kill on zero HP, regeneration restart, events); not reimplemented yet.
+    // 0x7bb8d08 - Takes a hit: below the spec's damage threshold nothing happens;
+    // overhealth absorbs first; a damage source that cannot kill leaves 1 HP; regeneration
+    // restarts from the new HP; dropping below the push threshold breaks the "shield";
+    // reaching zero kills when the spec says so; the loss is reported.
+    static HealthHitResult ApplyHit(Frame* frame, EntityRef entity, const HitData& hitData);
     // 0x7bc3050
     static void FullRegen(Frame* frame, EntityRef entity);
 };
