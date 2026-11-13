@@ -70,19 +70,35 @@ bool HitBoundingBox(const FPVector3& minB, const FPVector3& maxB, const FPVector
                     FPVector3& normal, FP& normalizedDist);
 } // namespace LinecastBody
 
-// Not implemented yet (CheckShapes asserts on these pairs and reports no collision):
-// TODO(0x7d70eec, Quantum.Physics3D.NarrowChecks.BoxBox.Check): SAT over face and edge axes
-// with the box edge/plane caches of NarrowData3D; also BoxBox.get_allowedDotDiff (0x7d7293c),
-// get_extentsExpansionMultiplier (0x7d72944), GetEdgesBox (0x7d72a28), GetPlanesBox
-// (0x7d72950), GetContactPoints (0x7d72d44), GetContactPointPlaneEdge (0x7d72ec4),
-// ClipToPlane (0x7d75a6c), BoxInAABB (0x7d75878), PointInAABB (0x7d75bac).
+// Not implemented yet (CheckShapes asserts on these pairs and reports no collision). Both
+// need NarrowData3D's box edge/plane caches (NarrowData3D.Init).
+// TODO(0x7d70eec, Quantum.Physics3D.NarrowChecks.BoxBox.Check): SAT over face and edge axes.
+// TODO(0x7d7293c, Quantum.Physics3D.NarrowChecks.BoxBox.get_allowedDotDiff)
+// TODO(0x7d72944, Quantum.Physics3D.NarrowChecks.BoxBox.get_extentsExpansionMultiplier)
+// TODO(0x7d72a28, Quantum.Physics3D.NarrowChecks.BoxBox.GetEdgesBox)
+// TODO(0x7d72950, Quantum.Physics3D.NarrowChecks.BoxBox.GetPlanesBox)
+// TODO(0x7d72d44, Quantum.Physics3D.NarrowChecks.BoxBox.GetContactPoints)
+// TODO(0x7d72ec4, Quantum.Physics3D.NarrowChecks.BoxBox.GetContactPointPlaneEdge)
+// TODO(0x7d75a6c, Quantum.Physics3D.NarrowChecks.BoxBox.ClipToPlane)
+// TODO(0x7d75878, Quantum.Physics3D.NarrowChecks.BoxBox.BoxInAABB)
+// TODO(0x7d75bac, Quantum.Physics3D.NarrowChecks.BoxBox.PointInAABB)
 // TODO(0x7d72058, Quantum.Physics3D.NarrowChecks.BoxTriangle.Check): Akenine-Moller
-// box/triangle SAT (AxisTestX01 0x7d75ca4, AxisTestX2 0x7d75edc, AxisTestY02 0x7d75d34,
-// AxisTestY1 0x7d75f6c, AxisTestZ12 0x7d75dcc, AxisTestZ0 0x7d75e54, PlaneBoxOverlaps
-// 0x7d76000) with edge clipping for contacts (ClipTriEdgesOnBoxPlanes 0x7d763d0,
-// ClipBoxEdgesOnTriPlane 0x7d77624, ClipToPlane 0x7d77f18, PointInAabb 0x7d76368,
-// PointInTriangle 0x7d77fd4, ClosestPointOnTriangle 0x7d7619c, CheckForEdge 0x7d78180,
-// PointPenetrationRaw 0x7d762bc).
+// box/triangle SAT with edge clipping for the contacts.
+// TODO(0x7d75ca4, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestX01)
+// TODO(0x7d75edc, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestX2)
+// TODO(0x7d75d34, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestY02)
+// TODO(0x7d75f6c, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestY1)
+// TODO(0x7d75dcc, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestZ12)
+// TODO(0x7d75e54, Quantum.Physics3D.NarrowChecks.BoxTriangle.AxisTestZ0)
+// TODO(0x7d76000, Quantum.Physics3D.NarrowChecks.BoxTriangle.PlaneBoxOverlaps)
+// TODO(0x7d763d0, Quantum.Physics3D.NarrowChecks.BoxTriangle.ClipTriEdgesOnBoxPlanes)
+// TODO(0x7d77624, Quantum.Physics3D.NarrowChecks.BoxTriangle.ClipBoxEdgesOnTriPlane)
+// TODO(0x7d77f18, Quantum.Physics3D.NarrowChecks.BoxTriangle.ClipToPlane)
+// TODO(0x7d76368, Quantum.Physics3D.NarrowChecks.BoxTriangle.PointInAabb)
+// TODO(0x7d77fd4, Quantum.Physics3D.NarrowChecks.BoxTriangle.PointInTriangle)
+// TODO(0x7d7619c, Quantum.Physics3D.NarrowChecks.BoxTriangle.ClosestPointOnTriangle)
+// TODO(0x7d78180, Quantum.Physics3D.NarrowChecks.BoxTriangle.CheckForEdge)
+// TODO(0x7d762bc, Quantum.Physics3D.NarrowChecks.BoxTriangle.PointPenetrationRaw)
 
 // Walks the per-triangle manifolds of a sphere/box-against-mesh collision.
 struct TriangleCollisionIterator {
