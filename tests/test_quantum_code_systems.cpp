@@ -7,7 +7,13 @@
 #include "quantum_code/systems/all_systems.h"
 #include "quantum_code/systems/enablers.h"
 #include "quantum_code/systems/system_setup.h"
+#include "quantum_code/systems/asset_decls.h"
+#include "quantum_code/systems/combat_libs.h"
+#include "quantum_code/systems/health_systems.h"
+#include "quantum_code/systems/killable_systems.h"
+#include "quantum_code/systems/libs.h"
 #include "quantum_core/frame_context.h"
+#include "quantum_core/resource_manager.h"
 
 #include <memory>
 #include <vector>
@@ -30,12 +36,16 @@ struct SystemsSimulation {
     SimulationConfig simulation;
     SystemList roots;
     std::vector<SystemBase*> all;
+    std::unique_ptr<ResourceManagerStatic> resources;
     std::unique_ptr<Frame> frame;
 
-    explicit SystemsSimulation(SystemList systems) : roots(std::move(systems)) {
+    explicit SystemsSimulation(SystemList systems, const std::vector<std::shared_ptr<AssetObject>>& assets = {})
+        : roots(std::move(systems)) {
         ComponentTypeId<>::ResetForTests();
         platform.Allocator = &allocator;
         FrameContext::Args args;
+        resources = std::make_unique<ResourceManagerStatic>(assets, nullptr);
+        args.AssetDatabase = resources->CreateAssetDatabase();
         args.PlatformInfo = &platform;
         args.HeapConfig = Heap::Config(12, 256, 4);
         context = std::make_unique<FrameContext>(args);
@@ -110,4 +120,166 @@ TEST_CASE("quantum.code systems: start, enablers and group scheduling") {
     // A whole frame of systems runs without touching anything unexpected.
     UpdateSystems(&f);
     CHECK(f.Exists(entity));
+}
+
+namespace {
+template <class T> std::shared_ptr<T> MakeAsset(std::int64_t guid) {
+    auto asset = std::make_shared<T>();
+    asset->Guid = AssetGuid(guid);
+    return asset;
+}
+
+// Runs the systems for `frames` frames, advancing the frame number like the session.
+void RunFrames(SystemsSimulation& sim, int frames) {
+    for (int i = 0; i < frames; ++i) {
+        ++sim.frame->Number;
+        UpdateSystems(sim.frame.get());
+        sim.frame->CommitAllCommands();
+    }
+}
+} // namespace
+
+TEST_CASE("quantum.code systems: health initialises from its spec and regenerates") {
+    auto spec = MakeAsset<HealthSpec>(100);
+    spec->Mode = HealthSpecMode::FIXED;
+    spec->FixedHP = FP::FromInt(100);
+    spec->CanRegenerate = true;
+    spec->TimeWithoutDamageBeforeStartRegen = FP::One();
+    spec->TimeToRegenerate = FP::FromInt(2);
+    SystemsSimulation sim(MakeSystems<HealthSystem>(), {spec});
+    Frame& f = *sim.frame;
+    StartSystems(&f);
+    f.Number = 1;
+    const EntityRef entity = f.Create();
+    Health* health = nullptr;
+    f.Add<Health>(entity, Health{}, health);
+    health->Spec.Id = AssetGuid(100);
+    // OnAdded set every multiplier to 1.
+    CHECK(HealthLib::GetMaxHpMultiplier(&f, entity, HEALTH_MULTIPLIER_SOURCE::SPAWNER) == FP::One());
+
+    RunFrames(sim, 1);
+    health = f.GetPointer<Health>(entity);
+    CHECK(health->Stats.Initialised);
+    CHECK(health->CurrentHP == FP::FromInt(100));
+    CHECK(health->Stats.MaxHP == FP::FromInt(100));
+
+    // Halve the maximum through a multiplier: a full entity stays full.
+    HealthLib::SetMaxHpMultiplier(&f, entity, HEALTH_MULTIPLIER_SOURCE::KING_CHASE, FP::FromRaw(32768), false);
+    CHECK(health->Stats.MaxHP == FP::FromInt(50));
+    CHECK(health->CurrentHP == FP::FromInt(50));
+    HealthLib::SetMaxHpMultiplier(&f, entity, HEALTH_MULTIPLIER_SOURCE::KING_CHASE, FP::One(), true);
+    CHECK(health->Stats.MaxHP == FP::FromInt(100));
+
+    // Damage taken now: nothing happens for a second, then HP climbs back.
+    health->CurrentHP = FP::FromInt(50);
+    health->StartRegenHP = FP::FromInt(50);
+    health->regenFrameReference = f.Number;
+    RunFrames(sim, 30);
+    CHECK(health->CurrentHP == FP::FromInt(50));
+    RunFrames(sim, 60);
+    CHECK(health->CurrentHP > FP::FromInt(60));
+    CHECK(health->CurrentHP < FP::FromInt(100));
+    RunFrames(sim, 60);
+    CHECK(health->CurrentHP == FP::FromInt(100));
+    CHECK(HealthLib::GetHPRatio(&f, entity) == FP::One());
+}
+
+TEST_CASE("quantum.code systems: kill marks, lifetimes and killables") {
+    auto lifetimeSpec = MakeAsset<LifetimeSpec>(200);
+    lifetimeSpec->StartLifetimeOnSpawn = true;
+    lifetimeSpec->LifetimeDuration = FP::One();
+    SystemsSimulation sim(MakeSystems<KillableSystem, LifetimeSystem, LifetimeInitSystem>(), {lifetimeSpec});
+    Frame& f = *sim.frame;
+    StartSystems(&f);
+    f.Number = 1;
+
+    // A delayed kill of a non-player destroys it once the delay has passed.
+    const EntityRef marked = f.Create();
+    KillableLib::KillNextFrame(&f, marked, FP::FromRaw(32768), KillType::GameRule, EntityRef{});
+    // A second mark does not replace the first.
+    KillableLib::KillNextFrame(&f, marked, FP::FromInt(10), KillType::Undefined, EntityRef{});
+    CHECK(f.GetPointer<KillNextFrame>(marked)->killType == KillType::GameRule);
+    RunFrames(sim, 20);
+    CHECK(f.Exists(marked));
+    RunFrames(sim, 20);
+    CHECK(!f.Exists(marked));
+
+    // A lifetime that starts on spawn kills its entity after its duration.
+    const EntityRef temporary = f.Create();
+    Lifetime lifetime{};
+    lifetime.Spec.Id = AssetGuid(200);
+    f.Add<Lifetime>(temporary, lifetime);
+    CHECK(f.GetPointer<Lifetime>(temporary)->StartFrame == f.Number);
+    RunFrames(sim, 30);
+    CHECK(f.GetPointer<Lifetime>(temporary)->Stats.initialised);
+    CHECK(f.Exists(temporary));
+    RunFrames(sim, 40);
+    CHECK(!f.Exists(temporary));
+
+    // Killables: alive when added; extra lives only for limited lives; revive and kill
+    // records.
+    const EntityRef actor = f.Create();
+    f.Add<Killable>(actor);
+    CHECK(KillableLib::IsAlive(&f, actor));
+    CHECK(KillableLib::GetLivesLeft(&f, actor) == 1);
+    Killable* killable = f.GetPointer<Killable>(actor);
+    killable->maxDeath = 3;
+    KillableLib::IncrementDeathCount(&f, actor);
+    KillableLib::AddExtraLives(&f, actor, 2);
+    CHECK(KillableLib::GetLivesLeft(&f, actor) == 4);
+    KilledByData killedBy{};
+    CHECK(!KillableLib::TryGetKilledBy(&f, actor, killedBy));
+}
+
+TEST_CASE("quantum.code systems: game timer ends the game mode") {
+    auto modeSpec = MakeAsset<GameModeSpec>(300);
+    modeSpec->gameDuration = FP::One();
+    SystemsSimulation sim(MakeSystems<GameTimerSystem>(), {modeSpec});
+    Frame& f = *sim.frame;
+    StartSystems(&f);
+    f.Number = 10;
+    f.set_UnscaledDeltaTime(f.get_DeltaTime());
+    GameModeHandler* handler = f.GetOrAddSingletonPointer<GameModeHandler>();
+    handler->state = GAME_MODE_HANDLER_STATE::MainLoop;
+    handler->stateStartFrame = f.Number;
+    handler->gameModeSpecRef.Id = AssetGuid(300);
+    CHECK(GameTimerLib::GetGameDuration(&f) == FP::One());
+    bool overtime = true;
+    CHECK(GameTimerLib::GetTimeLeft(&f, overtime) == FP::One());
+    CHECK(!overtime);
+    RunFrames(sim, 30);
+    CHECK(!GameModeHandlerLib::IsGameModeFinished(&f));
+    RunFrames(sim, 31);
+    CHECK(GameModeHandlerLib::IsGameModeFinished(&f));
+    CHECK(f.GetPointerSingleton<GameModeHandler>()->finishFrame == f.Number);
+    // A finished mode has no running timer.
+    CHECK(GameTimerLib::GetTimeLeft(&f, overtime) == -FP::One());
+}
+
+TEST_CASE("quantum.code systems: teams, entity info and status events") {
+    SystemsSimulation sim(MakeSystems<EntityInfoSystem, ActorIcedSystem, ActorInputInitialiserSystem>());
+    Frame& f = *sim.frame;
+    StartSystems(&f);
+    const EntityRef pickup = f.Create();
+    Code::EntityInfo info{};
+    info.type = static_cast<EntityInfoType>(2);
+    f.Add<Code::EntityInfo>(pickup, info);
+    CHECK(Team::GetTeamID(&f, pickup) == Team::NeutralTeamID);
+    CHECK(f.GetPointer<Team>(pickup)->isLeader);
+
+    const EntityRef other = f.Create();
+    info.type = static_cast<EntityInfoType>(1);
+    f.Add<Code::EntityInfo>(other, info);
+    CHECK(Team::GetTeamID(&f, other) == -1);
+
+    const EntityRef actor = f.Create();
+    f.Add<ActorInputInitialiser>(actor);
+    f.CommitAllCommands();
+    CHECK(f.Has<ActorInput>(actor));
+    CHECK(!f.Has<ActorInputInitialiser>(actor));
+
+    const int eventsBefore = f.get_Context()->get_Events()->get_Count();
+    f.Add<ActorIced>(actor);
+    f.Remove<ActorIced>(actor);
+    CHECK(f.get_Context()->get_Events()->get_Count() == eventsBefore + 2);
 }

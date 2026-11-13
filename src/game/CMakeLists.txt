@@ -37,4 +37,13 @@ target_sources(rr_game PRIVATE
     quantum_code/systems/system_groups.cpp
     quantum_code/systems/enablers.cpp
     quantum_code/systems/system_setup.cpp
+    quantum_code/systems/team.cpp
+    quantum_code/systems/actor_systems.cpp
+    quantum_code/systems/physics_systems.cpp
+    quantum_code/systems/game_mode_systems.cpp
+    quantum_code/systems/reward_systems.cpp
+    quantum_code/systems/game_mode_libs.cpp
+    quantum_code/systems/combat_libs.cpp
+    quantum_code/systems/health_systems.cpp
+    quantum_code/systems/killable_systems.cpp
 )
