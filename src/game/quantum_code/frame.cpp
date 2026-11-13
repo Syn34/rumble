@@ -21,7 +21,8 @@ Frame::Frame(Core::FrameContext* context, std::vector<SystemBase*> systemsAll,
     InitStaticGen();
     InitGen();
     for (std::size_t i = 0; i < _systemsAll.size(); ++i) {
-        _systemIndexByType.emplace(std::type_index(typeid(*_systemsAll[i])), static_cast<int>(i));
+        const SystemBase& system = *_systemsAll[i];
+        _systemIndexByType.emplace(std::type_index(typeid(system)), static_cast<int>(i));
     }
     _globals->DeltaTime = deltaTime;
     // Not reimplemented yet: the Physics2D/3D API objects and the prototype-materialized

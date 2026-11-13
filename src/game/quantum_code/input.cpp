@@ -75,7 +75,7 @@ void Input::set_LookInputVector(const FPVector3& value) {
 }
 
 std::int32_t Input::GetHashCode() const {
-    return HashBuilder(3072u)
+    return HashBuilder(1601u)
         .Add(Dash)
         .Add(EncodedCameraOrbitDirection)
         .Add(EncodedCameraOrbitOffset)

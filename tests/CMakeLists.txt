@@ -23,6 +23,7 @@ add_executable(rr_tests
     test_quantum_assets.cpp
     test_quantum_narrow2d.cpp
     test_quantum_narrow3d.cpp
+    test_quantum_code_frame.cpp
 )
 target_link_libraries(rr_tests PRIVATE rr::game rr::assets)
 rr_set_warnings(rr_tests)

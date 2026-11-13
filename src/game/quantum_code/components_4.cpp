@@ -630,7 +630,7 @@ std::int32_t ShieldHitResult::GetHashCode() const {
 }
 
 std::int32_t HitResult::GetHashCode() const {
-    return HashBuilder(2078259953u)
+    return HashBuilder(1583u)
         .Add(health)
         .Add(shield)
         .Value();
@@ -696,7 +696,7 @@ void CustomBotInfo::Serialize(void* ptr, FrameSerializer* serializer) {
 }
 
 std::int32_t BotsSettings::GetHashCode() const {
-    return HashBuilder(2u)
+    return HashBuilder(1321u)
         .Add(BackpackBracketPlayerPlacement)
         .Add(BackpackLevelBracketPercentage)
         .Add(BotLoadoutPresets)

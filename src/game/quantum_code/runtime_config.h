@@ -77,7 +77,10 @@ class RuntimeConfig {
     // 0x7ca3100 - The game's own settings, in declaration order; structs travel as raw
     // bytes.
     void SerializeUserData(Photon::Deterministic::BitStream& stream);
-    // 0x7ca32dc - Serialised into a stream of `arrayCapacity` bytes.
+    // 0x7ca32dc - Serialised into a stream of `arrayCapacity` bytes. Note: as in the
+    // original, the new stream is left in its default (reading) mode, so this reads the
+    // zeroed buffer into `config` and returns zeros; callers that need the bytes serialise
+    // through a writing BitStream themselves.
     static std::vector<std::uint8_t> ToByteArray(RuntimeConfig& config, int arrayCapacity);
     // 0x7ca3390
     static RuntimeConfig FromByteArray(std::vector<std::uint8_t> data);
