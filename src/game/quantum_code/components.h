@@ -3412,6 +3412,154 @@ struct alignas(8) KccExtension {
     // 0x7c4e630
     void set_wallCheckExclusions(Collections::QListPtr<EntityRef> value) { wallCheckExclusionsPtr = value.Ptr; }
 
+    // 0x7c4f92c - A surface type only replaces one set with a lower priority.
+    void TrySetCurrentSurfaceType(KccSurfaceType surfaceType, KccSurfaceSetPriority priority) {
+        if (surfaceSetPriority < priority) {
+            surfaceSetPriority = priority;
+            currentSurfaceType = surfaceType;
+        }
+    }
+    // 0x7c4fba8
+    void LockJump(FP duration) { lockJumpTimer = duration; lockJump = true; }
+    // 0x7c4fbd8
+    void UnlockJump() { lockJumpTimer = FP{}; lockJump = false; }
+    // 0x7c4fbfc
+    void LockRotation(FP duration) { lockRotationTimer = duration; lockRotation = true; }
+    // 0x7c4fc2c
+    void UnlockRotation() { lockRotationTimer = FP{}; lockRotation = false; }
+    // 0x7c4fc50 - An impulse consumed over 0.1 s.
+    void AddImpulse(FPVector3 _impulse) { AddImpulse(_impulse, FP::FromRaw(6553)); }
+    // 0x7c4fc94
+    void AddImpulse(FPVector3 _impulse, FP _duration) {
+        hasImpulseToConsume = true;
+        impulseTimer = _duration;
+        impulse = _impulse;
+    }
+    // 0x7c4fd0c
+    void ResetImpulse() {
+        hasImpulseToConsume = false;
+        impulseTimer = FP{};
+        impulse = FPVector3::Zero();
+    }
+    // 0x7c53030
+    bool IsImpulsing() const { return impulseTimer > FP{}; }
+    // 0x7c53e28
+    void SetLookMode(bool lookToCam, bool lookTowardsCameraSight_) {
+        lookTowardsCamera = lookToCam;
+        lookTowardsCameraSight = lookTowardsCameraSight_;
+    }
+    // 0x7c4feb0 - Blends a forced input in for `_duration` plus `_fallOff`; snapping to the
+    // ground only applies when grounded.
+    void SetForceInput(FPVector2 _forceInput, FP _blend, FP _duration, FP _fallOff, bool _snapOnGround) {
+        forceInput = _forceInput;
+        forceInputFallOff = _fallOff;
+        forceInputMaxBlend = _blend;
+        forceInputCounter = _fallOff + _duration;
+        forceInputSnapOnGround = _snapOnGround && grounded;
+    }
+    // 0x7c4fef8 - The forced input's blend (fading over the fall-off) and its countdown.
+    void UpdateForceInput(Frame* f);
+    // 0x7c54f0c - Back to the config's orientation sharpness.
+    void ResetOrientationSharpness(Frame* f);
+    // 0x7c53e64 - Adds a timed modifier to one of the modifier lists (none for a zero
+    // duration; a negative duration never expires), or replaces the one from the same
+    // origin when asked to.
+    void AddModifier(Frame* f, Collections::QListPtr<ModInfo> list, MOD_ORIGIN origin, FP value, FP duration,
+                     FP falloffDuration, bool originOverride);
+    // 0x7c54030
+    void AddModifier_MoveSpeed(Frame* f, MOD_ORIGIN origin, FP value, FP duration, FP falloffDuration, bool originOverride) {
+        AddModifier(f, get_speedModifiers(), origin, value, duration, falloffDuration, originOverride);
+    }
+    // 0x7c540c0
+    void AddModifier_MoveSpeed(Frame* f, EntityRef entity, MOD_ORIGIN origin, FP value, FP duration, bool originOverride,
+                               bool notifyView) {
+        AddModifier_MoveSpeed(f, entity, origin, value, duration, FP{}, originOverride, notifyView);
+    }
+    // 0x7c540e8 - Optionally tells the view.
+    void AddModifier_MoveSpeed(Frame* f, EntityRef entity, MOD_ORIGIN origin, FP value, FP duration, FP falloffDuration,
+                               bool originOverride, bool notifyView);
+    // 0x7c5416c
+    void AddModifier_MaxSpeed(Frame* f, MOD_ORIGIN origin, FP value, FP duration, FP falloffDuration, bool originOverride) {
+        AddModifier(f, get_maxSpeedModifiers(), origin, value, duration, falloffDuration, originOverride);
+    }
+    // 0x7c541fc
+    void AddModifier_MaxSpeed(Frame* f, MOD_ORIGIN origin, FP value, FP duration, bool originOverride) {
+        AddModifier_MaxSpeed(f, origin, value, duration, FP{}, originOverride);
+    }
+    // 0x7c54208
+    void AddModifier_Gravity(Frame* f, MOD_ORIGIN origin, FP value, FP duration, FP falloffDuration, bool originOverride) {
+        AddModifier(f, get_gravityModifiers(), origin, value, duration, falloffDuration, originOverride);
+    }
+    // 0x7c54298
+    void AddModifier_Gravity(Frame* f, MOD_ORIGIN origin, FP value, FP duration, bool originOverride) {
+        AddModifier_Gravity(f, origin, value, duration, FP{}, originOverride);
+    }
+    // 0x7c542a4
+    void AddModifier_MaxFallSpeed(Frame* f, MOD_ORIGIN origin, FP value, FP duration, FP falloffDuration,
+                                  bool originOverride) {
+        AddModifier(f, get_maxFallSpeedModifiers(), origin, value, duration, falloffDuration, originOverride);
+    }
+    // 0x7c54334
+    void AddModifier_MaxFallSpeed(Frame* f, MOD_ORIGIN origin, FP value, FP duration, bool originOverride) {
+        AddModifier_MaxFallSpeed(f, origin, value, duration, FP{}, originOverride);
+    }
+    // 0x7c54340 - Until cleared.
+    void AddModifier_MaxFallSpeed(Frame* f, MOD_ORIGIN origin, FP value, bool originOverride) {
+        AddModifier_MaxFallSpeed(f, origin, value, FP::FromRaw(-65536), FP{}, originOverride);
+    }
+    // 0x7c54350
+    void AddModifier_Acceleration(Frame* f, MOD_ORIGIN origin, FP value, FP duration, FP falloffDuration,
+                                  bool originOverride) {
+        AddModifier(f, get_accelerationModifiers(), origin, value, duration, falloffDuration, originOverride);
+    }
+    // 0x7c543e0
+    void AddModifier_Acceleration(Frame* f, MOD_ORIGIN origin, FP value, FP duration, bool originOverride) {
+        AddModifier_Acceleration(f, origin, value, duration, FP{}, originOverride);
+    }
+    // 0x7c543ec
+    bool HasModifier(Frame* f, Collections::QListPtr<ModInfo> list, MOD_ORIGIN origin) const;
+    // 0x7c54528
+    bool HasModifier_MaxSpeed(Frame* f, MOD_ORIGIN origin) const { return HasModifier(f, get_maxSpeedModifiers(), origin); }
+    // 0x7c5457c
+    bool HasModifier_MoveSpeed(Frame* f, MOD_ORIGIN origin) const { return HasModifier(f, get_speedModifiers(), origin); }
+    // 0x7c545d0 - Removes every modifier from `origin` (last first).
+    void ClearModifiersOfTypeInList(Frame* f, Collections::QListPtr<ModInfo> list, MOD_ORIGIN origin);
+    // 0x7c54718
+    void ClearModifier_MoveSpeed(Frame* f, MOD_ORIGIN origin) { ClearModifiersOfTypeInList(f, get_speedModifiers(), origin); }
+    // 0x7c5476c
+    void ClearModifier_MaxSpeed(Frame* f, MOD_ORIGIN origin) { ClearModifiersOfTypeInList(f, get_maxSpeedModifiers(), origin); }
+    // 0x7c547c0
+    void ClearModifier_Gravity(Frame* f, MOD_ORIGIN origin) { ClearModifiersOfTypeInList(f, get_gravityModifiers(), origin); }
+    // 0x7c54814
+    void ClearModifier_MaxFallSpeed(Frame* f, MOD_ORIGIN origin) {
+        ClearModifiersOfTypeInList(f, get_maxFallSpeedModifiers(), origin);
+    }
+    // 0x7c54868
+    void ClearModifier_Acceleration(Frame* f, MOD_ORIGIN origin) {
+        ClearModifiersOfTypeInList(f, get_accelerationModifiers(), origin);
+    }
+    // 0x7c548bc
+    void ClearModifier_Braking(Frame* f, MOD_ORIGIN origin) { ClearModifiersOfTypeInList(f, get_brakingModifiers(), origin); }
+    // 0x7c4d5e8 - From every list.
+    void ClearModifiersOfType(Frame* f, MOD_ORIGIN origin) {
+        ClearModifier_MoveSpeed(f, origin);
+        ClearModifier_MaxSpeed(f, origin);
+        ClearModifier_Gravity(f, origin);
+        ClearModifier_MaxFallSpeed(f, origin);
+        ClearModifier_Acceleration(f, origin);
+        ClearModifier_Braking(f, origin);
+    }
+    // 0x7c520b4 - 1 plus every live modifier, never below zero.
+    FP ComputeModifiers(Frame* f, Collections::QListPtr<ModInfo> list);
+    // 0x7c54910 - The sum of the live modifiers' current values; expired ones are removed.
+    FP ComputeAllModifiers_Additive(Frame* f, Collections::QListPtr<ModInfo> list);
+    // 0x7c54ac8 - The sum for one origin (nothing is removed).
+    FP ComputeModifiersOfType_Additive(Frame* f, Collections::QListPtr<ModInfo> list, MOD_ORIGIN origin) const;
+    // 0x7c54c4c - In every list.
+    void RemoveExpiredModifiers(Frame* f);
+    // 0x7c54d9c
+    void RemoveExpiredModifiers(Frame* f, Collections::QListPtr<ModInfo> list);
+
     // 0x7c4e638
     std::int32_t GetHashCode() const;
     // 0x7c4f25c
@@ -6836,6 +6984,10 @@ struct alignas(8) ModInfo {
     FP duration;
     FP falloffDuration;
     FP value;
+
+    // 0x7b99d60 - The value, fading linearly to zero over the last falloffDuration of its
+    // life when it has a falloff.
+    FP GetValueAtTime(FP time) const;
 
     // 0x7b99be0
     std::int32_t GetHashCode() const;

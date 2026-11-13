@@ -397,10 +397,23 @@ void ShieldedActorLib::StartOrRestartRegenTimers(Frame* frame, EntityRef entity,
 
 void ShieldedActorLib::ApplyMoveSpeedModifier(Frame* frame, EntityRef entity, ShieldedActor* shieldedActor,
                                               ShieldedActorSpec* spec) {
-    (void)frame;
-    (void)entity;
-    (void)shieldedActor;
-    (void)spec;
+    KccExtension* kcc = nullptr;
+    if (!frame->TryGetPointer<KccExtension>(entity, kcc)) {
+        return;
+    }
+    if (shieldedActor->shieldPoints > FP{}) {
+        // A hit slows at most once per tick interval.
+        const FP sinceLastSlow =
+            frame->get_DeltaTime() * (frame->Number - shieldedActor->lastFrameShieldHitSpeedModWasApplied);
+        if (sinceLastSlow >= spec->moveSpeedModifierTickRate) {
+            kcc->AddModifier_MoveSpeed(frame, entity, MOD_ORIGIN::SHIELD, spec->moveSpeedModifierWhenHit,
+                                       spec->moveSpeedModifierWhenHitDuration, true, true);
+            shieldedActor->lastFrameShieldHitSpeedModWasApplied = frame->Number;
+        }
+    } else {
+        kcc->AddModifier_MoveSpeed(frame, entity, MOD_ORIGIN::SHIELD, spec->moveSpeedModifierWhenBreak,
+                                   spec->moveSpeedModifierWhenBreakDuration, true, true);
+    }
 }
 
 // --- ShieldedActorSystem ---------------------------------------------------------------------------

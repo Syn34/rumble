@@ -79,9 +79,8 @@ class ShieldedActorLib {
     // 0x7cb7410 - Regeneration may start after the spec's delay from now.
     static void StartOrRestartRegenTimers(Frame* frame, EntityRef entity, ShieldedActor* shieldedActor,
                                           ShieldedActorSpec* spec);
-    // TODO(0x7cb7464, Quantum.ShieldedActorLib.ApplyMoveSpeedModifier): slows the actor's KCC
-    //   (hit slow at most once per tick interval, or the break slow); waits for
-    //   KccExtension.AddModifier_MoveSpeed. Does nothing for now.
+    // 0x7cb7464 - Slows the actor's KCC: the hit slow at most once per tick interval while
+    // the shield holds, the break slow once it is empty.
     static void ApplyMoveSpeedModifier(Frame* frame, EntityRef entity, ShieldedActor* shieldedActor,
                                        ShieldedActorSpec* spec);
 };
