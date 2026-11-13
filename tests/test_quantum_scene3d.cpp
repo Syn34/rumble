@@ -513,9 +513,11 @@ TEST_CASE("Scene3D: the character controller lands, stands and walks") {
     w.AddStaticBox(V3(0, -1, 0), V3(20, 1, 20));
     const EntityRef hero = w.frame->Create();
     w.frame->Add(hero, Quantum::Transform3D{V3(0, 1, 0), FPQuaternion::Identity()});
-    w.frame->Add(hero, CharacterController3D{});
+    Prototypes::CharacterController3D_Prototype prototype;
+    prototype.Config.Id = AssetGuid(500);
+    PrototypeMaterializationContext materialization{};
+    CHECK(prototype.AddToEntity(w.frame.get(), hero, materialization));
     CharacterController3D* kcc = w.frame->GetPointer<CharacterController3D>(hero);
-    kcc->Init(w.frame.get(), config.get());
     CHECK(kcc->MaxSpeed == F(3) && kcc->Config().Id == AssetGuid(500));
     PhysicsEngine3D* engine = w.context->get_Physics3D();
     engine->Init(w.frame.get(), AssetGuid{});

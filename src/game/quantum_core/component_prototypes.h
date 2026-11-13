@@ -285,17 +285,17 @@ class CharacterController2D_Prototype final : public PendingComponentPrototype {
     void Dispatch(ComponentPrototypeVisitorBase& visitor) override { visitor.Visit(*this); }
 };
 
-class CharacterController3D_Prototype final : public PendingComponentPrototype {
+class CharacterController3D_Prototype final : public TypedComponentPrototype<CharacterController3D> {
   public:
     AssetRefCharacterController3DConfig Config;
 
     // 0x7d7fc28
-    CharacterController3D_Prototype() : PendingComponentPrototype("CharacterController3D") {}
+    CharacterController3D_Prototype() = default;
 
-    // TODO(0x7d7fad0, Quantum.Prototypes.CharacterController3D_Prototype.Materialize): as the
-    // 2D one with CharacterController3D.Init.
-    // TODO(0x7d7fb2c, Quantum.Prototypes.CharacterController3D_Prototype.AddToEntity):
-    // Materialize into a zeroed component, then Set; true when new.
+    // 0x7d7fad0 - CharacterController3D.Init with the config (the default one when the
+    // reference finds nothing).
+    void Materialize(Core::FrameBase* frame, CharacterController3D& result) const;
+    // 0x7d7fb2c - Materialize into a zeroed component, then Set; true when new.
     bool AddToEntity(Core::FrameBase* f, EntityRef entity,
                      const PrototypeMaterializationContext& context) override;
     // 0x7d7fc04
