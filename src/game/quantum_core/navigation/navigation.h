@@ -23,6 +23,10 @@
 #include <memory>
 #include <vector>
 
+namespace Quantum::Core {
+class FrameBase;
+}
+
 namespace Quantum {
 
 using Photon::Deterministic::FP;
@@ -136,8 +140,9 @@ class Navigation {
         // 0x7d2674c - the pathfinder is active / the obstacle is enabled.
         bool IsActive() const;
 
-        // TODO(0x7d26684, Navigation.Entry.TryGetConfig): frame.FindAsset of the
-        // pathfinder's config GUID (null without pathfinder); needs FrameBase.
+        // 0x7d26684 - the pathfinder's config asset (frame.FindAsset; null without a
+        // pathfinder).
+        NavMeshAgentConfig* TryGetConfig(Core::FrameBase* frame) const;
         // TODO(0x7d26780, Navigation.Entry.ClearEntityPhysics): zeroes the 2D/3D body's
         // velocity and wakes it; needs PhysicsBody2D/3D.
     };

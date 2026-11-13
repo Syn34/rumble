@@ -7,6 +7,7 @@
 
 #include "photon_deterministic/fp.h"
 #include "quantum_core/asset_guid.h"
+#include "quantum_core/asset_object.h"
 
 #include <cstdint>
 #include <string>
@@ -29,14 +30,10 @@ enum class MovementType : std::uint8_t {
 enum class VerticalPositioningType : std::uint8_t { None = 0, Navmesh = 1, Physics = 2 };
 enum class RawPathAllocationStrategy : std::uint8_t { Fixed = 0, Allocating = 1 };
 
-class NavMeshAgentConfig {
+class NavMeshAgentConfig : public AssetObject, public IBuiltInAssetObject {
   public:
     // GUID of the built-in default config asset.
     static constexpr std::int64_t DEFAULT_ID = 2;
-
-    // AssetObject part: the asset's GUID and path.
-    AssetGuid Guid;
-    std::string Path;
 
     std::int32_t UpdateInterval = 1;
     Quantum::PathQuality PathQuality = Quantum::PathQuality::Good;
@@ -81,34 +78,21 @@ class NavMeshAgentConfig {
     // 0x7ce52c0 - the defaults above.
     NavMeshAgentConfig() = default;
 
-    // TODO(0x7ce5128, Quantum.NavMeshAgentConfig.Quantum.IBuiltInAssetObject.Dispatch):
-    // visitor double dispatch of the asset system; needs IAssetObjectVisitor.
+    // 0x7ce5128
+    void Dispatch(IAssetObjectVisitor& visitor) override { visitor.Visit(*this); }
 
     // 0x7ce51d0 - precomputes the squared distances (stopping distance raised to at least
     // Constants.MinStoppingDistance for that, the field itself is kept) and clamps
     // CachedWaypointCount into [3, Constants.MaxWaypoints]. The resource manager and
     // allocator parameters are unused.
-    void Loaded();
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
+    void Loaded() { Loaded(nullptr, nullptr); }
 };
 
 // Typed asset reference. Original: Quantum.AssetRefNavMeshAgentConfig.
-struct AssetRefNavMeshAgentConfig {
-    static constexpr int SIZE = 8;
-
-    AssetGuid Id;
-
-    // 0x7ce5024 (Equals(AssetRefNavMeshAgentConfig)); 0x7ce5034 Equals(object) is the
-    // boxed form.
-    friend constexpr bool operator==(AssetRefNavMeshAgentConfig,
-                                     AssetRefNavMeshAgentConfig) = default;
-    // 0x7ce50ac
-    std::int32_t GetHashCode() const { return Id.GetHashCode(); }
-    // 0x7ce501c
-    std::string ToString() const { return AssetRef{Id}.ToString(); }
-
-    // TODO(0x7ce50b4, Quantum.AssetRefNavMeshAgentConfigExt.FindAsset): frame.FindAsset;
-    // needs FrameBase and the asset database.
-};
+// 0x7ce501c ToString, 0x7ce5024 / 0x7ce5034 Equals, 0x7ce50ac GetHashCode, 0x7ce50b4
+// AssetRefNavMeshAgentConfigExt.FindAsset
+using AssetRefNavMeshAgentConfig = TypedAssetRef<NavMeshAgentConfig>;
 static_assert(sizeof(AssetRefNavMeshAgentConfig) == AssetRefNavMeshAgentConfig::SIZE);
 
 } // namespace Quantum

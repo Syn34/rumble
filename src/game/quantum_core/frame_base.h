@@ -25,6 +25,8 @@
 
 #include "photon_deterministic/deterministic_frame.h"
 #include "photon_deterministic/fp.h"
+#include "quantum_core/asset_guid.h"
+#include "quantum_core/asset_object.h"
 #include "quantum_core/component_data_buffer.h"
 #include "quantum_core/component_set.h"
 #include "quantum_core/component_type_id.h"
@@ -44,11 +46,15 @@
 #include <shared_mutex>
 #include <stdexcept>
 #include <string>
+#include <typeinfo>
 #include <vector>
 
 namespace Quantum {
 
+class AssetObject;
+class DynamicAssetDB;
 class FrameSerializer;
+class Map;
 
 template <class T> struct ComponentIterator;
 template <class... Ts> struct ComponentFilter;
@@ -140,7 +146,9 @@ class FrameBase : public Photon::Deterministic::DeterministicFrame {
     };
 
     // 0x7d1cc70 - Reserves a heap from the context's group and gives the frame a tracked
-    // heap with a disabled tracker. The entity store itself is created by Initialize.
+    // heap with a disabled tracker. The entity store itself is created by Initialize. The
+    // frame's dynamic asset database starts as a copy of the context's initial dynamic
+    // assets and resolves static GUIDs through the context's resource manager.
     explicit FrameBase(FrameContext* context);
     ~FrameBase() override;
 
@@ -156,6 +164,9 @@ class FrameBase : public Photon::Deterministic::DeterministicFrame {
     virtual CommitCommandsModes get_CommitCommandsMode() const = 0;
     virtual Photon::Deterministic::FP get_DeltaTime() const = 0;
     virtual void set_DeltaTime(Photon::Deterministic::FP value) = 0;
+    // 0x600092c (abstract): the map the game's frame runs on. The base has none; the
+    // game's Frame overrides this.
+    virtual Map* get_Map() const { return nullptr; }
     // Also abstract in the original, waiting for their types: get_PhysicsSceneSettings,
     // get_Map, get_NavMeshRegionMask, get__physicsState2D, get__physicsState3D.
 
@@ -468,15 +479,65 @@ class FrameBase : public Photon::Deterministic::DeterministicFrame {
     }
 
     // --- assets, prototypes, navigation ---------------------------------------------------
-    // TODO(0x4ea5dd0, Quantum.Core.FrameBase.FindAsset<T>) and the other FindAsset /
-    // TryFindAsset / FindAssetInternal / TryFindAssetInternal overloads: need AssetDB and
-    // DynamicAssetDB.
+    // Asset lookups: dynamic GUIDs come from the frame's DynamicAssetDB, static ones from
+    // the context's AssetDB. FindAsset logs (warning) when the asset is missing or has
+    // another type and returns null; TryFindAsset is silent. Frames use the main-thread
+    // path of the resource manager (FrameThreadSafe passes its thread instead).
+
+    // 0x4ea5dd0 (shared generic code)
+    template <class T> T* FindAsset(AssetGuid guid) { return FindAssetInternal<T>(guid, true); }
+    // 0x4ea5e14 (shared generic code)
+    template <class T> T* FindAsset(AssetRef assetRef) {
+        return FindAssetInternal<T>(assetRef.Id, true);
+    }
+    // 0x4ea5e58 (shared generic code) - true when found.
+    template <class T> bool FindAsset(AssetRef assetRef, T*& asset) {
+        asset = FindAssetInternal<T>(assetRef.Id, true);
+        return asset != nullptr;
+    }
+    template <class T> bool TryFindAsset(AssetGuid guid, T*& asset) {
+        return TryFindAssetInternal<T>(guid, true, asset);
+    }
+    template <class T> bool TryFindAsset(TypedAssetRef<T> assetRef, T*& asset) {
+        return TryFindAssetInternal<T>(assetRef.Id, true, asset);
+    }
+    template <class T> bool TryFindAsset(AssetRef assetRef, T*& asset) {
+        return TryFindAssetInternal<T>(assetRef.Id, true, asset);
+    }
+    // 0x4eec6f4 (shared generic code)
+    template <class T> bool TryFindAssetInternal(AssetGuid guid, bool isMainThread, T*& asset) {
+        asset = dynamic_cast<T*>(LookUpAsset(guid, isMainThread));
+        return asset != nullptr;
+    }
+    // 0x4ea5ec8 (shared generic code)
+    template <class T> T* FindAssetInternal(AssetGuid guid, bool isMainThread) {
+        if (!guid.IsValid()) {
+            return nullptr;
+        }
+        AssetObject* asset = LookUpAsset(guid, isMainThread);
+        if (asset == nullptr) {
+            LogAssetNotFound(guid, AssetTypeName<T>());
+            return nullptr;
+        }
+        T* typed = dynamic_cast<T*>(asset);
+        if (typed == nullptr) {
+            LogAssetTypeMismatch(guid, AssetTypeName<T>(), AssetTypeName(typeid(*asset)));
+        }
+        return typed;
+    }
+    // 0x7d1d650 - warning naming the GUID and the wanted type.
+    static void LogAssetNotFound(AssetGuid guid, const std::string& assetType);
+    // 0x7d1d774 - warning naming the GUID, the wanted and the actual type.
+    static void LogAssetTypeMismatch(AssetGuid guid, const std::string& expectedType,
+                                     const std::string& assetType);
+
+    // Quantum.Core.FrameBase._dynamicAssetDB.
+    DynamicAssetDB* get_DynamicAssetDB() const { return _dynamicAssetDB.get(); }
+
     // TODO(0x7d1d218, Quantum.Core.FrameBase.FindPrototype(EntityPrototypeRef)): needs
     // entity prototypes.
     // TODO(0x7d1d594, Quantum.Core.FrameBase.FindPrototype(ComponentPrototypeRef)): same.
     // TODO(0x7d1d60c, Quantum.Core.FrameBase.ClearAllNavMeshRegions): needs navigation.
-    // TODO(0x7d1d650, Quantum.Core.FrameBase.LogAssetNotFound): logging for FindAsset.
-    // TODO(0x7d1d774, Quantum.Core.FrameBase.LogAssetTypeMismatch): logging for FindAsset.
     // TODO(0x7d1cc28, Quantum.Core.FrameBase.get__physicsStateInternal2D) and
     // TODO(0x7d1cc38, Quantum.Core.FrameBase.get__physicsStateInternal3D): need the physics
     // engine state.
@@ -515,6 +576,9 @@ class FrameBase : public Photon::Deterministic::DeterministicFrame {
 
   private:
     void FreeEntityStore();
+    // The lookup shared by FindAssetInternal / TryFindAssetInternal (null for an invalid
+    // GUID, a missing database or an unknown asset).
+    AssetObject* LookUpAsset(AssetGuid guid, bool isMainThread) const;
 
     int _usedCount = 0;
     int _freeCount = 0;
@@ -530,9 +594,9 @@ class FrameBase : public Photon::Deterministic::DeterministicFrame {
     FrameContext* _context = nullptr;
     Quantum::Allocator::Heap* _heap = nullptr;
     std::unique_ptr<Quantum::Allocator::FrameHeap> _trackedHeap;
-    // Not present yet (their subsystems are missing): the dynamic asset database the
-    // constructor creates, the prototype-materialized signal and the Physics2D/Physics3D
-    // API objects.
+    std::unique_ptr<DynamicAssetDB> _dynamicAssetDB;
+    // Not present yet (their subsystems are missing): the prototype-materialized signal
+    // and the Physics2D/Physics3D API objects.
 };
 
 // ---------------------------------------------------------------------------------------

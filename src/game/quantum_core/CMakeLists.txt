@@ -45,6 +45,15 @@ add_library(rr_quantum_core
     frame_meta_data.cpp
     q_list.cpp
     input_types.cpp
+    assert.cpp
+    asset_object.cpp
+    asset_db.cpp
+    resource_manager.cpp
+    dynamic_asset_db.cpp
+    builtin_assets.cpp
+    polygon_collider.cpp
+    map.cpp
+    asset_resource_provider.cpp
 )
 add_library(rr::quantum_core ALIAS rr_quantum_core)
 target_include_directories(rr_quantum_core PUBLIC ..)

@@ -25,6 +25,7 @@
 #include "photon_deterministic/fp_vector2.h"
 #include "photon_deterministic/fp_vector3.h"
 #include "quantum_core/asset_guid.h"
+#include "quantum_core/asset_object.h"
 #include "quantum_core/navigation/navmesh_region_mask.h"
 #include "quantum_core/navigation/navmesh_types.h"
 
@@ -40,21 +41,12 @@ namespace Quantum {
 
 using Photon::Deterministic::FPVector2;
 
+class BinaryData;
 class ByteStream;
 class MailboxSet8;
 
-// The part of a BinaryData asset NavMesh::Loaded uses.
-struct NavMeshBinaryData {
-    std::vector<std::uint8_t> Data;
-    bool IsCompressed = false;
-};
-
-class NavMesh {
+class NavMesh : public AssetObject, public IBuiltInAssetObject {
   public:
-    // AssetObject part (Quantum.AssetObject.Identifier): the asset's GUID and path.
-    AssetGuid Guid;
-    std::string Path;
-
     std::string Name;
     AssetGuid DataAsset; // AssetRefBinaryData
     std::string DataFilepath;
@@ -74,16 +66,19 @@ class NavMesh {
     // 0x7ce5014
     NavMesh() = default;
 
-    // TODO(0x7ce2774, Quantum.NavMesh.Quantum.IBuiltInAssetObject.Dispatch): visitor
-    // double dispatch of the asset system; needs IAssetObjectVisitor.
+    // 0x7ce2774
+    void Dispatch(IAssetObjectVisitor& visitor) override { visitor.Visit(*this); }
 
     // 0x7ce281c
     int BorderCount() const { return static_cast<int>(Borders.size()); }
 
-    // 0x7ce2834 - called after the asset is loaded. The original looks the DataAsset GUID
-    // up in the resource manager; the caller does that and passes the result (nullptr if
-    // missing). Missing data logs a warning; a broken blob logs an error.
-    void Loaded(const NavMeshBinaryData* dataAsset);
+    // 0x7ce2834 - fetches the DataAsset blob from the resource manager and reads it
+    // (LoadData); afterwards a static blob is released again. Without a DataAsset nothing
+    // happens.
+    void Loaded(IResourceManager* resourceManager, Allocator* allocator) override;
+    // The reading part of Loaded: a missing blob (null) logs a warning, a broken one an
+    // error.
+    void LoadData(const BinaryData* dataAsset);
 
     // 0x7ce3164 - grid cell index of an XZ position (not clamped).
     int CalculateNodeGridIndex(FP positionX, FP positionZ) const;
@@ -150,27 +145,9 @@ class NavMesh {
 };
 
 // Typed asset reference. Original: Quantum.AssetRefNavMesh.
-struct AssetRefNavMesh {
-    static constexpr int SIZE = 8;
-
-    AssetGuid Id;
-
-    // 0x7ce265c - the navmesh's GUID (invalid for null).
-    static AssetRefNavMesh FromAsset(const NavMesh* value) {
-        return AssetRefNavMesh{value != nullptr ? value->Guid : AssetGuid{}};
-    }
-
-    // 0x7ce2670 (Equals(AssetRefNavMesh)); 0x7ce2680 Equals(object) is the boxed form.
-    friend constexpr bool operator==(AssetRefNavMesh, AssetRefNavMesh) = default;
-
-    // 0x7ce26f8
-    std::int32_t GetHashCode() const { return Id.GetHashCode(); }
-    // 0x7ce2668
-    std::string ToString() const { return AssetRef{Id}.ToString(); }
-
-    // TODO(0x7ce2700, Quantum.AssetRefNavMeshExt.FindAsset): frame.FindAsset<NavMesh>(Id);
-    // needs FrameBase and the asset database.
-};
+// 0x7ce265c op_Implicit, 0x7ce2668 ToString, 0x7ce2670 / 0x7ce2680 Equals, 0x7ce26f8
+// GetHashCode, 0x7ce2700 AssetRefNavMeshExt.FindAsset
+using AssetRefNavMesh = TypedAssetRef<NavMesh>;
 static_assert(sizeof(AssetRefNavMesh) == AssetRefNavMesh::SIZE);
 
 } // namespace Quantum

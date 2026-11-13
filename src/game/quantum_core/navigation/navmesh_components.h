@@ -23,6 +23,10 @@ namespace Photon::Deterministic {
 class IDeterministicFrameSerializer;
 }
 
+namespace Quantum::Core {
+class FrameBase;
+}
+
 namespace Quantum {
 
 using Allocator::IFrameHeap;
@@ -66,8 +70,12 @@ struct NavMeshSteeringAgent {
     void SetVelocity(FPVector2 value) { _velocity = value; }
 
     // 0x7d309f8 - copies speed and acceleration from the config where unset (or always
-    // with `overwrite`). For a null config the original loads the default config asset
-    // (NavMeshAgentConfig::DEFAULT_ID) from the frame; callers resolve that themselves.
+    // with `overwrite`). A null config means the default config asset
+    // (NavMeshAgentConfig::DEFAULT_ID), looked up in the frame; if that is missing too and
+    // a value has to be copied, std::invalid_argument is thrown (the original dereferences
+    // null).
+    void SetConfig(Core::FrameBase* frame, const NavMeshAgentConfig* config, bool overwrite);
+    // The copying part of SetConfig for a config at hand.
     void SetConfig(const NavMeshAgentConfig& config, bool overwrite);
 
     // 0x7d30ad8 - stops the agent (the frame and entity are unused).

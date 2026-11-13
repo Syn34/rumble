@@ -1,7 +1,9 @@
 #include "frame_base.h"
 
 #include "photon_deterministic/log.h"
+#include "quantum_core/asset_db.h"
 #include "quantum_core/component_reference.h"
+#include "quantum_core/dynamic_asset_db.h"
 #include "quantum_core/frame_serializer.h"
 
 #include <algorithm>
@@ -43,9 +45,37 @@ struct ClearOnExit {
 
 } // namespace
 
-FrameBase::FrameBase(FrameContext* context) : Unsafe(this), _context(context) {
+FrameBase::FrameBase(FrameContext* context)
+    : Unsafe(this), _context(context), _dynamicAssetDB(std::make_unique<DynamicAssetDB>()) {
     _heap = context->ReserveHeap();
     InitTrackedHeap(std::make_shared<DisabledHeapAllocTracker>());
+    if (const DynamicAssetDB* initial = context->InitialDynamicAssets(); initial != nullptr) {
+        _dynamicAssetDB->CopyFrom(*initial);
+    }
+    if (const AssetDB* assetDB = context->get_AssetDB(); assetDB != nullptr) {
+        _dynamicAssetDB->set_StaticResourceManager(assetDB->get_ResourceManager());
+    }
+}
+
+AssetObject* FrameBase::LookUpAsset(AssetGuid guid, bool isMainThread) const {
+    if (!guid.IsValid()) {
+        return nullptr;
+    }
+    if (guid.IsDynamic()) {
+        return _dynamicAssetDB->FindAsset(guid);
+    }
+    AssetDB* assetDB = _context->get_AssetDB();
+    return assetDB != nullptr ? assetDB->FindAsset(guid, isMainThread) : nullptr;
+}
+
+void FrameBase::LogAssetNotFound(AssetGuid guid, const std::string& assetType) {
+    Photon::Deterministic::Log::Warn("Asset {0} ({1}) not found", guid.ToString(true), assetType);
+}
+
+void FrameBase::LogAssetTypeMismatch(AssetGuid guid, const std::string& expectedType,
+                                     const std::string& assetType) {
+    Photon::Deterministic::Log::Warn("Asset {0} is a {2}, not a {1}", guid.ToString(true),
+                                     expectedType, assetType);
 }
 
 FrameBase::~FrameBase() = default;
